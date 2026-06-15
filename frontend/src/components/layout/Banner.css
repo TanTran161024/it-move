@@ -1,0 +1,226 @@
+.banner-root {
+  position: relative;
+  width: 100%;
+  /* max-width: 2000px; */
+  margin-left: auto;
+  margin-right: auto;
+  min-height: 500px;
+  max-height: 750px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  background: #181c24;
+  justify-content: flex-start;
+  cursor: grab;
+}
+.banner-root:active {
+  cursor: grabbing;
+}
+@media (min-width: 900px) {
+  .banner-root {
+    min-height: 620px;
+  }
+}
+
+.banner-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+  /* Không filter, giữ nguyên ảnh gốc */
+  transition: opacity 0.5s ease-in-out;
+}
+
+.banner-fade {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 40%;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(24,28,36,0) 85%, #181c24 100%);
+}
+
+.banner-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  background: radial-gradient(ellipse at center, rgba(24,28,36,0.15) 0%, rgba(24,28,36,0.25) 100%);
+}
+
+.banner-content {
+  position: relative;
+  z-index: 4;
+  margin-left: 16px;
+  max-width: 600px;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  min-height: 460px;
+  justify-content: space-between;
+  flex: 1;
+  padding-top: 16px;
+  padding-bottom: 16px;
+  transition: opacity 0.5s ease-in-out;
+}
+@media (min-width: 900px) {
+  .banner-content {
+    margin-left: 80px;
+  }
+}
+
+.banner-title-img-box {
+  margin-bottom: 16px;
+  min-height: 60px;
+}
+
+.banner-title-img {
+  max-width: 550px;
+  width: 100%;
+}
+
+.banner-title {
+  color: #FFA726 !important;
+  font-weight: 400 !important;
+  min-height: 32px;
+}
+
+.banner-badges {
+  margin-top: 8px;
+  margin-bottom: 8px;
+  min-height: 36px;
+}
+
+.banner-tags {
+  margin-bottom: 8px;
+  min-height: 36px;
+}
+
+.banner-desc {
+  color: #fff !important;
+  margin-bottom: 8px;
+  min-height: 60px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 1.15rem;
+  letter-spacing: 0.02em;
+}
+
+.banner-badge {
+  border-radius: 16px;
+  padding: 2px 16px;
+  font-size: 16px;
+  font-weight: 700;
+  margin-right: 10px;
+  display: inline-block;
+  box-sizing: border-box;
+  line-height: 32px;
+  height: 32px;
+  border: 2px solid transparent;
+  transition: background 0.2s, color 0.2s, border 0.2s;
+}
+.banner-badge-imdb {
+  background: #f5c518;
+  color: #222;
+  border: 2px solid #f5c518;
+}
+.banner-badge-quality {
+  background: #fff;
+  color: #222;
+  border: 2px solid #222;
+}
+.banner-badge-age {
+  background: #fff;
+  color: #222;
+  border: 2px solid #222;
+}
+.banner-badge-default {
+  background: #222;
+  color: #fff;
+  border: 2px solid rgba(255,255,255,0.2);
+}
+
+/* Tag style (dưới) */
+.banner-tags .MuiChip-root {
+  background: #656574;
+  color: #fff;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 15px;
+  margin-right: 10px;
+  margin-bottom: 4px;
+  padding: 0 14px;
+  height: 32px;
+}
+
+
+.banner-btn-play {
+  background-color: #FFA726 !important;
+  color: #222 !important;
+  border-radius: 50px !important;
+  padding-left: 32px !important;
+  padding-right: 32px !important;
+  font-weight: 700 !important;
+  font-size: 1.1rem !important;
+  box-shadow: none !important;
+  transition: background 0.2s !important;
+}
+.banner-btn-play:hover {
+  background-color: #fb8c00 !important;
+  box-shadow: none !important;
+}
+
+.banner-btn-icon {
+  background-color: rgba(255,255,255,0.1) !important;
+  color: #fff !important;
+  transition: background 0.2s !important;
+}
+.banner-btn-icon:hover {
+  background-color: rgba(255,255,255,0.2) !important;
+}
+
+.banner-thumbnails {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 5;
+  display: flex;
+  gap: 8px;
+}
+@media (min-width: 900px) {
+  .banner-thumbnails {
+    right: 40px;
+    bottom: 40px;
+  }
+}
+
+.banner-thumbnail {
+  width: 80px;
+  height: 50px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border 0.2s, opacity 0.2s, filter 0.2s;
+  opacity: 0.7;
+  filter: grayscale(0.2);
+  margin-right: 8px;
+}
+.banner-thumbnail.selected {
+  border: 2px solid #fff;
+  opacity: 1;
+  filter: none;
+}
+.banner-thumbnail:last-child {
+  margin-right: 0;
+} 

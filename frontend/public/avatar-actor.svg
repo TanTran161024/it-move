@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300">
+  <rect width="300" height="300" fill="#23242a"/>
+  <circle cx="150" cy="112" r="52" fill="#3a3b44"/>
+  <path d="M58 270c8-60 45-92 92-92s84 32 92 92" fill="#3a3b44"/>
+  <circle cx="150" cy="112" r="44" fill="#f5c46b"/>
+  <path d="M82 270c12-42 38-62 68-62s56 20 68 62" fill="#f5c46b"/>
+  <path d="M105 102c14-34 43-45 82-31 6 20 1 39-16 57-27-4-48-13-66-26z" fill="#15161b" opacity=".7"/>
+  <text x="150" y="286" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#ffffff">Actor</text>
+</svg>

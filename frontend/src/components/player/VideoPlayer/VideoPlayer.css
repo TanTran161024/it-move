@@ -1,0 +1,399 @@
+/* Player container và section nền đen */
+.video-player-container-modern {
+  background: #000 !important;
+  width: 100%;
+  max-width: 100vw;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.video-player-section {
+  position: relative;
+  width: 100%;
+  max-width: 1600px;
+  height: 55vw;
+  max-height: 880px;
+  min-height: 400px;
+  background: #000 !important;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  overflow: visible;
+}
+
+/* Video element */
+.vp-video-player {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  background: #000;
+  display: block;
+}
+
+.vp-source-empty {
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px;
+  color: #fff;
+  background:
+    linear-gradient(rgba(0, 0, 0, 0.68), rgba(0, 0, 0, 0.82)),
+    #111;
+  text-align: center;
+}
+
+.vp-source-empty-title {
+  color: #ffd600;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.vp-source-empty-text {
+  max-width: 520px;
+  color: #c8ceda;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Progress bar */
+.vp-progress-bar-modern {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 24px;
+  z-index: 3;
+  height: 24px;
+}
+.vp-progress-slider-modern {
+  flex: 1;
+  height: 4px;
+  accent-color: #fff;
+  background: #23242b;
+  border-radius: 2px;
+  outline: none;
+  margin: 0 12px;
+  cursor: pointer;
+}
+.vp-time {
+  color: #fff;
+  font-size: 13px;
+  min-width: 48px;
+  text-align: center;
+  text-shadow: 0 2px 8px #000a;
+}
+
+/* Controls layout */
+.vp-controls-modern {
+  position: absolute !important;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2000 !important;
+  display: flex !important;
+  padding: 0 24px 8px 24px;
+  background: none !important;
+  box-shadow: none !important;
+  border-radius: 0;
+  pointer-events: auto;
+  min-height: 48px;
+}
+.vp-controls-flex {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+.vp-controls-left,
+.vp-controls-right {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+}
+.vp-controls-right {
+  justify-content: flex-end;
+}
+.vp-controls-left {
+  justify-content: flex-start;
+}
+
+/* Nút icon */
+.vp-control-btn-modern {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+  border-radius: 50%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+  outline: none;
+}
+.vp-control-btn-modern:hover {
+  background: #23242b00; 
+  color: #1e90ff;
+}
+/* FORCE ICON CONTROLS HIỂN THỊ */
+.vp-control-btn-modern svg {
+  color: #fff !important;
+  fill: #fff !important;
+  opacity: 1 !important;
+  display: inline-block !important;
+  visibility: visible !important;
+  background: none !important;
+  stroke: none !important;
+  z-index: 10 !important;
+}
+.vp-control-btn-modern {
+  z-index: 10 !important;
+}
+.vp-play-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2.5px solid #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s, background 0.2s;
+  box-shadow: 0 2px 8px #000a;
+  color: #fff;
+  font-size: 10px;
+  padding: 0;
+}
+
+.vp-play-btn:hover {
+  border-color: #FFA726;
+  background: rgba(30,144,255,0.15);
+  color: #FFA726;
+}
+
+.vp-play-btn svg {
+  color: inherit;
+  width: 24px;
+  height: 24px;
+}
+
+/* Volume slider nhỏ, nằm ngang hàng */
+.vp-volume-slider-modern {
+  width: 200px;
+  height: 4px;
+  margin-left: 4px;
+  accent-color: #fff;
+  background: #23242b;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.vp-header-overlay {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  z-index: 1002;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  justify-content: flex-start;
+  width: auto;
+}
+
+.vp-seek-btn {
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  transition: background 0.2s, color 0.2s;
+  cursor: pointer;
+  margin: -5px;
+}
+.vp-seek-btn svg {
+  width: 28px;
+  height: 28px;
+  color: inherit;
+}
+.vp-seek-btn:hover {
+  color: #FFA726;
+}
+.vp-seek-btn,
+.vp-seek-btn:hover,
+.vp-seek-btn:focus,
+.vp-seek-btn:active {
+  background: rgba(0, 0, 0, 0) !important;
+  color: #fff !important;
+  outline: none;
+  box-shadow: none;
+}
+
+.vp-control-btn-modern,
+.vp-control-btn-modern:focus,
+.vp-control-btn-modern:active {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.vp-control-btn-modern:hover,
+.vp-control-btn-modern:focus {
+  color: #FFA726 !important;
+}
+.vp-control-btn-modern svg {
+  color: inherit;
+}
+
+.vp-settings-menu {
+  position: absolute;
+  right: 32px;
+  bottom: 60px;
+  min-width: 260px;
+  background: rgba(30, 32, 40, 0.98);
+  border-radius: 14px;
+  box-shadow: 0 4px 32px #0008;
+  padding: 16px 0 8px 0;
+  z-index: 3000;
+  color: #fff;
+  font-family: inherit;
+  font-size: 16px;
+  border: 1.5px solid #4446;
+  backdrop-filter: blur(8px);
+}
+.vp-settings-title {
+  font-weight: 700;
+  font-size: 17px;
+  padding: 0 24px 10px 24px;
+  margin-bottom: 6px;
+}
+.vp-settings-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+}
+.vp-settings-back {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0 6px 0 10px;
+  border-radius: 50%;
+  transition: background 0.15s;
+  outline: none;
+  box-shadow: none;
+}
+.vp-settings-back:hover {
+  background: #23242b;
+}
+.vp-settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 24px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-size: 15px;
+  color: #fff;
+  transition: background 0.15s;
+  border-radius: 8px;
+}
+.vp-settings-item:hover {
+  background: #23242b;
+}
+.vp-settings-value {
+  color: #b0b0b0;
+  font-size: 15px;
+  margin: 0 8px;
+}
+.vp-settings-arrow {
+  color: #fff;
+  font-size: 18px;
+}
+.vp-settings-close {
+  margin: 10px 0 0 24px;
+  background: none;
+  border: none;
+  color: #FFA726;
+  font-size: 15px;
+  cursor: pointer;
+  padding: 4px 12px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+.vp-settings-close:hover {
+  background: #23242b;
+}
+.vp-settings-item.selected {
+  background: #23242b;
+  color: #FFA726;
+}
+.vp-settings-check {
+  color: #FFA726;
+  font-size: 18px;
+  margin-left: 8px;
+}
+
+@media (max-width: 900px) {
+  .video-player-section {
+    height: 45vw;
+    margin: 0;
+  }
+  .vp-progress-bar-modern {
+    padding: 0 8px;
+    bottom: 44px;
+  }
+  .vp-controls-modern {
+    padding: 0 8px 6px 8px;
+  }
+}
+@media (max-width: 600px) {
+  .video-player-container-modern {
+    padding-bottom: 8px;
+  }
+  .video-player-section {
+    height: 54vw;
+    min-height: 120px;
+  }
+  .vp-progress-bar-modern {
+    padding: 0 4px;
+    bottom: 36px;
+  }
+  .vp-controls-modern {
+    padding: 0 2px 4px 2px;
+  }
+  .vp-control-btn-modern {
+    width: 28px;
+    height: 28px;
+    font-size: 15px;
+  }
+  .vp-play-btn {
+
+    font-size: 20px;
+  }
+  .vp-controls-left,
+  .vp-controls-right {
+    gap: 6px;
+  }
+  .vp-volume-slider-modern {
+    width: 36px;
+  }
+} 
