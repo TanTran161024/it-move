@@ -4,7 +4,7 @@
   overflow: hidden;
   background: #15171d;
   color: #fff;
-  font-family: 'Segoe UI', sans-serif;
+  font-family: inherit;
 }
 
 .detail-hero-bg {

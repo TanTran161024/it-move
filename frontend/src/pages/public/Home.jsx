@@ -1,8 +1,8 @@
 import { Box } from '@mui/material';
-import MovieSlider from '../components/movie/MovieSlider';
+import MovieSlider from '../../components/movie/MovieSlider';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import Banner from '../components/layout/Banner';
+import Banner from '../../components/layout/Banner';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 

@@ -43,6 +43,21 @@ frontend/src/
     user/                   User profile/library components
       ProfileSidebar.jsx
   pages/                    Route pages
+    admin/                  Admin routes
+      AdminPage.jsx
+    auth/                   Auth routes
+      Login.jsx
+      Register.jsx
+    movie/                  Movie browsing/detail/watch/search routes
+      DetailMovies.jsx
+      Movies.jsx
+      Search.jsx
+      WatchMovie.jsx
+    public/                 Public routes
+      Home.jsx
+    user/                   User account/library routes
+      Profile.jsx
+      UserLibrary.jsx
   assets/                   Static frontend assets
 ```
 

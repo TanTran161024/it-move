@@ -22,6 +22,12 @@ Movie-website-main-main/
       movie/             Component hiển thị phim
       player/            Video player
       user/              Component tài khoản người dùng
+    src/pages/
+      admin/             Trang quản trị
+      auth/              Trang đăng nhập, đăng ký
+      movie/             Trang danh sách, chi tiết, xem phim, tìm kiếm
+      public/            Trang chủ
+      user/              Trang tài khoản, yêu thích, lịch sử, xem tiếp
   backend/               Express API
     movie_website.sql    File database đầy đủ cho người chạy mới
     migrations/          File cập nhật DB cho người đã có DB cũ
@@ -198,6 +204,12 @@ Build frontend:
 npm run build
 ```
 
+Chạy tất cả migration database chưa chạy:
+
+```bash
+npm run migrate
+```
+
 Xem thử bản build:
 
 ```bash
@@ -251,20 +263,27 @@ CREATE TABLE IF NOT EXISTS movie_views (
 );
 ```
 
-Người khác sau khi pull code chỉ cần chạy migration mới:
+Người khác sau khi pull code chỉ cần chạy:
 
 ```bash
-mysql -u root -p
+npm run migrate
 ```
 
-Trong MySQL:
+Script này sẽ:
+
+- Đọc tất cả file `.sql` trong `backend/migrations`.
+- Chạy theo thứ tự tên file.
+- Lưu file đã chạy vào bảng `schema_migrations`.
+- Lần sau chạy lại sẽ tự bỏ qua migration đã chạy.
+
+Nếu muốn chạy thủ công, vẫn có thể mở MySQL:
 
 ```sql
 USE movie_website;
 SOURCE D:/Movie-website-main-main/backend/migrations/2026-06-15-add-movie-views.sql;
 ```
 
-Nếu chưa biết mình đã chạy migration nào, có thể chạy lại các migration hiện tại vì phần lớn đã dùng `IF NOT EXISTS`. Nếu migration có `INSERT`, `UPDATE`, hoặc thay dữ liệu thật thì cần đọc file trước khi chạy lại.
+Nếu migration có `INSERT`, `UPDATE`, hoặc thay dữ liệu thật thì cần đọc file trước khi viết để tránh chạy lặp gây sai dữ liệu.
 
 ## Quy trình làm việc đề xuất cho team
 
@@ -275,11 +294,10 @@ git pull
 npm run install:all
 ```
 
-Nếu có file mới trong `backend/migrations`, mở MySQL và chạy các file migration đó:
+Nếu có file mới trong `backend/migrations`, chạy:
 
-```sql
-USE movie_website;
-SOURCE D:/Movie-website-main-main/backend/migrations/tên-file-mới.sql;
+```bash
+npm run migrate
 ```
 
 Sau đó chạy lại project:
@@ -294,7 +312,7 @@ Khi bạn sửa database:
 - Không sửa trực tiếp DB trên máy rồi quên commit.
 - Luôn cập nhật `backend/movie_website.sql`.
 - Luôn thêm migration tương ứng trong `backend/migrations`.
-- Ghi chú trong commit/nhóm chat tên file migration cần chạy.
+- Nhắc mọi người chạy `npm run migrate` sau khi pull code mới.
 
 ## Lỗi thường gặp
 

@@ -1,11 +1,3 @@
--- phpMyAdmin SQL Dump
--- version 5.2.1
--- https://www.phpmyadmin.net/
---
--- Máy chủ: 127.0.0.1
--- Thời gian đã tạo: Th8 04, 2025 lúc 11:43 AM
--- Phiên bản máy phục vụ: 10.4.32-MariaDB
--- Phiên bản PHP: 8.2.12
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -297,7 +289,8 @@ CREATE TABLE `movies` (
   `imdb_rating` float DEFAULT NULL,
   `status` enum('ongoing','completed') DEFAULT NULL,
   `created_at` datetime DEFAULT current_timestamp(),
-  `quality` varchar(20) DEFAULT NULL
+  `quality` varchar(20) DEFAULT NULL,
+  `views` int(11) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -464,6 +457,9 @@ CREATE TABLE `users` (
   `id` int(11) NOT NULL,
   `username` varchar(50) NOT NULL,
   `gender` enum('male','female','other') DEFAULT NULL,
+  `avatar_url` text DEFAULT NULL,
+  `phone` varchar(20) DEFAULT NULL,
+  `birth_date` date DEFAULT NULL,
   `password` varchar(255) NOT NULL,
   `email` varchar(100) NOT NULL,
   `is_admin` tinyint(1) DEFAULT 0,
@@ -471,6 +467,8 @@ CREATE TABLE `users` (
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `email_otp` varchar(64) DEFAULT NULL,
   `email_otp_expires` datetime DEFAULT NULL,
+  `password_reset_otp` varchar(64) DEFAULT NULL,
+  `password_reset_expires` datetime DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -478,10 +476,30 @@ CREATE TABLE `users` (
 -- Đang đổ dữ liệu cho bảng `users`
 --
 
-INSERT INTO `users` (`id`, `username`, `gender`, `password`, `email`, `is_admin`, `email_verified`, `is_active`, `email_otp`, `email_otp_expires`, `created_at`) VALUES
-(1, 'Admin', 'male', '$2b$10$eRkghm5P/a6P69TCMVaYwuTE4I7SAzNrqD6ZHr0WEJXwPZ.EChuIu', 'admin@gmail.com', 1, 1, 1, NULL, NULL, '2025-06-30 10:16:01'),
-(8, 'abc2', 'female', '$2b$10$glFoblKMSzqsPLvlW2S6reKGtFoCADxumSyZOnIfToOlTRKSGTDUe', 'abc@gmail.com', 0, 1, 1, NULL, NULL, '2025-06-30 12:56:10'),
-(9, 'bcd', 'other', '$2b$10$9oPVfgOR7JGpKsJdAbLY8uQvUFZv8ekWClrMD8AFMroK4hdKCOh2W', 'bcd@gmail.com', 0, 1, 1, NULL, NULL, '2025-07-15 14:02:55');
+INSERT INTO `users` (`id`, `username`, `gender`, `avatar_url`, `phone`, `birth_date`, `password`, `email`, `is_admin`, `email_verified`, `is_active`, `email_otp`, `email_otp_expires`, `password_reset_otp`, `password_reset_expires`, `created_at`) VALUES
+(1, 'Admin', 'male', NULL, NULL, NULL, '$2b$10$eRkghm5P/a6P69TCMVaYwuTE4I7SAzNrqD6ZHr0WEJXwPZ.EChuIu', 'admin@gmail.com', 1, 1, 1, NULL, NULL, NULL, NULL, '2025-06-30 10:16:01'),
+(8, 'abc2', 'female', NULL, NULL, NULL, '$2b$10$glFoblKMSzqsPLvlW2S6reKGtFoCADxumSyZOnIfToOlTRKSGTDUe', 'abc@gmail.com', 0, 1, 1, NULL, NULL, NULL, NULL, '2025-06-30 12:56:10'),
+(9, 'bcd', 'other', NULL, NULL, NULL, '$2b$10$9oPVfgOR7JGpKsJdAbLY8uQvUFZv8ekWClrMD8AFMroK4hdKCOh2W', 'bcd@gmail.com', 0, 1, 1, NULL, NULL, NULL, NULL, '2025-07-15 14:02:55');
+
+-- --------------------------------------------------------
+
+--
+-- C?u tr?c b?ng cho b?ng `movie_views`
+--
+
+CREATE TABLE IF NOT EXISTS `movie_views` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `movie_id` int(11) NOT NULL,
+  `user_id` int(11) DEFAULT NULL,
+  `ip_address` varchar(64) DEFAULT NULL,
+  `user_agent` text DEFAULT NULL,
+  `viewed_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_movie_views_movie` (`movie_id`, `viewed_at`),
+  KEY `idx_movie_views_user` (`user_id`, `viewed_at`),
+  CONSTRAINT `movie_views_ibfk_1` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `movie_views_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Chỉ mục cho các bảng đã đổ
@@ -742,11 +760,19 @@ ALTER TABLE `producers`
 -- Safe to run on an existing database; existing columns are skipped.
 --
 
+ALTER TABLE `movies`
+  ADD COLUMN IF NOT EXISTS `views` int(11) NOT NULL DEFAULT 0 AFTER `quality`;
+
 ALTER TABLE `users`
+  ADD COLUMN IF NOT EXISTS `avatar_url` text DEFAULT NULL AFTER `gender`,
+  ADD COLUMN IF NOT EXISTS `phone` varchar(20) DEFAULT NULL AFTER `avatar_url`,
+  ADD COLUMN IF NOT EXISTS `birth_date` date DEFAULT NULL AFTER `phone`,
   ADD COLUMN IF NOT EXISTS `email_verified` tinyint(1) NOT NULL DEFAULT 1 AFTER `is_admin`,
   ADD COLUMN IF NOT EXISTS `is_active` tinyint(1) NOT NULL DEFAULT 1 AFTER `email_verified`,
   ADD COLUMN IF NOT EXISTS `email_otp` varchar(64) DEFAULT NULL AFTER `is_active`,
-  ADD COLUMN IF NOT EXISTS `email_otp_expires` datetime DEFAULT NULL AFTER `email_otp`;
+  ADD COLUMN IF NOT EXISTS `email_otp_expires` datetime DEFAULT NULL AFTER `email_otp`,
+  ADD COLUMN IF NOT EXISTS `password_reset_otp` varchar(64) DEFAULT NULL AFTER `email_otp_expires`,
+  ADD COLUMN IF NOT EXISTS `password_reset_expires` datetime DEFAULT NULL AFTER `password_reset_otp`;
 
 UPDATE `users`
 SET `email_verified` = 1,

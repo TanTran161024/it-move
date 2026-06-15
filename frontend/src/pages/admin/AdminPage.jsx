@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Box, Container, Typography, Grid, Card, CardMedia, CardContent, CardActions, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Alert, Toolbar, Autocomplete, Tabs, Tab, Switch } from '@mui/material';
 import axios from 'axios';
-import MovieTable from '../components/admin/MovieTable';
-import MovieForm from '../components/admin/MovieForm';
-import EpisodeManager from '../components/admin/EpisodeManager';
-import Sidebar from '../components/admin/Sidebar';
-import CategoryManager from '../components/admin/CategoryManager';
-import AdminFeedbackManager from '../components/admin/AdminFeedbackManager';
+import MovieTable from '../../components/admin/MovieTable';
+import MovieForm from '../../components/admin/MovieForm';
+import EpisodeManager from '../../components/admin/EpisodeManager';
+import Sidebar from '../../components/admin/Sidebar';
+import CategoryManager from '../../components/admin/CategoryManager';
+import AdminFeedbackManager from '../../components/admin/AdminFeedbackManager';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
@@ -811,6 +811,11 @@ export default function Admin() {
                     <Typography variant="subtitle2" sx={{ mt: 1 }}>Người dùng</Typography>
                     <Typography variant="h4" sx={{ fontWeight: 700 }}>{stats.total_users}</Typography>
                   </Box>
+                  <Box sx={{ bgcolor: '#23242a', color: '#fff', borderRadius: 3, p: 3, minWidth: 180, flex: 1, boxShadow: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: 220 }}>
+                    <svg width="36" height="36" fill="#ab47bc" viewBox="0 0 24 24"><path d="M12 5c5.5 0 9.4 4.5 10.7 6.2.4.5.4 1.1 0 1.6C21.4 14.5 17.5 19 12 19S2.6 14.5 1.3 12.8a1.3 1.3 0 0 1 0-1.6C2.6 9.5 6.5 5 12 5Zm0 3.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"/></svg>
+                    <Typography variant="subtitle2" sx={{ mt: 1 }}>Tổng lượt xem</Typography>
+                    <Typography variant="h4" sx={{ fontWeight: 700 }}>{stats.total_views || 0}</Typography>
+                  </Box>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
                   <Box sx={{ bgcolor: '#23242a', color: '#fff', borderRadius: 3, p: 3, minWidth: 220, flex: 1, boxShadow: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: 300 }}>
@@ -820,6 +825,42 @@ export default function Admin() {
                   <Box sx={{ bgcolor: '#23242a', color: '#fff', borderRadius: 3, p: 3, minWidth: 220, flex: 1, boxShadow: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: 300 }}>
                     <Typography variant="subtitle2">Phim đã hoàn thành</Typography>
                     <Typography variant="h5" sx={{ fontWeight: 700 }}>{stats.completed_movies}</Typography>
+                  </Box>
+                  <Box sx={{ bgcolor: '#23242a', color: '#fff', borderRadius: 3, p: 3, minWidth: 220, flex: 1, boxShadow: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: 300 }}>
+                    <Typography variant="subtitle2">Lượt xem hôm nay</Typography>
+                    <Typography variant="h5" sx={{ fontWeight: 700 }}>{stats.today_views || 0}</Typography>
+                  </Box>
+                </Box>
+                <Box sx={{ mt: 4 }}>
+                  <Typography variant="h5" gutterBottom sx={{ fontWeight: 700, color: '#FFD600', textAlign: 'center', mb: 2 }}>Top phim xem nhiều</Typography>
+                  <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', justifyContent: 'center' }}>
+                    {(stats.top_viewed_movies || []).map(movie => (
+                      <Box key={movie.id} sx={{ bgcolor: '#23242a', color: '#fff', borderRadius: 3, p: 2, minWidth: 180, maxWidth: 200, textAlign: 'center', boxShadow: 3 }}>
+                        <img src={movie.poster_url} alt={movie.title} style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 10, marginBottom: 10 }} />
+                        <Typography variant="subtitle1" noWrap sx={{ fontWeight: 700, color: '#fff', fontSize: 17 }}>{movie.title}</Typography>
+                        <Typography variant="caption" color="#FFD600">{movie.views || 0} lượt xem</Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+                <Box sx={{ mt: 4, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 3 }}>
+                  <Box sx={{ bgcolor: '#23242a', color: '#fff', borderRadius: 3, p: 3, boxShadow: 3 }}>
+                    <Typography variant="h6" sx={{ color: '#FFD600', fontWeight: 700, mb: 2 }}>Lượt xem 7 ngày</Typography>
+                    {(stats.daily_views || []).map(item => (
+                      <Box key={item.date} sx={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #333', py: 1 }}>
+                        <span>{new Date(item.date).toLocaleDateString('vi-VN')}</span>
+                        <strong>{item.views}</strong>
+                      </Box>
+                    ))}
+                  </Box>
+                  <Box sx={{ bgcolor: '#23242a', color: '#fff', borderRadius: 3, p: 3, boxShadow: 3 }}>
+                    <Typography variant="h6" sx={{ color: '#FFD600', fontWeight: 700, mb: 2 }}>Lượt xem theo thể loại</Typography>
+                    {(stats.genre_views || []).map(item => (
+                      <Box key={item.name} sx={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #333', py: 1 }}>
+                        <span>{item.name}</span>
+                        <strong>{item.views}</strong>
+                      </Box>
+                    ))}
                   </Box>
                 </Box>
                 <Box sx={{ mt: 4 }}>

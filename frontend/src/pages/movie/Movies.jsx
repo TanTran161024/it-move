@@ -6,7 +6,7 @@ import './Movies.css';
 import { Link, useLocation } from 'react-router-dom';
 import SearchIcon from '@mui/icons-material/Search';
 import InputAdornment from '@mui/material/InputAdornment';
-import FilterBox from '../components/filter/FilterBox';
+import FilterBox from '../../components/filter/FilterBox';
 
 const PAGE_SIZE = 16;
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';

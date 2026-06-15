@@ -21,7 +21,7 @@ export default function ProfileSidebar({ user = {}, profile = {} }) {
   const navigate = useNavigate();
   const displayName = profile.username || user.username || 'Người dùng';
   const email = profile.email || user.email || '';
-  const avatar = profile.avatar || user.avatar || '';
+  const avatar = profile.avatar || profile.avatar_url || user.avatar || user.avatar_url || '';
 
   const handleLogout = () => {
     localStorage.removeItem('user');

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import "./WatchMovie.css";
 import { FaArrowLeft } from "react-icons/fa";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
-import VideoPlayer from "../components/player/VideoPlayer";
+import VideoPlayer from "../../components/player/VideoPlayer";
 
 function useQuery() {
   return new URLSearchParams(useLocation().search);

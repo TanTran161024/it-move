@@ -199,5 +199,5 @@
 .movies-filter-title {
   color: #fff;
   font-weight: 600;
-  font-family: 'Roboto, Arial, sans-serif';
+  font-family: inherit;
 } 

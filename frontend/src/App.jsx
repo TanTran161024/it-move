@@ -1,18 +1,18 @@
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { CssBaseline, ThemeProvider, createTheme, Box } from '@mui/material';
-import Home from './pages/Home';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Admin from './pages/AdminPage';
+import Home from './pages/public/Home';
+import Login from './pages/auth/Login';
+import Register from './pages/auth/Register';
+import Admin from './pages/admin/AdminPage';
 import Header from './components/layout/Header';
 import ScrollToTop from './components/layout/ScrollToTop';
 import Footer from './components/layout/Footer';
-import Movies from './pages/Movies';
-import DetailMovies from './pages/DetailMovies';
-import WatchMovie from './pages/WatchMovie';
-import Search from './pages/Search';
-import Profile from './pages/Profile';
-import UserLibrary from './pages/UserLibrary';
+import Movies from './pages/movie/Movies';
+import DetailMovies from './pages/movie/DetailMovies';
+import WatchMovie from './pages/movie/WatchMovie';
+import Search from './pages/movie/Search';
+import Profile from './pages/user/Profile';
+import UserLibrary from './pages/user/UserLibrary';
 
 const theme = createTheme({
   palette: {

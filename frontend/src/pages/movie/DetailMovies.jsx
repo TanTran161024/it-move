@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import ForgotPasswordDialog from '../../components/auth/ForgotPasswordDialog';
+import LoginDialog from '../../components/auth/LoginDialog';
+import RegisterDialog from '../../components/auth/RegisterDialog';
 import './DetailMovies.css';
 
 const API = 'http://localhost:5000/api';
@@ -31,6 +34,9 @@ const DetailMovies = () => {
   const [reportReason, setReportReason] = useState(reportReasons[0]);
   const [reportText, setReportText] = useState('');
   const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [loginPromptOpen, setLoginPromptOpen] = useState(false);
+  const [registerPromptOpen, setRegisterPromptOpen] = useState(false);
+  const [forgotPromptOpen, setForgotPromptOpen] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -81,9 +87,14 @@ const DetailMovies = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const requireLogin = () => {
+    setFeedbackMessage('Vui lòng đăng nhập để sử dụng chức năng này.');
+    setLoginPromptOpen(true);
+  };
+
   const toggleLibraryItem = async (type) => {
     if (!user.id) {
-      setFeedbackMessage('Vui lòng đăng nhập để dùng chức năng này.');
+      requireLogin();
       return;
     }
 
@@ -171,6 +182,7 @@ const DetailMovies = () => {
   const selectedEpisodeQuery = selectedEpisode > 1 ? `?ep=${selectedEpisode}` : '';
 
   return (
+    <>
     <div className="detail-movies-bg">
       <div className="detail-hero-bg" style={{ backgroundImage: `url('${bgImage}')` }} />
       <div className="detail-movies-container">
@@ -410,6 +422,35 @@ const DetailMovies = () => {
         </main>
       </div>
     </div>
+    <LoginDialog
+      open={loginPromptOpen}
+      onClose={() => setLoginPromptOpen(false)}
+      onRegister={() => {
+        setLoginPromptOpen(false);
+        setRegisterPromptOpen(true);
+      }}
+      onForgot={() => {
+        setLoginPromptOpen(false);
+        setForgotPromptOpen(true);
+      }}
+    />
+    <RegisterDialog
+      open={registerPromptOpen}
+      onClose={() => setRegisterPromptOpen(false)}
+      onLogin={() => {
+        setRegisterPromptOpen(false);
+        setLoginPromptOpen(true);
+      }}
+    />
+    <ForgotPasswordDialog
+      open={forgotPromptOpen}
+      onClose={() => setForgotPromptOpen(false)}
+      onLogin={() => {
+        setForgotPromptOpen(false);
+        setLoginPromptOpen(true);
+      }}
+    />
+    </>
   );
 };
 

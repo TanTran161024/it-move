@@ -6,8 +6,8 @@ import HistoryIcon from '@mui/icons-material/History';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
-import ProfileSidebar from '../components/user/ProfileSidebar';
-import './WatchMovie.css';
+import ProfileSidebar from '../../components/user/ProfileSidebar';
+import '../movie/WatchMovie.css';
 import './Profile.css';
 import './UserLibrary.css';
 

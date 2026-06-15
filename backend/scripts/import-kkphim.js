@@ -4,6 +4,17 @@ const mysql = require('mysql2/promise');
 const API_BASE = 'https://phimapi.com';
 const pages = Number(process.env.KKPHIM_PAGES || process.argv[2] || 2);
 const limit = Number(process.env.KKPHIM_LIMIT || process.argv[3] || 24);
+const TEST_VIEW_MIN = Number(process.env.TEST_VIEW_MIN || 1000);
+const TEST_VIEW_MAX = Number(process.env.TEST_VIEW_MAX || 10000);
+
+function randomTestViews() {
+  return Math.floor(Math.random() * (TEST_VIEW_MAX - TEST_VIEW_MIN + 1)) + TEST_VIEW_MIN;
+}
+
+function getInitialViews(apiViews) {
+  const views = Number(apiViews) || 0;
+  return views > 0 ? views : randomTestViews();
+}
 
 function cleanText(value) {
   if (!value) return null;
@@ -68,13 +79,15 @@ async function upsertMovie(db, movie) {
     movie.tmdb?.vote_average || null,
     movie.status === 'completed' ? 'completed' : 'ongoing',
     movie.quality || null,
+    getInitialViews(movie.view),
   ];
 
   if (existing.length) {
     await db.execute(
       `UPDATE movies
        SET title=?, age_limit=?, original_title=?, slug=?, description=?, release_year=?, duration=?,
-           is_series=?, poster_url=?, trailer_url=?, imdb_rating=?, status=?, quality=?
+           is_series=?, poster_url=?, trailer_url=?, imdb_rating=?, status=?, quality=?,
+           views=GREATEST(COALESCE(views, 0), ?)
        WHERE id=?`,
       [...values, existing[0].id]
     );
@@ -84,8 +97,8 @@ async function upsertMovie(db, movie) {
   const [result] = await db.execute(
     `INSERT INTO movies
      (title, age_limit, original_title, slug, description, release_year, duration,
-      is_series, poster_url, trailer_url, imdb_rating, status, quality)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      is_series, poster_url, trailer_url, imdb_rating, status, quality, views)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     values
   );
   return result.insertId;

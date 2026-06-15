@@ -6,6 +6,12 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 
 const OTP_EXPIRATION_MINUTES = 10;
+const TEST_VIEW_MIN = Number(process.env.TEST_VIEW_MIN || 1000);
+const TEST_VIEW_MAX = Number(process.env.TEST_VIEW_MAX || 10000);
+
+function randomTestViews() {
+  return Math.floor(Math.random() * (TEST_VIEW_MAX - TEST_VIEW_MIN + 1)) + TEST_VIEW_MIN;
+}
 
 function generateOtp() {
   return crypto.randomInt(100000, 1000000).toString();
@@ -20,6 +26,17 @@ function cleanImageUrl(value) {
   return String(value).replace(/&quot;?|"/g, '').trim() || null;
 }
 
+function formatDateOnly(value) {
+  if (!value) return '';
+  if (value instanceof Date) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  return String(value).slice(0, 10);
+}
+
 function formatUser(user) {
   return {
     id: user.id,
@@ -28,6 +45,11 @@ function formatUser(user) {
     is_admin: user.is_admin,
     email_verified: user.email_verified,
     is_active: user.is_active,
+    gender: user.gender,
+    avatar: user.avatar_url,
+    avatar_url: user.avatar_url,
+    phone: user.phone,
+    birth_date: formatDateOnly(user.birth_date),
   };
 }
 
@@ -47,10 +69,16 @@ async function sendOtpEmail(email, otp, type = 'register') {
     },
   });
 
+  const subject = type === 'register'
+    ? 'Xác nhận email IT Move'
+    : type === 'reset-password'
+      ? 'Đặt lại mật khẩu IT Move'
+      : 'Mã OTP IT Move';
+
   await transporter.sendMail({
     from: process.env.SMTP_FROM || '"IT Move" <no-reply@itmove.local>',
     to: email,
-    subject: type === 'register' ? 'Xác nhận email IT Move' : 'Mã OTP IT Move',
+    subject,
     text: `Mã xác nhận của bạn là: ${otp}\n\nMã có hiệu lực trong ${OTP_EXPIRATION_MINUTES} phút.`,
   });
 }
@@ -58,6 +86,13 @@ async function sendOtpEmail(email, otp, type = 'register') {
 async function setUserOtp(db, userId, otp) {
   await db.execute(
     'UPDATE users SET email_otp=?, email_otp_expires=DATE_ADD(NOW(), INTERVAL ? MINUTE) WHERE id=?',
+    [hashOtp(otp), OTP_EXPIRATION_MINUTES, userId]
+  );
+}
+
+async function setPasswordResetOtp(db, userId, otp) {
+  await db.execute(
+    'UPDATE users SET password_reset_otp=?, password_reset_expires=DATE_ADD(NOW(), INTERVAL ? MINUTE) WHERE id=?',
     [hashOtp(otp), OTP_EXPIRATION_MINUTES, userId]
   );
 }
@@ -77,6 +112,7 @@ async function verifyGoogleCredential(credential) {
   return {
     email: profile.email.toLowerCase(),
     username: profile.name || profile.email.split('@')[0],
+    avatar_url: profile.picture || null,
   };
 }
 
@@ -104,6 +140,18 @@ async function requireAdmin(req, res) {
     return null;
   }
   return { db, userId };
+}
+
+async function recordMovieView(db, req, movieId) {
+  const userId = getUserId(req) || null;
+  const ipAddress = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || null;
+  const userAgent = req.headers['user-agent'] || null;
+
+  await db.execute(
+    'INSERT INTO movie_views (movie_id, user_id, ip_address, user_agent) VALUES (?, ?, ?, ?)',
+    [movieId, userId, ipAddress, userAgent]
+  );
+  await db.execute('UPDATE movies SET views = COALESCE(views, 0) + 1 WHERE id = ?', [movieId]);
 }
 
 async function getMovieCardsByJoin(db, tableName, userId, orderColumn = 'ul.created_at') {
@@ -231,8 +279,8 @@ router.post('/auth/google', async (req, res) => {
       }
       const randomPassword = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
       const [result] = await db.execute(
-        'INSERT INTO users (username, password, email, email_verified, is_active) VALUES (?, ?, ?, 1, 1)',
-        [username, randomPassword, profile.email]
+        'INSERT INTO users (username, avatar_url, password, email, email_verified, is_active) VALUES (?, ?, ?, ?, 1, 1)',
+        [username, profile.avatar_url, randomPassword, profile.email]
       );
       const [createdRows] = await db.execute('SELECT * FROM users WHERE id = ?', [result.insertId]);
       user = createdRows[0];
@@ -309,12 +357,13 @@ router.get('/movies', async (req, res) => {
 
 // Thêm phim (admin)
 router.post('/movies', async (req, res) => {
-  const { title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality } = req.body;
+  const { title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality, views } = req.body;
   try {
     const db = getDb(req);
+    const initialViews = Number(views) >= 0 ? Number(views) : randomTestViews();
     await db.execute(
-      'INSERT INTO movies (title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality]
+      'INSERT INTO movies (title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality, views) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality, initialViews]
     );
     res.json({ message: 'Movie added' });
   } catch (err) {
@@ -524,11 +573,73 @@ router.get('/genres/search/:name', async (req, res) => {
   }
 });
 
-// Quên mật khẩu (giả lập)
+// Quên mật khẩu: gửi OTP đặt lại mật khẩu
 router.post('/auth/forgot-password', async (req, res) => {
-  const { email } = req.body;
-  // Có thể kiểm tra email trong DB, gửi mail thực tế nếu muốn
-  res.json({ message: 'Nếu email tồn tại, hướng dẫn đặt lại mật khẩu đã được gửi!' });
+  const email = String(req.body.email || '').trim().toLowerCase();
+  if (!email) return res.status(400).json({ message: 'Vui lòng nhập email' });
+
+  try {
+    const db = getDb(req);
+    const [rows] = await db.execute('SELECT id, email, is_active FROM users WHERE email = ? LIMIT 1', [email]);
+
+    // Không tiết lộ email có tồn tại hay không.
+    if (!rows.length) {
+      return res.json({ message: 'Nếu email tồn tại, mã OTP đặt lại mật khẩu đã được gửi.' });
+    }
+
+    const user = rows[0];
+    if (!user.is_active) return res.status(403).json({ message: 'Tài khoản đã bị khóa' });
+
+    const otp = generateOtp();
+    await setPasswordResetOtp(db, user.id, otp);
+    await sendOtpEmail(user.email, otp, 'reset-password');
+
+    res.json({ message: 'Mã OTP đặt lại mật khẩu đã được gửi đến email của bạn.', email: user.email });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Xác nhận OTP và đặt mật khẩu mới
+router.post('/auth/reset-password', async (req, res) => {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const otp = String(req.body.otp || '').trim();
+  const password = String(req.body.password || '');
+
+  if (!email || !otp || !password) {
+    return res.status(400).json({ message: 'Vui lòng nhập email, OTP và mật khẩu mới' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
+  }
+
+  try {
+    const db = getDb(req);
+    const [rows] = await db.execute(
+      'SELECT id, password_reset_otp, password_reset_expires, is_active FROM users WHERE email = ? LIMIT 1',
+      [email]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Không tìm thấy tài khoản' });
+
+    const user = rows[0];
+    if (!user.is_active) return res.status(403).json({ message: 'Tài khoản đã bị khóa' });
+    if (!user.password_reset_otp || user.password_reset_otp !== hashOtp(otp)) {
+      return res.status(400).json({ message: 'Mã OTP không đúng' });
+    }
+    if (user.password_reset_expires && new Date(user.password_reset_expires) < new Date()) {
+      return res.status(400).json({ message: 'Mã OTP đã hết hạn' });
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+    await db.execute(
+      'UPDATE users SET password=?, password_reset_otp=NULL, password_reset_expires=NULL WHERE id=?',
+      [hash, user.id]
+    );
+
+    res.json({ message: 'Đặt lại mật khẩu thành công. Bạn có thể đăng nhập bằng mật khẩu mới.' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
 // Lấy tối đa 6 banner mới nhất, kèm thông tin phim và genres
@@ -698,7 +809,9 @@ router.get('/watch/:id', async (req, res) => {
     // 1. Thông tin phim
     const [movieRows] = await db.execute('SELECT * FROM movies WHERE id = ?', [movieId]);
     if (!movieRows.length) return res.status(404).json({ message: 'Movie not found' });
-    const movie = movieRows[0];
+    await recordMovieView(db, req, movieId);
+    const [updatedMovieRows] = await db.execute('SELECT * FROM movies WHERE id = ?', [movieId]);
+    const movie = updatedMovieRows[0];
 
     // 2. Genres
     const [genreRows] = await db.execute(
@@ -1436,9 +1549,17 @@ router.get('/user/profile', async (req, res) => {
     const user_id = req.query?.user_id || req.body?.user_id || req.headers?.['x-user-id'];
     if (!user_id) return res.status(401).json({ error: 'Chưa đăng nhập' });
     const db = getDb(req);
-    const [rows] = await db.execute('SELECT id, username, email, gender FROM users WHERE id = ?', [user_id]);
+    const [rows] = await db.execute(
+      'SELECT id, username, email, gender, avatar_url, phone, birth_date FROM users WHERE id = ?',
+      [user_id]
+    );
     if (!rows.length) return res.status(404).json({ error: 'Không tìm thấy user' });
-    res.json(rows[0]);
+    const profile = rows[0];
+    res.json({
+      ...profile,
+      avatar: profile.avatar_url,
+      birth_date: formatDateOnly(profile.birth_date),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1450,11 +1571,29 @@ router.put('/user/profile', async (req, res) => {
     // Lấy user_id từ body hoặc headers (giả lập)
     const user_id = req.body?.user_id || req.headers?.['x-user-id'];
     if (!user_id) return res.status(401).json({ error: 'Chưa đăng nhập' });
-    const { username, gender } = req.body;
+    const { username, gender, avatar_url, avatar, phone, birth_date } = req.body;
     if (!username) return res.status(400).json({ error: 'Thiếu tên hiển thị' });
     const db = getDb(req);
-    await db.execute('UPDATE users SET username = ?, gender = ? WHERE id = ?', [username, gender || 'other', user_id]);
-    res.json({ success: true });
+    const cleanAvatar = cleanImageUrl(avatar_url || avatar);
+    const cleanPhone = phone ? String(phone).trim() : null;
+    const cleanBirthDate = birth_date ? String(birth_date).slice(0, 10) : null;
+    await db.execute(
+      'UPDATE users SET username = ?, gender = ?, avatar_url = ?, phone = ?, birth_date = ? WHERE id = ?',
+      [username, gender || 'other', cleanAvatar, cleanPhone, cleanBirthDate, user_id]
+    );
+    const [rows] = await db.execute(
+      'SELECT id, username, email, gender, avatar_url, phone, birth_date, is_admin, email_verified, is_active FROM users WHERE id = ?',
+      [user_id]
+    );
+    const profile = rows[0];
+    res.json({
+      success: true,
+      user: {
+        ...profile,
+        avatar: profile.avatar_url,
+        birth_date: formatDateOnly(profile.birth_date),
+      },
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1593,7 +1732,26 @@ router.get('/admin/stats', async (req, res) => {
     const [[{ total_users }]] = await db.query('SELECT COUNT(*) as total_users FROM users');
     const [[{ ongoing_movies }]] = await db.query("SELECT COUNT(*) as ongoing_movies FROM movies WHERE status='ongoing'");
     const [[{ completed_movies }]] = await db.query("SELECT COUNT(*) as completed_movies FROM movies WHERE status='completed'");
+    const [[{ total_views }]] = await db.query('SELECT COALESCE(SUM(views), 0) as total_views FROM movies');
+    const [[{ today_views }]] = await db.query('SELECT COUNT(*) as today_views FROM movie_views WHERE DATE(viewed_at) = CURDATE()');
     const [recent_movies] = await db.query('SELECT id, title, poster_url, created_at FROM movies ORDER BY created_at DESC LIMIT 8');
+    const [top_viewed_movies] = await db.query('SELECT id, title, poster_url, views FROM movies ORDER BY views DESC, created_at DESC LIMIT 8');
+    const [daily_views] = await db.query(`
+      SELECT DATE(viewed_at) AS date, COUNT(*) AS views
+      FROM movie_views
+      WHERE viewed_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+      GROUP BY DATE(viewed_at)
+      ORDER BY DATE(viewed_at) ASC
+    `);
+    const [genre_views] = await db.query(`
+      SELECT g.name, COALESCE(SUM(m.views), 0) AS views, COUNT(DISTINCT m.id) AS movie_count
+      FROM genres g
+      JOIN movie_genres mg ON g.id = mg.genre_id
+      JOIN movies m ON mg.movie_id = m.id
+      GROUP BY g.id, g.name
+      ORDER BY views DESC, movie_count DESC
+      LIMIT 8
+    `);
     res.json({
       total_movies,
       total_genres,
@@ -1601,7 +1759,12 @@ router.get('/admin/stats', async (req, res) => {
       total_users,
       ongoing_movies,
       completed_movies,
-      recent_movies
+      total_views: Number(total_views) || 0,
+      today_views: Number(today_views) || 0,
+      recent_movies,
+      top_viewed_movies,
+      daily_views,
+      genre_views
     });
   } catch (err) {
     res.status(500).json({ message: err.message });

@@ -3,7 +3,7 @@ import { Box, Typography, Grid, Pagination, Stack, Button } from '@mui/material'
 import FilterListIcon from '@mui/icons-material/FilterList';
 import './Movies.css';
 import { Link, useLocation } from 'react-router-dom';
-import FilterBox from '../components/filter/FilterBox';
+import FilterBox from '../../components/filter/FilterBox';
 
 const PAGE_SIZE = 16;
 

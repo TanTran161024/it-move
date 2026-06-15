@@ -5,10 +5,12 @@
     "install:all": "npm install && npm --prefix frontend install && npm --prefix backend install",
     "frontend": "npm --prefix frontend run dev",
     "backend": "npm --prefix backend start",
+    "migrate": "npm --prefix backend run migrate",
     "build": "npm --prefix frontend run build",
     "preview": "npm --prefix frontend run preview",
     "lint": "npm --prefix frontend run lint",
-    "import:kkphim": "npm --prefix backend run import:kkphim"
+    "import:kkphim": "npm --prefix backend run import:kkphim",
+    "seed:views": "npm --prefix backend run seed:views"
   },
   "dependencies": {
     "swiper": "^11.2.10"
