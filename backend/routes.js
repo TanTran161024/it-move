@@ -300,7 +300,10 @@ router.post('/auth/google', async (req, res) => {
 router.get('/movies', async (req, res) => {
   try {
     const db = getDb(req);
-    const [rows] = await db.execute('SELECT * FROM movies ORDER BY created_at DESC');
+    const includeHidden = req.query.include_hidden === 'true' && req.headers?.['x-user-id'] && await isAdminUser(db, req.headers['x-user-id']);
+    const [rows] = await db.execute(
+      `SELECT * FROM movies ${includeHidden ? '' : 'WHERE is_visible = 1'} ORDER BY created_at DESC`
+    );
 
     // Lấy genres và countries cho tất cả movies
     const movieIds = rows.map(row => row.id);
@@ -357,15 +360,15 @@ router.get('/movies', async (req, res) => {
 
 // Thêm phim (admin)
 router.post('/movies', async (req, res) => {
-  const { title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality, views } = req.body;
+  const { title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality, views, is_visible } = req.body;
   try {
     const db = getDb(req);
     const initialViews = Number(views) >= 0 ? Number(views) : randomTestViews();
-    await db.execute(
-      'INSERT INTO movies (title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality, views) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality, initialViews]
+    const [result] = await db.execute(
+      'INSERT INTO movies (title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality, views, is_visible) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality, initialViews, is_visible === false ? 0 : 1]
     );
-    res.json({ message: 'Movie added' });
+    res.json({ message: 'Movie added', id: result.insertId });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -373,15 +376,27 @@ router.post('/movies', async (req, res) => {
 
 // Sửa phim (admin)
 router.put('/movies/:id', async (req, res) => {
-  const { title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality, is_admin } = req.body;
+  const { title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality, is_visible, is_admin } = req.body;
   if (!is_admin) return res.status(403).json({ message: 'Admin only' });
   try {
     const db = getDb(req);
     await db.execute(
-      'UPDATE movies SET title=?, description=?, poster_url=?, age_limit=?, original_title=?, release_year=?, duration=?, is_series=?, trailer_url=?, imdb_rating=?, quality=? WHERE id=?',
-      [title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality, req.params.id]
+      'UPDATE movies SET title=?, description=?, poster_url=?, age_limit=?, original_title=?, release_year=?, duration=?, is_series=?, trailer_url=?, imdb_rating=?, quality=?, is_visible=? WHERE id=?',
+      [title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality, is_visible === false || is_visible === 0 ? 0 : 1, req.params.id]
     );
     res.json({ message: 'Movie updated' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.patch('/movies/:id/visibility', async (req, res) => {
+  const auth = await requireAdmin(req, res);
+  if (!auth) return;
+  const isVisible = req.body.is_visible === false || req.body.is_visible === 0 ? 0 : 1;
+  try {
+    await auth.db.execute('UPDATE movies SET is_visible = ? WHERE id = ?', [isVisible, req.params.id]);
+    res.json({ success: true, is_visible: isVisible });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -651,6 +666,7 @@ router.get('/banners', async (req, res) => {
       SELECT b.*, m.imdb_rating, m.quality, m.age_limit, m.release_year, m.duration, m.description, m.title as movie_title, m.id as movie_id
       FROM banners b
       JOIN movies m ON b.movie_id = m.id
+      WHERE m.is_visible = 1
       ORDER BY b.id DESC
       LIMIT 6
     `);
@@ -726,7 +742,7 @@ router.get('/movie/:id', async (req, res) => {
     const [movieRows] = await db.execute(
       'SELECT * FROM movies WHERE id = ?', [movieId]
     );
-    if (!movieRows.length) return res.status(404).json({ message: 'Movie not found' });
+    if (!movieRows.length || !movieRows[0].is_visible) return res.status(404).json({ message: 'Movie not found' });
     const movie = movieRows[0];
 
     // 2. Banner/bg
@@ -772,7 +788,7 @@ router.get('/movie/:id', async (req, res) => {
 
     // 9. Suggested movies (top imdb_rating, trừ phim hiện tại)
     const [suggestedRows] = await db.execute(
-      `SELECT id, title, poster_url, imdb_rating FROM movies WHERE id != ? ORDER BY imdb_rating DESC LIMIT 12`, [movieId]
+      `SELECT id, title, poster_url, imdb_rating FROM movies WHERE id != ? AND is_visible = 1 ORDER BY imdb_rating DESC LIMIT 12`, [movieId]
     );
 
     // 10. Kết quả trả về
@@ -808,7 +824,7 @@ router.get('/watch/:id', async (req, res) => {
 
     // 1. Thông tin phim
     const [movieRows] = await db.execute('SELECT * FROM movies WHERE id = ?', [movieId]);
-    if (!movieRows.length) return res.status(404).json({ message: 'Movie not found' });
+    if (!movieRows.length || !movieRows[0].is_visible) return res.status(404).json({ message: 'Movie not found' });
     await recordMovieView(db, req, movieId);
     const [updatedMovieRows] = await db.execute('SELECT * FROM movies WHERE id = ?', [movieId]);
     const movie = updatedMovieRows[0];
@@ -848,7 +864,7 @@ router.get('/movies/filter', async (req, res) => {
 
     let sql = `SELECT DISTINCT m.* FROM movies m`;
     let joins = [];
-    let wheres = [];
+    let wheres = ['m.is_visible = 1'];
     let params = [];
 
     // Join với bảng liên quan nếu cần
@@ -1983,7 +1999,7 @@ router.get('/categories/:id/movies', async (req, res) => {
     
     let sql = 'SELECT DISTINCT m.* FROM movies m';
     let params = [];
-    let conditions = [];
+    let conditions = ['m.is_visible = 1'];
     
     // Thêm điều kiện genre nếu có
     if (genreIds.length > 0) {

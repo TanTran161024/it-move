@@ -97,8 +97,8 @@ async function upsertMovie(db, movie) {
   const [result] = await db.execute(
     `INSERT INTO movies
      (title, age_limit, original_title, slug, description, release_year, duration,
-      is_series, poster_url, trailer_url, imdb_rating, status, quality, views)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      is_series, poster_url, trailer_url, imdb_rating, status, quality, views, is_visible)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
     values
   );
   return result.insertId;

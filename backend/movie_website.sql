@@ -290,7 +290,8 @@ CREATE TABLE `movies` (
   `status` enum('ongoing','completed') DEFAULT NULL,
   `created_at` datetime DEFAULT current_timestamp(),
   `quality` varchar(20) DEFAULT NULL,
-  `views` int(11) NOT NULL DEFAULT 0
+  `views` int(11) NOT NULL DEFAULT 0,
+  `is_visible` tinyint(1) NOT NULL DEFAULT 1
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -761,7 +762,8 @@ ALTER TABLE `producers`
 --
 
 ALTER TABLE `movies`
-  ADD COLUMN IF NOT EXISTS `views` int(11) NOT NULL DEFAULT 0 AFTER `quality`;
+  ADD COLUMN IF NOT EXISTS `views` int(11) NOT NULL DEFAULT 0 AFTER `quality`,
+  ADD COLUMN IF NOT EXISTS `is_visible` tinyint(1) NOT NULL DEFAULT 1 AFTER `views`;
 
 ALTER TABLE `users`
   ADD COLUMN IF NOT EXISTS `avatar_url` text DEFAULT NULL AFTER `gender`,

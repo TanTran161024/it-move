@@ -1,50 +1,53 @@
 import { Box } from '@mui/material';
-import MovieSlider from '../../components/movie/MovieSlider';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import Banner from '../../components/layout/Banner';
+import MovieSlider from '../../components/movie/MovieSlider';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+function normalizeMovie(movie) {
+  return {
+    ...movie,
+    poster: movie.poster_url,
+    originalTitle: movie.original_title || movie.title,
+  };
+}
+
 export default function Home() {
   const [newMovies, setNewMovies] = useState([]);
-  const [topSeries, setTopSeries] = useState([]);
+  const [topViewedMovies, setTopViewedMovies] = useState([]);
   const [categories, setCategories] = useState([]);
   const [moviesByCategory, setMoviesByCategory] = useState({});
 
   useEffect(() => {
-    // Lấy tất cả phim
-    axios.get(`${API}/api/movies`).then(res => {
-      const movies = res.data.slice(0, 16).map(movie => ({
-        ...movie,
-        poster: movie.poster_url,
-        originalTitle: movie.original_title || movie.title,
-      }));
-      setNewMovies(movies);
-      setTopSeries(res.data.slice(0, 10));
+    axios.get(`${API}/api/movies`).then((res) => {
+      const movies = Array.isArray(res.data) ? res.data : [];
+      setNewMovies(movies.slice(0, 16).map(normalizeMovie));
+      setTopViewedMovies(
+        [...movies]
+          .sort((a, b) => Number(b.views || 0) - Number(a.views || 0))
+          .slice(0, 16)
+          .map(normalizeMovie)
+      );
     });
 
-    // Lấy danh sách danh mục
-    axios.get(`${API}/api/categories`).then(res => {
-      setCategories(res.data);
-      
-      // Với mỗi danh mục, lấy phim thuộc danh mục đó
-      res.data.forEach(category => {
-        axios.get(`${API}/api/categories/${category.id}/movies`).then(moviesRes => {
-          const movies = moviesRes.data.map(movie => ({
-            ...movie,
-            poster: movie.poster_url,
-            originalTitle: movie.original_title || movie.title,
+    axios.get(`${API}/api/categories`).then((res) => {
+      const categoryList = Array.isArray(res.data) ? res.data : [];
+      setCategories(categoryList);
+
+      categoryList.forEach((category) => {
+        axios.get(`${API}/api/categories/${category.id}/movies`).then((moviesRes) => {
+          const movies = Array.isArray(moviesRes.data) ? moviesRes.data.map(normalizeMovie) : [];
+          setMoviesByCategory((current) => ({
+            ...current,
+            [category.id]: movies,
           }));
-          setMoviesByCategory(prev => ({
-            ...prev,
-            [category.id]: movies
-          }));
-        }).catch(err => {
+        }).catch((err) => {
           console.error(`Lỗi khi lấy phim cho danh mục ${category.name}:`, err);
         });
       });
-    }).catch(err => {
+    }).catch((err) => {
       console.error('Lỗi khi lấy danh mục:', err);
     });
   }, []);
@@ -54,14 +57,13 @@ export default function Home() {
       <Banner />
       <Box sx={{ width: '100%', mt: 7, mb: 6 }}>
         <Box sx={{ width: '100%', maxWidth: 2000, mx: 'auto' }}>
-          {/* Hiển thị "Tất cả phim" */}
-          <MovieSlider movies={newMovies} title="Tất cả phim" />
-          
-          {/* Hiển thị từng danh mục */}
-          {categories.map(category => (
-            <MovieSlider 
+          <MovieSlider movies={newMovies} title="Phim mới cập nhật" />
+          <MovieSlider movies={topViewedMovies} title="Phim xem nhiều nhất" />
+
+          {categories.map((category) => (
+            <MovieSlider
               key={category.id}
-              movies={moviesByCategory[category.id] || []} 
+              movies={moviesByCategory[category.id] || []}
               title={category.name}
               categoryId={category.id}
               categoryName={category.name}
@@ -71,4 +73,4 @@ export default function Home() {
       </Box>
     </Box>
   );
-} 
+}

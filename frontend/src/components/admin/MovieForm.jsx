@@ -1,11 +1,51 @@
-import { Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button, Alert, Box, Autocomplete } from '@mui/material';
+import {
+  Alert,
+  Autocomplete,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  Switch,
+  TextField,
+} from '@mui/material';
 
-export default function MovieForm({ open, form, editMovie, error, onChange, onClose, onSubmit, genres, countries, actors, directors, selectedGenres, selectedCountries, selectedActors, selectedDirectors, onSelectChange }) {
+export default function MovieForm({
+  open,
+  form,
+  editMovie,
+  error,
+  onChange,
+  onClose,
+  onSubmit,
+  genres,
+  countries,
+  actors,
+  directors,
+  selectedGenres,
+  selectedCountries,
+  selectedActors,
+  selectedDirectors,
+  onSelectChange,
+}) {
+  const visible = form.is_visible !== 0 && form.is_visible !== false;
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{editMovie ? 'Sửa phim' : 'Thêm phim'}</DialogTitle>
       <DialogContent>
-        <TextField label="Tên phim" name="title" fullWidth margin="normal" value={form.title} onChange={onChange} />
+        <FormControlLabel
+          sx={{ mt: 1 }}
+          control={
+            <Switch
+              checked={visible}
+              onChange={(event) => onChange({ target: { name: 'is_visible', value: event.target.checked ? 1 : 0 } })}
+            />
+          }
+          label={visible ? 'Đang hiển thị trên web' : 'Đang ẩn khỏi người dùng'}
+        />
+        <TextField label="Tên phim" name="title" fullWidth margin="normal" value={form.title || ''} onChange={onChange} />
         <TextField label="Tên tiếng Anh" name="original_title" fullWidth margin="normal" value={form.original_title || ''} onChange={onChange} />
         <TextField label="Giới hạn tuổi" name="age_limit" fullWidth margin="normal" value={form.age_limit || ''} onChange={onChange} />
         <TextField label="Năm phát hành" name="release_year" type="number" fullWidth margin="normal" value={form.release_year || ''} onChange={onChange} />
@@ -16,38 +56,38 @@ export default function MovieForm({ open, form, editMovie, error, onChange, onCl
         <Autocomplete
           multiple
           options={genres}
-          getOptionLabel={option => option.name}
+          getOptionLabel={(option) => option.name}
           value={selectedGenres}
           onChange={(_, value) => onSelectChange('genres', value)}
-          renderInput={params => <TextField {...params} label="Thể loại" margin="normal" fullWidth />}
+          renderInput={(params) => <TextField {...params} label="Thể loại" margin="normal" fullWidth />}
         />
         <Autocomplete
           multiple
           options={countries}
-          getOptionLabel={option => option.name}
+          getOptionLabel={(option) => option.name}
           value={selectedCountries}
           onChange={(_, value) => onSelectChange('countries', value)}
-          renderInput={params => <TextField {...params} label="Quốc gia" margin="normal" fullWidth />}
+          renderInput={(params) => <TextField {...params} label="Quốc gia" margin="normal" fullWidth />}
         />
         <Autocomplete
           multiple
           options={actors}
-          getOptionLabel={option => option.name}
+          getOptionLabel={(option) => option.name}
           value={selectedActors}
           onChange={(_, value) => onSelectChange('actors', value)}
-          renderInput={params => <TextField {...params} label="Diễn viên" margin="normal" fullWidth />}
+          renderInput={(params) => <TextField {...params} label="Diễn viên" margin="normal" fullWidth />}
         />
         <Autocomplete
           multiple
           options={directors}
-          getOptionLabel={option => option.name}
+          getOptionLabel={(option) => option.name}
           value={selectedDirectors}
           onChange={(_, value) => onSelectChange('directors', value)}
-          renderInput={params => <TextField {...params} label="Đạo diễn" margin="normal" fullWidth />}
+          renderInput={(params) => <TextField {...params} label="Đạo diễn" margin="normal" fullWidth />}
         />
-        <TextField label="Ngày chiếu" name="release_date" type="date" fullWidth margin="normal" value={form.release_date} onChange={onChange} InputLabelProps={{ shrink: true }} />
-        <TextField label="Poster URL" name="poster_url" fullWidth margin="normal" value={form.poster_url} onChange={onChange} />
-        <TextField label="Mô tả" name="description" fullWidth margin="normal" multiline rows={3} value={form.description} onChange={onChange} />
+        <TextField label="Ngày chiếu" name="release_date" type="date" fullWidth margin="normal" value={form.release_date || ''} onChange={onChange} InputLabelProps={{ shrink: true }} />
+        <TextField label="Poster URL" name="poster_url" fullWidth margin="normal" value={form.poster_url || ''} onChange={onChange} />
+        <TextField label="Mô tả" name="description" fullWidth margin="normal" multiline rows={3} value={form.description || ''} onChange={onChange} />
         {error && <Alert severity="error">{error}</Alert>}
       </DialogContent>
       <DialogActions>
@@ -56,4 +96,4 @@ export default function MovieForm({ open, form, editMovie, error, onChange, onCl
       </DialogActions>
     </Dialog>
   );
-} 
+}

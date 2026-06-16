@@ -145,7 +145,9 @@ export default function Admin() {
   };
 
   const fetchMovies = () => {
-    axios.get('http://localhost:5000/api/movies').then(res => setMovies(res.data));
+    axios.get('http://localhost:5000/api/movies?include_hidden=true', {
+      headers: { 'x-user-id': user.id },
+    }).then(res => setMovies(res.data));
   };
 
   // Lấy danh sách banner
@@ -157,7 +159,9 @@ export default function Admin() {
   // Lấy danh sách phim cho select movie
   const [allMovies, setAllMovies] = useState([]);
   const fetchAllMovies = async () => {
-    const res = await axios.get('http://localhost:5000/api/movies');
+    const res = await axios.get('http://localhost:5000/api/movies?include_hidden=true', {
+      headers: { 'x-user-id': user.id },
+    });
     setAllMovies(res.data);
   };
 
@@ -270,7 +274,7 @@ export default function Admin() {
   const handleOpen = async (movie) => {
     await fetchRelations();
     setEditMovie(movie);
-    setForm(movie || { title: '', description: '', poster_url: '', release_date: '', genre: '' });
+    setForm(movie || { title: '', description: '', poster_url: '', release_date: '', genre: '', is_visible: 1 });
     // Gán selected cho các trường liên kết
     setSelectedGenres(movie?.genresObj || []);
     setSelectedCountries(movie?.countriesObj || []);
@@ -281,7 +285,7 @@ export default function Admin() {
   const handleClose = () => {
     setOpen(false);
     setEditMovie(null);
-    setForm({ title: '', description: '', poster_url: '', release_date: '', genre: '' });
+    setForm({ title: '', description: '', poster_url: '', release_date: '', genre: '', is_visible: 1 });
     setError('');
     setSelectedGenres([]);
     setSelectedCountries([]);
@@ -309,6 +313,7 @@ export default function Admin() {
     trailer_url: data.trailer_url || null,
     imdb_rating: data.imdb_rating ?? null,
     quality: data.quality || null,
+    is_visible: data.is_visible === false || data.is_visible === 0 ? 0 : 1,
   });
 
   const handleSubmit = async () => {
@@ -344,6 +349,21 @@ export default function Admin() {
     try {
       await axios.delete(`http://localhost:5000/api/movies/${id}?is_admin=true`);
       fetchMovies();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Lỗi');
+    }
+  };
+
+  const handleToggleVisibility = async (movie) => {
+    try {
+      await axios.patch(
+        `http://localhost:5000/api/movies/${movie.id}/visibility`,
+        { is_visible: !movie.is_visible },
+        { headers: { 'x-user-id': user.id } }
+      );
+      fetchMovies();
+      fetchAllMovies();
+      fetchBanners();
     } catch (err) {
       setError(err.response?.data?.message || 'Lỗi');
     }
@@ -477,6 +497,7 @@ export default function Admin() {
               onEdit={handleOpen}
               onDelete={handleDelete}
               onManageEpisodes={handleManageEpisodes}
+              onToggleVisibility={handleToggleVisibility}
             />
             <MovieForm
               open={open}
