@@ -30,8 +30,8 @@ export default function ScrollToTop() {
         sx={{
           position: 'fixed',
           bottom: 32,
-          right: 32,
-          zIndex: 1200,
+          right: { xs: 88, sm: 104 },
+          zIndex: 1190,
           bgcolor: '#fff',
           color: '#23242a',
           boxShadow: 4,

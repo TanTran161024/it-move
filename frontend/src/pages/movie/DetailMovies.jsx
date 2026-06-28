@@ -288,7 +288,7 @@ const DetailMovies = () => {
           <nav className="detail-tabs">
             <button type="button" className={activeTab === 'episodes' ? 'active' : ''} onClick={() => setActiveTab('episodes')}>Tập phim</button>
             <button type="button" className={activeTab === 'actors' ? 'active' : ''} onClick={() => setActiveTab('actors')}>Diễn viên</button>
-            <button type="button" className={activeTab === 'suggested' ? 'active' : ''} onClick={() => setActiveTab('suggested')}>Đề xuất</button>
+            <button type="button" className={activeTab === 'suggested' ? 'active' : ''} onClick={() => setActiveTab('suggested')}>Gợi ý tương tự</button>
           </nav>
 
           {activeTab === 'episodes' && (
@@ -335,7 +335,7 @@ const DetailMovies = () => {
 
           {activeTab === 'suggested' && (
             <section className="detail-content-block">
-              <div className="detail-section-heading"><h2>Đề xuất</h2></div>
+              <div className="detail-section-heading"><h2>Gợi ý tương tự</h2></div>
               <div className="detail-suggested-grid">
                 {data.suggested?.length > 0 ? data.suggested.map((movie) => (
                   <button type="button" className="detail-suggested-card" key={movie.id} onClick={() => navigate(`/movies/${movie.id}`)}>

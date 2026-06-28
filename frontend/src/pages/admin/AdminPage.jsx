@@ -39,6 +39,12 @@ export default function Admin() {
   const [selectedActors, setSelectedActors] = useState([]);
   const [selectedDirectors, setSelectedDirectors] = useState([]);
   const user = JSON.parse(localStorage.getItem('user') || '{}');
+  useEffect(() => {
+    if (user.id) axios.defaults.headers.common['x-user-id'] = user.id;
+    return () => {
+      delete axios.defaults.headers.common['x-user-id'];
+    };
+  }, [user.id]);
   const [banners, setBanners] = useState([]);
   const [bannerOpen, setBannerOpen] = useState(false);
   const [editBanner, setEditBanner] = useState(null);
@@ -321,9 +327,9 @@ export default function Admin() {
       let movieId = editMovie?.id;
       const movieData = safeMovieData(form);
       if (editMovie) {
-        await axios.put(`http://localhost:5000/api/movies/${editMovie.id}`, { ...movieData, is_admin: true });
+        await axios.put(`http://localhost:5000/api/movies/${editMovie.id}`, movieData);
       } else {
-        const res = await axios.post('http://localhost:5000/api/movies', { ...movieData, is_admin: true });
+        const res = await axios.post('http://localhost:5000/api/movies', movieData);
         movieId = res.data.id || null;
         if (!movieId) {
           await fetchMovies();
@@ -347,7 +353,7 @@ export default function Admin() {
   const handleDelete = async (id) => {
     if (!window.confirm('Xóa phim này?')) return;
     try {
-      await axios.delete(`http://localhost:5000/api/movies/${id}?is_admin=true`);
+      await axios.delete(`http://localhost:5000/api/movies/${id}`);
       fetchMovies();
     } catch (err) {
       setError(err.response?.data?.message || 'Lỗi');

@@ -4,6 +4,8 @@ const mysql = require('mysql2/promise');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
+const { getSimilarMovies, getUserRecommendations, clampLimit } = require('./services/recommendationService');
+const { chatWithMovieAdvisor, getAiStatus } = require('./services/aiService');
 
 const OTP_EXPIRATION_MINUTES = 10;
 const TEST_VIEW_MIN = Number(process.env.TEST_VIEW_MIN || 1000);
@@ -140,6 +142,17 @@ async function requireAdmin(req, res) {
     return null;
   }
   return { db, userId };
+}
+
+async function requireAdminMiddleware(req, res, next) {
+  try {
+    const auth = await requireAdmin(req, res);
+    if (!auth) return;
+    req.admin = auth;
+    next();
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 }
 
 async function recordMovieView(db, req, movieId) {
@@ -359,7 +372,48 @@ router.get('/movies', async (req, res) => {
 });
 
 // Thêm phim (admin)
-router.post('/movies', async (req, res) => {
+router.get('/recommendations', async (req, res) => {
+  try {
+    const db = getDb(req);
+    const movieId = req.query.movie_id;
+    if (!movieId) return res.status(400).json({ message: 'movie_id là bắt buộc' });
+    const recommendations = await getSimilarMovies(db, movieId, clampLimit(req.query.limit));
+    res.json(recommendations);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.get('/recommendations/user/:userId', async (req, res) => {
+  try {
+    const db = getDb(req);
+    const recommendations = await getUserRecommendations(db, req.params.userId, clampLimit(req.query.limit));
+    res.json(recommendations);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.get('/ai/status', (req, res) => {
+  res.json(getAiStatus());
+});
+
+router.post('/ai/chat', async (req, res) => {
+  try {
+    const db = getDb(req);
+    const result = await chatWithMovieAdvisor(db, {
+      message: req.body?.message,
+      user_id: req.body?.user_id || req.headers?.['x-user-id'],
+      history: req.body?.history,
+      shown_movie_ids: req.body?.shown_movie_ids,
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.post('/movies', requireAdminMiddleware, async (req, res) => {
   const { title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality, views, is_visible } = req.body;
   try {
     const db = getDb(req);
@@ -375,9 +429,8 @@ router.post('/movies', async (req, res) => {
 });
 
 // Sửa phim (admin)
-router.put('/movies/:id', async (req, res) => {
-  const { title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality, is_visible, is_admin } = req.body;
-  if (!is_admin) return res.status(403).json({ message: 'Admin only' });
+router.put('/movies/:id', requireAdminMiddleware, async (req, res) => {
+  const { title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality, is_visible } = req.body;
   try {
     const db = getDb(req);
     await db.execute(
@@ -403,9 +456,7 @@ router.patch('/movies/:id/visibility', async (req, res) => {
 });
 
 // Xóa phim (admin)
-router.delete('/movies/:id', async (req, res) => {
-  const is_admin = req.query.is_admin === 'true';
-  if (!is_admin) return res.status(403).json({ message: 'Admin only' });
+router.delete('/movies/:id', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
     await db.execute('DELETE FROM movies WHERE id=?', [req.params.id]);
@@ -450,7 +501,7 @@ router.get('/countries', async (req, res) => {
 });
 
 // Thêm quốc gia mới
-router.post('/countries', async (req, res) => {
+router.post('/countries', requireAdminMiddleware, async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ message: 'Missing name' });
   try {
@@ -466,7 +517,7 @@ router.post('/countries', async (req, res) => {
 });
 
 // Sửa quốc gia
-router.put('/countries/:id', async (req, res) => {
+router.put('/countries/:id', requireAdminMiddleware, async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ message: 'Missing name' });
   try {
@@ -483,7 +534,7 @@ router.put('/countries/:id', async (req, res) => {
 });
 
 // Xóa quốc gia
-router.delete('/countries/:id', async (req, res) => {
+router.delete('/countries/:id', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
     // Kiểm tra quốc gia có đang được liên kết với phim không
@@ -509,7 +560,7 @@ router.get('/genres', async (req, res) => {
 });
 
 // Thêm thể loại mới
-router.post('/genres', async (req, res) => {
+router.post('/genres', requireAdminMiddleware, async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ message: 'Missing name' });
   try {
@@ -525,7 +576,7 @@ router.post('/genres', async (req, res) => {
 });
 
 // Sửa thể loại
-router.put('/genres/:id', async (req, res) => {
+router.put('/genres/:id', requireAdminMiddleware, async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ message: 'Missing name' });
   try {
@@ -542,7 +593,7 @@ router.put('/genres/:id', async (req, res) => {
 });
 
 // Xóa thể loại
-router.delete('/genres/:id', async (req, res) => {
+router.delete('/genres/:id', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
     // Kiểm tra thể loại có đang được liên kết với phim không
@@ -717,7 +768,7 @@ router.get('/banners', async (req, res) => {
 });
 
 // Thêm banner mới
-router.post('/banners', async (req, res) => {
+router.post('/banners', requireAdminMiddleware, async (req, res) => {
   const { movie_id, bg_url, title_url, thumbnails } = req.body;
   if (!movie_id || !bg_url) return res.status(400).json({ message: 'Missing required fields' });
   try {
@@ -787,9 +838,7 @@ router.get('/movie/:id', async (req, res) => {
     );
 
     // 9. Suggested movies (top imdb_rating, trừ phim hiện tại)
-    const [suggestedRows] = await db.execute(
-      `SELECT id, title, poster_url, imdb_rating FROM movies WHERE id != ? AND is_visible = 1 ORDER BY imdb_rating DESC LIMIT 12`, [movieId]
-    );
+    const suggestedRows = await getSimilarMovies(db, movieId, 12);
 
     // 10. Kết quả trả về
     res.json({
@@ -979,7 +1028,7 @@ router.get('/movies/:id/episodes', async (req, res) => {
 });
 
 // Thêm tập phim mới cho phim
-router.post('/movies/:id/episodes', async (req, res) => {
+router.post('/movies/:id/episodes', requireAdminMiddleware, async (req, res) => {
   const { episode_number, title, video_url, subtitle_url } = req.body;
   if (!episode_number || !title || !video_url) {
     return res.status(400).json({ message: 'Thiếu thông tin tập phim' });
@@ -997,7 +1046,7 @@ router.post('/movies/:id/episodes', async (req, res) => {
 });
 
 // Sửa tập phim
-router.put('/episodes/:id', async (req, res) => {
+router.put('/episodes/:id', requireAdminMiddleware, async (req, res) => {
   const { episode_number, title, video_url, subtitle_url } = req.body;
   try {
     const db = getDb(req);
@@ -1012,7 +1061,7 @@ router.put('/episodes/:id', async (req, res) => {
 });
 
 // Xóa tập phim
-router.delete('/episodes/:id', async (req, res) => {
+router.delete('/episodes/:id', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
     await db.execute('DELETE FROM episodes WHERE id=?', [req.params.id]);
@@ -1023,7 +1072,7 @@ router.delete('/episodes/:id', async (req, res) => {
 });
 
 // ===== CRUD ACTORS =====
-router.post('/actors', async (req, res) => {
+router.post('/actors', requireAdminMiddleware, async (req, res) => {
   const { name, profile_pic_url, bio } = req.body;
   if (!name) return res.status(400).json({ message: 'Missing name' });
   try {
@@ -1034,7 +1083,7 @@ router.post('/actors', async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-router.put('/actors/:id', async (req, res) => {
+router.put('/actors/:id', requireAdminMiddleware, async (req, res) => {
   const { name, profile_pic_url, bio } = req.body;
   try {
     const db = getDb(req);
@@ -1044,7 +1093,7 @@ router.put('/actors/:id', async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-router.delete('/actors/:id', async (req, res) => {
+router.delete('/actors/:id', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
     await db.execute('DELETE FROM actors WHERE id=?', [req.params.id]);
@@ -1064,7 +1113,7 @@ router.get('/directors', async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-router.post('/directors', async (req, res) => {
+router.post('/directors', requireAdminMiddleware, async (req, res) => {
   const { name, profile_pic_url, bio } = req.body;
   if (!name) return res.status(400).json({ message: 'Missing name' });
   try {
@@ -1075,7 +1124,7 @@ router.post('/directors', async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-router.put('/directors/:id', async (req, res) => {
+router.put('/directors/:id', requireAdminMiddleware, async (req, res) => {
   const { name, profile_pic_url, bio } = req.body;
   try {
     const db = getDb(req);
@@ -1085,7 +1134,7 @@ router.put('/directors/:id', async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-router.delete('/directors/:id', async (req, res) => {
+router.delete('/directors/:id', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
     await db.execute('DELETE FROM directors WHERE id=?', [req.params.id]);
@@ -1096,7 +1145,7 @@ router.delete('/directors/:id', async (req, res) => {
 });
 
 // ===== CRUD BANNERS (update, delete) =====
-router.put('/banners/:id', async (req, res) => {
+router.put('/banners/:id', requireAdminMiddleware, async (req, res) => {
   const { movie_id, bg_url, title_url, thumbnails } = req.body;
   try {
     const db = getDb(req);
@@ -1106,7 +1155,7 @@ router.put('/banners/:id', async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-router.delete('/banners/:id', async (req, res) => {
+router.delete('/banners/:id', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
     await db.execute('DELETE FROM banners WHERE id=?', [req.params.id]);
@@ -1118,7 +1167,7 @@ router.delete('/banners/:id', async (req, res) => {
 
 // ===== MOVIE RELATIONSHIP API =====
 // Gắn thể loại cho phim
-router.post('/movies/:id/genres', async (req, res) => {
+router.post('/movies/:id/genres', requireAdminMiddleware, async (req, res) => {
   const { genre_ids } = req.body; // array
   if (!Array.isArray(genre_ids)) return res.status(400).json({ message: 'genre_ids must be array' });
   try {
@@ -1135,7 +1184,7 @@ router.post('/movies/:id/genres', async (req, res) => {
   }
 });
 // Gắn quốc gia cho phim
-router.post('/movies/:id/countries', async (req, res) => {
+router.post('/movies/:id/countries', requireAdminMiddleware, async (req, res) => {
   const { country_ids } = req.body;
   if (!Array.isArray(country_ids)) return res.status(400).json({ message: 'country_ids must be array' });
   try {
@@ -1150,7 +1199,7 @@ router.post('/movies/:id/countries', async (req, res) => {
   }
 });
 // Gắn diễn viên cho phim
-router.post('/movies/:id/actors', async (req, res) => {
+router.post('/movies/:id/actors', requireAdminMiddleware, async (req, res) => {
   const { actor_ids } = req.body;
   if (!Array.isArray(actor_ids)) return res.status(400).json({ message: 'actor_ids must be array' });
   try {
@@ -1165,7 +1214,7 @@ router.post('/movies/:id/actors', async (req, res) => {
   }
 });
 // Gắn đạo diễn cho phim
-router.post('/movies/:id/directors', async (req, res) => {
+router.post('/movies/:id/directors', requireAdminMiddleware, async (req, res) => {
   const { director_ids } = req.body;
   if (!Array.isArray(director_ids)) return res.status(400).json({ message: 'director_ids must be array' });
   try {
@@ -1650,7 +1699,7 @@ router.get('/producers', async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-router.post('/producers', async (req, res) => {
+router.post('/producers', requireAdminMiddleware, async (req, res) => {
   const { name, country_id } = req.body;
   if (!name) return res.status(400).json({ message: 'Missing name' });
   try {
@@ -1661,7 +1710,7 @@ router.post('/producers', async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-router.put('/producers/:id', async (req, res) => {
+router.put('/producers/:id', requireAdminMiddleware, async (req, res) => {
   const { name, country_id } = req.body;
   try {
     const db = getDb(req);
@@ -1671,7 +1720,7 @@ router.put('/producers/:id', async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-router.delete('/producers/:id', async (req, res) => {
+router.delete('/producers/:id', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
     await db.execute('DELETE FROM producers WHERE id=?', [req.params.id]);
@@ -1683,7 +1732,7 @@ router.delete('/producers/:id', async (req, res) => {
 
 // ===== USER MANAGEMENT (ADMIN) =====
 // Lấy danh sách user
-router.get('/users', async (req, res) => {
+router.get('/users', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
     const [rows] = await db.execute('SELECT id, username, email, is_admin, email_verified, is_active, gender, created_at FROM users ORDER BY created_at DESC');
@@ -1693,7 +1742,7 @@ router.get('/users', async (req, res) => {
   }
 });
 // Cập nhật quyền admin
-router.put('/users/:id/admin', async (req, res) => {
+router.put('/users/:id/admin', requireAdminMiddleware, async (req, res) => {
   const { is_admin } = req.body;
   try {
     const db = getDb(req);
@@ -1705,7 +1754,7 @@ router.put('/users/:id/admin', async (req, res) => {
 });
 
 // Cập nhật trạng thái khóa/mở khóa tài khoản
-router.put('/users/:id/status', async (req, res) => {
+router.put('/users/:id/status', requireAdminMiddleware, async (req, res) => {
   const { is_active } = req.body;
   try {
     const db = getDb(req);
@@ -1716,7 +1765,7 @@ router.put('/users/:id/status', async (req, res) => {
   }
 });
 // Xóa user
-router.delete('/users/:id', async (req, res) => {
+router.delete('/users/:id', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
     await db.execute('DELETE FROM users WHERE id=?', [req.params.id]);
@@ -1727,7 +1776,7 @@ router.delete('/users/:id', async (req, res) => {
 });
 
 // Sửa thông tin user
-router.put('/users/:id', async (req, res) => {
+router.put('/users/:id', requireAdminMiddleware, async (req, res) => {
   const { username, email, gender } = req.body;
   try {
     const db = getDb(req);
@@ -1739,7 +1788,7 @@ router.put('/users/:id', async (req, res) => {
 });
 
 // ===== ADMIN DASHBOARD STATS =====
-router.get('/admin/stats', async (req, res) => {
+router.get('/admin/stats', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
     const [[{ total_movies }]] = await db.query('SELECT COUNT(*) as total_movies FROM movies');
@@ -1833,7 +1882,7 @@ router.get('/categories', async (req, res) => {
 });
 
 // Thêm danh mục mới
-router.post('/categories', async (req, res) => {
+router.post('/categories', requireAdminMiddleware, async (req, res) => {
   const { name, genreIds, countryIds } = req.body;
   if (!name) return res.status(400).json({ message: 'Tên danh mục không được để trống' });
   
@@ -1867,7 +1916,7 @@ router.post('/categories', async (req, res) => {
 });
 
 // Sửa danh mục
-router.put('/categories/:id', async (req, res) => {
+router.put('/categories/:id', requireAdminMiddleware, async (req, res) => {
   const { name, genreIds, countryIds } = req.body;
   const categoryId = req.params.id;
   
@@ -1911,7 +1960,7 @@ router.put('/categories/:id', async (req, res) => {
 });
 
 // Xóa danh mục
-router.delete('/categories/:id', async (req, res) => {
+router.delete('/categories/:id', requireAdminMiddleware, async (req, res) => {
   const categoryId = req.params.id;
   
   try {
@@ -2055,7 +2104,7 @@ router.get('/categories/:id/movies', async (req, res) => {
 });
 
 // API để tạo bảng category_countries (chỉ dùng một lần)
-router.post('/setup/category-countries', async (req, res) => {
+router.post('/setup/category-countries', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
     await db.execute(`

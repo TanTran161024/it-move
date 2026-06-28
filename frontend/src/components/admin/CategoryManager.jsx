@@ -11,6 +11,11 @@ import AddIcon from '@mui/icons-material/Add';
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 export default function CategoryManager() {
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const adminHeaders = {
+    'Content-Type': 'application/json',
+    ...(user.id ? { 'x-user-id': user.id } : {}),
+  };
   const [categories, setCategories] = useState([]);
   const [genres, setGenres] = useState([]);
   const [countries, setCountries] = useState([]);
@@ -144,7 +149,7 @@ export default function CategoryManager() {
 
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: adminHeaders,
         body: JSON.stringify(form)
       });
 
@@ -170,7 +175,8 @@ export default function CategoryManager() {
 
     try {
       const response = await fetch(`${API}/api/categories/${categoryId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: adminHeaders,
       });
 
       const data = await response.json();

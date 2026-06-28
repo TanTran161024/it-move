@@ -13,6 +13,7 @@ import WatchMovie from './pages/movie/WatchMovie';
 import Search from './pages/movie/Search';
 import Profile from './pages/user/Profile';
 import UserLibrary from './pages/user/UserLibrary';
+import MovieChatbot from './components/ai/MovieChatbot';
 
 const theme = createTheme({
   palette: {
@@ -56,6 +57,7 @@ function App() {
           </Routes>
         </Box>
         {!isAdminPage && <Footer />}
+        {!isAdminPage && <MovieChatbot />}
       </Box>
       <ScrollToTop />
     </ThemeProvider>
