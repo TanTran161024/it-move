@@ -1,5 +1,5 @@
 import { Routes, Route, useLocation } from 'react-router-dom';
-import { CssBaseline, ThemeProvider, createTheme, Box } from '@mui/material';
+import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import Home from './pages/public/Home';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
@@ -17,10 +17,14 @@ import MovieChatbot from './components/ai/MovieChatbot';
 
 const theme = createTheme({
   palette: {
-    mode: 'light',
-    primary: { main: '#1976d2' },
-    secondary: { main: '#f50057' },
+    mode: 'dark',
+    primary: { main: '#E50914' },
+    secondary: { main: '#2C2C2C' },
+    background: { default: '#090909', paper: '#1A1A1A' }
   },
+  typography: {
+    fontFamily: "'Be Vietnam Pro', sans-serif",
+  }
 });
 
 function App() {
@@ -29,16 +33,11 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Box sx={{ 
-        minHeight: '100vh',
-        bgcolor: '#181A20',
-        width: '100%', 
-        display: 'flex', 
-        flexDirection: 'column',
-        background: 'linear-gradient(to bottom, #181A20 0%, #23242a 100%)' }}>
+      <div className="flex flex-col min-h-screen w-full bg-background text-white selection:bg-primary/30 selection:text-white">
         {!isAdminPage && <Header />}
-        {!isAdminPage && <Box sx={{ height: { xs: 56, md: 64 } }} />}
-        <Box component="main" sx={{ flex: 1, width: '100%' }}>
+        
+        {/* Main Content Area */}
+        <main className="flex-1 w-full">
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
@@ -55,10 +54,11 @@ function App() {
             <Route path="/user/continue" element={<UserLibrary />} />
             <Route path="/user/notifications" element={<UserLibrary />} />
           </Routes>
-        </Box>
+        </main>
+        
         {!isAdminPage && <Footer />}
         {!isAdminPage && <MovieChatbot />}
-      </Box>
+      </div>
       <ScrollToTop />
     </ThemeProvider>
   );

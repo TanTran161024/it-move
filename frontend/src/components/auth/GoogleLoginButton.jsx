@@ -1,8 +1,7 @@
-import { Box, Button, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 let googleScriptPromise = null;
 
 function loadGoogleScript() {
@@ -52,7 +51,7 @@ export default function GoogleLoginButton({ onSuccess, onError }) {
           callback: async (response) => {
             try {
               setStatus('Đang xử lý Google...');
-              const res = await axios.post(`${API}/api/auth/google`, { credential: response.credential });
+              const res = await axios.post(`${API}/auth/google`, { credential: response.credential });
               localStorage.setItem('user', JSON.stringify(res.data));
               setStatus('');
               onSuccess?.(res.data);
@@ -87,18 +86,27 @@ export default function GoogleLoginButton({ onSuccess, onError }) {
   }, [clientId, onError, onSuccess]);
 
   return (
-    <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-      <Box ref={containerRef} sx={{ minHeight: 40, display: clientId ? 'block' : 'none' }} />
+    <div className="flex flex-col items-center gap-2 mt-4 w-full">
+      <div 
+        ref={containerRef} 
+        className="min-h-[40px]" 
+        style={{ display: clientId ? 'block' : 'none' }} 
+      />
+      
       {status && (
-        <Typography variant="caption" color="#bbb" align="center">
+        <p className="text-xs text-center text-text-secondary">
           {status}
-        </Typography>
+        </p>
       )}
+      
       {!clientId && (
-        <Button disabled fullWidth variant="outlined" sx={{ color: '#bbb', borderColor: '#555' }}>
+        <button 
+          disabled 
+          className="w-full max-w-[320px] py-2 px-4 border border-white/20 rounded text-text-secondary bg-white/5 opacity-50 cursor-not-allowed text-sm font-medium"
+        >
           Google Sign-In chưa cấu hình
-        </Button>
+        </button>
       )}
-    </Box>
+    </div>
   );
 }

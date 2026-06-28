@@ -7,9 +7,6 @@ import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import ProfileSidebar from '../../components/user/ProfileSidebar';
-import '../movie/WatchMovie.css';
-import './Profile.css';
-import './UserLibrary.css';
 
 const PAGE_CONFIG = {
   '/user/favorites': {
@@ -140,88 +137,84 @@ export default function UserLibrary() {
   };
 
   return (
-    <div className="profile-bg">
-      <div className="watch-movie-container profile-container">
+    <div className="min-h-screen bg-background pt-24 pb-12">
+      <div className="container mx-auto px-4 md:px-8 max-w-7xl flex flex-col lg:flex-row gap-8">
         <ProfileSidebar user={user} />
-        <main className="profile-main">
-          <div className="library-page profile-library-page">
-            <div className="library-heading">
-              <div className="library-title-row">
-                <Icon className="library-title-icon" />
-                <h1>{config.title}</h1>
+        
+        <main className="flex-1 min-w-0">
+          <div className="bg-surface/30 backdrop-blur-md border border-white/5 rounded-2xl p-6 md:p-8 shadow-2xl min-h-[60vh]">
+            <div className="mb-8 pb-6 border-b border-white/5">
+              <div className="flex items-center gap-3 mb-2">
+                <Icon className="text-primary text-3xl" />
+                <h1 className="text-2xl md:text-3xl font-heading font-bold text-white">{config.title}</h1>
               </div>
-              <p>{config.description}</p>
+              <p className="text-text-secondary text-sm md:text-base">{config.description}</p>
             </div>
 
             {loading ? (
-              <div className="library-state">Đang tải...</div>
+              <div className="flex items-center justify-center h-40 text-text-secondary animate-pulse">Đang tải...</div>
             ) : message ? (
-              <div className="library-state">{message}</div>
+              <div className="flex items-center justify-center h-40 text-red-400">{message}</div>
             ) : items.length === 0 ? (
-              <div className="library-empty">
-                <Icon />
-                <p>{config.empty}</p>
-                <button type="button" onClick={() => navigate('/movies')}>Khám phá phim</button>
+              <div className="flex flex-col items-center justify-center h-64 text-center">
+                <Icon className="text-6xl text-white/10 mb-4" />
+                <p className="text-text-secondary mb-6 text-lg">{config.empty}</p>
+                <button type="button" className="px-6 py-2.5 bg-primary hover:bg-red-600 text-white font-medium rounded-full transition-colors" onClick={() => navigate('/movies')}>Khám phá phim</button>
               </div>
             ) : (
-              <div className="library-grid">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
                 {items.map((item) => (
-                  <article className="library-card" key={`${item.history_id || 'movie'}-${item.id}`}>
-                    <button type="button" className="library-poster" onClick={() => handleOpen(item)}>
-                      <img src={item.poster_url || '/posters/the-matrix.jpg'} alt={item.title} />
+                  <article className="group relative rounded-xl overflow-hidden bg-surface/50 border border-white/5 hover:border-white/20 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl" key={`${item.history_id || 'movie'}-${item.id}`}>
+                    <button type="button" className="w-full aspect-[2/3] relative overflow-hidden bg-black" onClick={() => handleOpen(item)}>
+                      <img src={item.poster_url || '/posters/the-matrix.jpg'} alt={item.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                      
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-full border-2 border-white bg-white/20 flex items-center justify-center backdrop-blur-sm text-white group-hover:scale-110 transition-transform">
+                          <PlayCircleOutlineIcon />
+                        </div>
+                      </div>
+
                       {(location.pathname === '/user/continue' || location.pathname === '/user/history') && (
-                        <span className="library-play-badge">
+                        <span className="absolute top-2 left-2 bg-primary text-white text-xs font-bold px-2 py-1 rounded shadow-md">
                           Tập {item.episode_number || 1}
                         </span>
                       )}
                     </button>
-                    <div className="library-card-body">
-                      <button type="button" className="library-card-title" onClick={() => handleOpen(item)}>
+                    
+                    <div className="p-3">
+                      <h3 className="text-white font-medium text-sm line-clamp-1 group-hover:text-primary transition-colors cursor-pointer text-left" onClick={() => handleOpen(item)}>
                         {item.title}
-                      </button>
-                      {item.original_title && item.original_title !== item.title && (
-                        <div className="library-card-subtitle">{item.original_title}</div>
-                      )}
-                      <div className="library-meta">
+                      </h3>
+                      
+                      <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[11px] text-text-secondary font-medium">
                         {item.release_year && <span>{item.release_year}</span>}
-                        {item.quality && <span>{item.quality}</span>}
-                        {item.imdb_rating && <span>IMDb {Number(item.imdb_rating).toFixed(1)}</span>}
+                        {item.quality && <span className="border border-white/20 px-1 rounded">{item.quality}</span>}
+                        {item.imdb_rating && <span className="text-[#f5c518]">★ {Number(item.imdb_rating).toFixed(1)}</span>}
                       </div>
+
                       {(location.pathname === '/user/continue' || location.pathname === '/user/history') && (
-                        <div className={`library-progress-wrap${hasPreciseProgress(item) ? '' : ' iframe'}`}>
-                          {hasPreciseProgress(item) ? (
-                            <>
-                              <div className="library-progress-text">
+                        <div className="mt-3 relative">
+                          <div className="flex justify-between text-[10px] text-text-secondary mb-1">
+                            {hasPreciseProgress(item) ? (
+                              <>
                                 <span>{formatProgress(item)}</span>
                                 <span>{progressPercent(item)}%</span>
-                              </div>
-                              <div className="library-progress">
-                                <span style={{ width: `${progressPercent(item)}%` }} />
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="library-progress-text">
-                                <span>{formatWatchedAt(item.last_watched_at)}</span>
-                                <span>KKPhim</span>
-                              </div>
-                              <div className="library-progress library-progress-indeterminate">
-                                <span />
-                              </div>
-                            </>
-                          )}
+                              </>
+                            ) : (
+                              <span>{formatWatchedAt(item.last_watched_at)}</span>
+                            )}
+                          </div>
+                          <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+                            <div className="h-full bg-primary" style={{ width: `${hasPreciseProgress(item) ? progressPercent(item) : 100}%` }} />
+                          </div>
                         </div>
                       )}
-                      <div className="library-card-actions">
-                        <button type="button" onClick={() => handleOpen(item)}>
-                          {location.pathname === '/user/continue' ? 'Tiếp tục xem' : 'Mở phim'}
+
+                      {config.removeEndpoint && (
+                        <button type="button" className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); handleRemove(item); }} title="Xóa">
+                          <DeleteOutlineIcon sx={{ fontSize: 16 }} />
                         </button>
-                        {config.removeEndpoint && (
-                          <button type="button" className="library-remove" onClick={() => handleRemove(item)} title="Xóa">
-                            <DeleteOutlineIcon />
-                          </button>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </article>
                 ))}

@@ -1,5 +1,4 @@
 import React, { useRef, useImperativeHandle, forwardRef, useState, useEffect } from "react";
-import "./VideoPlayer.css";
 import {
   FaPlay,
   FaPause,
@@ -45,21 +44,23 @@ function getPlayableSource(src) {
 function SpeedMenu({ open, onBack, currentSpeed, onSelect }) {
   if (!open) return null;
   return (
-    <div className="vp-settings-menu">
-      <div className="vp-settings-title vp-settings-title-row">
-        <button className="vp-settings-back" onClick={onBack}><MdChevronLeft /></button>
+    <div className="absolute right-4 bottom-16 min-w-[260px] bg-black/90 backdrop-blur-md rounded-xl shadow-2xl p-2 z-[3000] border border-white/10 text-white animate-in slide-in-from-bottom-2 fade-in">
+      <div className="flex items-center gap-2 font-bold text-lg p-3 mb-1 border-b border-white/10">
+        <button className="p-1 hover:bg-white/10 rounded-full transition-colors" onClick={onBack}><MdChevronLeft size={24} /></button>
         <span>Tốc độ</span>
       </div>
-      {SPEEDS.map((speed) => (
-        <div
-          key={speed}
-          className={`vp-settings-item${currentSpeed === speed ? " selected" : ""}`}
-          onClick={() => onSelect(speed)}
-        >
-          <span>{speed}x</span>
-          {currentSpeed === speed && <MdCheck className="vp-settings-check" />}
-        </div>
-      ))}
+      <div className="flex flex-col gap-1">
+        {SPEEDS.map((speed) => (
+          <button
+            key={speed}
+            className={`flex items-center justify-between w-full p-3 rounded-lg text-sm font-medium transition-colors ${currentSpeed === speed ? "bg-primary/20 text-primary" : "hover:bg-white/10"}`}
+            onClick={() => onSelect(speed)}
+          >
+            <span>{speed}x</span>
+            {currentSpeed === speed && <MdCheck size={20} />}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -67,33 +68,41 @@ function SpeedMenu({ open, onBack, currentSpeed, onSelect }) {
 function QualityMenu({ open, onBack }) {
   if (!open) return null;
   return (
-    <div className="vp-settings-menu">
-      <div className="vp-settings-title vp-settings-title-row">
-        <button className="vp-settings-back" onClick={onBack}><MdChevronLeft /></button>
+    <div className="absolute right-4 bottom-16 min-w-[260px] bg-black/90 backdrop-blur-md rounded-xl shadow-2xl p-2 z-[3000] border border-white/10 text-white animate-in slide-in-from-bottom-2 fade-in">
+      <div className="flex items-center gap-2 font-bold text-lg p-3 mb-1 border-b border-white/10">
+        <button className="p-1 hover:bg-white/10 rounded-full transition-colors" onClick={onBack}><MdChevronLeft size={24} /></button>
         <span>Chất lượng</span>
       </div>
-      <div className="vp-settings-item selected">
-        <span>Auto</span>
-        <MdCheck className="vp-settings-check" />
+      <div className="flex flex-col gap-1">
+        <button className="flex items-center justify-between w-full p-3 rounded-lg text-sm font-medium bg-primary/20 text-primary transition-colors">
+          <span>Auto</span>
+          <MdCheck size={20} />
+        </button>
       </div>
     </div>
   );
 }
 
-function SettingsMenu({ open, onClose, anchorRef, onSpeedClick, onQualityClick }) {
+function SettingsMenu({ open, onSpeedClick, onQualityClick }) {
   if (!open) return null;
   return (
-    <div className="vp-settings-menu">
-      <div className="vp-settings-title">Cài đặt</div>
-      <div className="vp-settings-item" onClick={onQualityClick}>
-        <span>Chất lượng</span>
-        <span className="vp-settings-value">Auto</span>
-        <MdChevronRight className="vp-settings-arrow" />
-      </div>
-      <div className="vp-settings-item" onClick={onSpeedClick}>
-        <span>Tốc độ</span>
-        <span className="vp-settings-value">1x</span>
-        <MdChevronRight className="vp-settings-arrow" />
+    <div className="absolute right-4 bottom-16 min-w-[260px] bg-black/90 backdrop-blur-md rounded-xl shadow-2xl p-2 z-[3000] border border-white/10 text-white animate-in slide-in-from-bottom-2 fade-in">
+      <div className="font-bold text-lg p-3 mb-1 border-b border-white/10">Cài đặt</div>
+      <div className="flex flex-col gap-1">
+        <button className="flex items-center justify-between w-full p-3 rounded-lg text-sm font-medium hover:bg-white/10 transition-colors group" onClick={onQualityClick}>
+          <span>Chất lượng</span>
+          <div className="flex items-center gap-1 text-white/50 group-hover:text-white">
+            <span>Auto</span>
+            <MdChevronRight size={20} />
+          </div>
+        </button>
+        <button className="flex items-center justify-between w-full p-3 rounded-lg text-sm font-medium hover:bg-white/10 transition-colors group" onClick={onSpeedClick}>
+          <span>Tốc độ</span>
+          <div className="flex items-center gap-1 text-white/50 group-hover:text-white">
+            <span>1x</span>
+            <MdChevronRight size={20} />
+          </div>
+        </button>
       </div>
     </div>
   );
@@ -101,22 +110,26 @@ function SettingsMenu({ open, onClose, anchorRef, onSpeedClick, onQualityClick }
 
 const VideoPlayer = forwardRef(({ src, poster, className = "" }, ref) => {
   const videoRef = useRef(null);
+  const containerRef = useRef(null);
   useImperativeHandle(ref, () => videoRef.current);
+  
   const iframeSource = isIframeSource(src);
   const playableSource = getPlayableSource(src);
+  
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
   const [qualityMenuOpen, setQualityMenuOpen] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
+  
   const [showControls, setShowControls] = useState(true);
   const hideControlsTimeout = useRef(null);
-  const settingsBtnRef = useRef(null);
 
   // Fullscreen logic
   useEffect(() => {
@@ -135,29 +148,34 @@ const VideoPlayer = forwardRef(({ src, poster, className = "" }, ref) => {
     };
   }, []);
 
-  // Auto-hide controls in fullscreen
+  // Auto-hide controls
   useEffect(() => {
-    if (!fullscreen) {
-      setShowControls(true);
+    const resetHideTimeout = () => {
       if (hideControlsTimeout.current) clearTimeout(hideControlsTimeout.current);
-      return;
-    }
-    // Khi controls hiện, set timeout để ẩn sau 2s
-    if (showControls) {
-      if (hideControlsTimeout.current) clearTimeout(hideControlsTimeout.current);
-      hideControlsTimeout.current = setTimeout(() => {
-        setShowControls(false);
-      }, 2000);
-    }
-    return () => {
-      if (hideControlsTimeout.current) clearTimeout(hideControlsTimeout.current);
+      if (playing) {
+        hideControlsTimeout.current = setTimeout(() => {
+          if (!settingsOpen && !speedMenuOpen && !qualityMenuOpen) {
+            setShowControls(false);
+          }
+        }, 3000);
+      } else {
+        setShowControls(true);
+      }
     };
-  }, [fullscreen, showControls]);
+    resetHideTimeout();
+    return () => clearTimeout(hideControlsTimeout.current);
+  }, [playing, fullscreen, settingsOpen, speedMenuOpen, qualityMenuOpen]);
 
-  // Mouse move show controls in fullscreen
   const handleMouseMove = () => {
-    if (!fullscreen) return;
     setShowControls(true);
+    if (hideControlsTimeout.current) clearTimeout(hideControlsTimeout.current);
+    if (playing) {
+      hideControlsTimeout.current = setTimeout(() => {
+        if (!settingsOpen && !speedMenuOpen && !qualityMenuOpen) {
+          setShowControls(false);
+        }
+      }, 3000);
+    }
   };
 
   const handlePlayPause = () => {
@@ -216,7 +234,9 @@ const VideoPlayer = forwardRef(({ src, poster, className = "" }, ref) => {
   };
 
   const handleFullscreen = () => {
-    const container = document.querySelector(".video-player-section");
+    const container = containerRef.current;
+    if (!container) return;
+    
     if (!fullscreen) {
       if (container.requestFullscreen) {
         container.requestFullscreen();
@@ -225,7 +245,6 @@ const VideoPlayer = forwardRef(({ src, poster, className = "" }, ref) => {
       } else if (container.msRequestFullscreen) {
         container.msRequestFullscreen();
       }
-      setFullscreen(true);
     } else {
       if (document.exitFullscreen) {
         document.exitFullscreen();
@@ -234,7 +253,6 @@ const VideoPlayer = forwardRef(({ src, poster, className = "" }, ref) => {
       } else if (document.msExitFullscreen) {
         document.msExitFullscreen();
       }
-      setFullscreen(false);
     }
   };
 
@@ -247,7 +265,6 @@ const VideoPlayer = forwardRef(({ src, poster, className = "" }, ref) => {
     setCurrentTime(newTime);
   };
 
-  // Picture-in-Picture
   const handlePiP = () => {
     if (iframeSource) return;
     const video = videoRef.current;
@@ -260,7 +277,6 @@ const VideoPlayer = forwardRef(({ src, poster, className = "" }, ref) => {
     }
   };
 
-  // Đổi tốc độ phát
   const handleSelectSpeed = (speed) => {
     setPlaybackRate(speed);
     if (videoRef.current && !iframeSource) {
@@ -270,131 +286,153 @@ const VideoPlayer = forwardRef(({ src, poster, className = "" }, ref) => {
     setSettingsOpen(false);
   };
 
+  const closeMenus = () => {
+    setSettingsOpen(false);
+    setSpeedMenuOpen(false);
+    setQualityMenuOpen(false);
+  };
+
   return (
     <div
-      className={`video-player-container-modern ${className}`}
-      style={{ position: 'relative' }}
+      ref={containerRef}
+      className={`relative w-full h-full bg-black flex flex-col justify-center items-center overflow-hidden group ${fullscreen ? 'fixed inset-0 z-[9999]' : ''} ${className}`}
       onMouseMove={handleMouseMove}
+      onMouseLeave={() => playing && setShowControls(false)}
     >
-      <div className="video-player-section">
-        {isMissingSource(src) ? (
-          <div className="vp-source-empty">
-            <div className="vp-source-empty-title">Phim chưa có nguồn phát</div>
-            <div className="vp-source-empty-text">
-              Tập này chưa có link KKPhim hợp lệ hoặc đang dùng link mẫu cũ.
+      {isMissingSource(src) ? (
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-8 bg-gradient-to-b from-black/80 to-[#111] text-center z-10">
+          <div className="text-primary text-2xl md:text-3xl font-black mb-4">Phim chưa có nguồn phát</div>
+          <p className="text-white/70 max-w-lg">Tập này chưa có link phim hợp lệ hoặc đang dùng link mẫu cũ.</p>
+        </div>
+      ) : iframeSource ? (
+        <iframe
+          className="w-full h-full object-cover"
+          src={playableSource}
+          title="Movie player"
+          allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+          allowFullScreen
+          referrerPolicy="no-referrer"
+        />
+      ) : (
+        <video
+          className="w-full h-full object-contain cursor-pointer"
+          ref={videoRef}
+          poster={poster}
+          src={src}
+          onClick={handlePlayPause}
+          onTimeUpdate={handleTimeUpdate}
+          onLoadedMetadata={handleLoadedMetadata}
+          onPause={() => setPlaying(false)}
+          onPlay={() => setPlaying(true)}
+        />
+      )}
+
+      {/* Custom Controls Overlay */}
+      {!iframeSource && (
+        <div 
+          className={`absolute inset-0 flex flex-col justify-end transition-opacity duration-300 pointer-events-none bg-gradient-to-t from-black/80 via-transparent to-transparent ${showControls ? 'opacity-100' : 'opacity-0'}`}
+        >
+          {/* Clickable area for menu closing */}
+          <div className="absolute inset-0 z-0 pointer-events-auto" onClick={closeMenus} />
+
+          <div className="relative z-10 w-full px-4 md:px-6 pb-4 pointer-events-auto flex flex-col gap-2">
+            
+            {/* Progress Bar */}
+            <div className="flex items-center gap-3 w-full group/progress">
+              <span className="text-white/90 text-xs font-medium w-10 text-center">{formatTime(currentTime)}</span>
+              <div className="relative flex-1 h-1.5 md:h-2 bg-white/20 rounded-full cursor-pointer overflow-hidden transition-all group-hover/progress:h-3">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={duration ? (currentTime / duration) * 100 : 0}
+                  onChange={handleSeek}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                />
+                <div 
+                  className="absolute left-0 top-0 bottom-0 bg-primary rounded-full z-10 pointer-events-none"
+                  style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
+                />
+              </div>
+              <span className="text-white/90 text-xs font-medium w-10 text-center">{formatTime(duration)}</span>
+            </div>
+
+            {/* Bottom Controls */}
+            <div className="flex items-center justify-between w-full pt-2">
+              {/* Left Controls */}
+              <div className="flex items-center gap-3 md:gap-5">
+                <button 
+                  className="text-white hover:text-primary transition-colors focus:outline-none"
+                  onClick={handlePlayPause}
+                >
+                  {playing ? <FaPause size={20} /> : <FaPlay size={20} />}
+                </button>
+                <button className="text-white hover:text-primary transition-colors focus:outline-none hidden sm:block" onClick={() => handleSkip(-10)}>
+                  <MdReplay10 size={24} />
+                </button>
+                <button className="text-white hover:text-primary transition-colors focus:outline-none hidden sm:block" onClick={() => handleSkip(10)}>
+                  <MdForward10 size={24} />
+                </button>
+                
+                <div className="flex items-center gap-2 group/volume relative">
+                  <button className="text-white hover:text-primary transition-colors focus:outline-none" onClick={handleMute}>
+                    {muted || volume === 0 ? <FaVolumeMute size={20} /> : <FaVolumeUp size={20} />}
+                  </button>
+                  <div className="w-0 overflow-hidden group-hover/volume:w-20 sm:w-20 transition-all duration-300 ease-in-out flex items-center">
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={muted ? 0 : volume}
+                      onChange={handleVolume}
+                      className="w-full h-1.5 md:h-2 bg-white/20 rounded-full appearance-none outline-none accent-primary cursor-pointer"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Controls */}
+              <div className="flex items-center gap-4 md:gap-5">
+                <button className="text-white hover:text-primary transition-colors focus:outline-none hidden sm:block" onClick={handlePiP} title="Picture in Picture">
+                  <FaRegWindowRestore size={18} />
+                </button>
+                <button
+                  className={`text-white hover:text-primary transition-colors focus:outline-none ${(settingsOpen || speedMenuOpen || qualityMenuOpen) ? 'text-primary' : ''}`}
+                  title="Cài đặt"
+                  onClick={() => {
+                    setSettingsOpen((v) => !v);
+                    setSpeedMenuOpen(false);
+                    setQualityMenuOpen(false);
+                  }}
+                >
+                  <FaCog size={20} />
+                </button>
+                <button className="text-white hover:text-primary transition-colors focus:outline-none" onClick={handleFullscreen}>
+                  {fullscreen ? <FaCompress size={20} /> : <FaExpand size={20} />}
+                </button>
+              </div>
             </div>
           </div>
-        ) : iframeSource ? (
-          <iframe
-            className="vp-video-player"
-            src={playableSource}
-            title="Movie player"
-            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-            allowFullScreen
-            referrerPolicy="no-referrer"
+        </div>
+      )}
+
+      {/* Settings Menus Overlays */}
+      {!iframeSource && (
+        <>
+          <SettingsMenu
+            open={settingsOpen && !speedMenuOpen && !qualityMenuOpen}
+            onSpeedClick={() => { setSpeedMenuOpen(true); setSettingsOpen(false); }}
+            onQualityClick={() => { setQualityMenuOpen(true); setSettingsOpen(false); }}
           />
-        ) : (
-          <video
-            className="vp-video-player"
-            ref={videoRef}
-            poster={poster}
-            src={src}
-            onClick={handlePlayPause}
-            onTimeUpdate={handleTimeUpdate}
-            onLoadedMetadata={handleLoadedMetadata}
-            onPause={() => setPlaying(false)}
-            onPlay={() => setPlaying(true)}
-          />
-        )}
-        {/* Progress Bar */}
-        {!iframeSource && <div className="vp-progress-bar-modern" style={{ opacity: showControls ? 1 : 0, pointerEvents: showControls ? 'auto' : 'none', transition: 'opacity 0.3s' }}>
-          <span className="vp-time vp-time-start">{formatTime(currentTime)}</span>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={duration ? (currentTime / duration) * 100 : 0}
-            onChange={handleSeek}
-            className="vp-progress-slider-modern"
-          />
-          <span className="vp-time vp-time-end">{formatTime(duration)}</span>
-        </div>}
-        {/* Controls */}
-        {!iframeSource && <div
-          className="vp-controls-modern vp-controls-flex"
-          style={{ opacity: showControls ? 1 : 0, pointerEvents: showControls ? 'auto' : 'none', transition: 'opacity 0.3s' }}
-        >
-          <div className="vp-controls-left">
-            <button className="vp-control-btn-modern vp-play-btn" onClick={handlePlayPause}>
-              {playing ? <FaPause /> : <FaPlay />}
-            </button>
-            <button className="vp-control-btn-modern vp-seek-btn" onClick={() => handleSkip(-10)}>
-              <MdReplay10 />
-            </button>
-            <button className="vp-control-btn-modern vp-seek-btn" onClick={() => handleSkip(10)}>
-              <MdForward10 />
-            </button>
-            <button className="vp-control-btn-modern" onClick={handleMute}>
-              {muted || volume === 0 ? <FaVolumeMute /> : <FaVolumeUp />}
-            </button>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={muted ? 0 : volume}
-              onChange={handleVolume}
-              className="vp-volume-slider-modern"
-            />
-          </div>
-          <div className="vp-controls-right">
-            <button className="vp-control-btn-modern" onClick={handlePiP} title="Picture in Picture">
-              <FaRegWindowRestore />
-            </button>
-            <button
-              className="vp-control-btn-modern"
-              title="Cài đặt"
-              ref={settingsBtnRef}
-              onClick={() => {
-                setSettingsOpen((v) => !v);
-                setSpeedMenuOpen(false);
-                setQualityMenuOpen(false);
-              }}
-            >
-              <FaCog />
-            </button>
-            <button className="vp-control-btn-modern" onClick={handleFullscreen}>
-              {fullscreen ? <FaCompress /> : <FaExpand />}
-            </button>
-          </div>
-        </div>}
-        {/* Settings Menus */}
-        {!iframeSource && <SettingsMenu
-          open={settingsOpen && !speedMenuOpen && !qualityMenuOpen}
-          onClose={() => setSettingsOpen(false)}
-          anchorRef={settingsBtnRef}
-          onSpeedClick={() => {
-            setSpeedMenuOpen(true);
-            setQualityMenuOpen(false);
-          }}
-          onQualityClick={() => {
-            setQualityMenuOpen(true);
-            setSpeedMenuOpen(false);
-          }}
-        />}
-        {!iframeSource && <SpeedMenu
-          open={speedMenuOpen}
-          onBack={() => setSpeedMenuOpen(false)}
-          currentSpeed={playbackRate}
-          onSelect={handleSelectSpeed}
-        />}
-        {!iframeSource && <QualityMenu
-          open={qualityMenuOpen}
-          onBack={() => setQualityMenuOpen(false)}
-        />}
-      </div>
+          <SpeedMenu open={speedMenuOpen} onBack={() => { setSpeedMenuOpen(false); setSettingsOpen(true); }} currentSpeed={playbackRate} onSelect={handleSelectSpeed} />
+          <QualityMenu open={qualityMenuOpen} onBack={() => { setQualityMenuOpen(false); setSettingsOpen(true); }} />
+        </>
+      )}
     </div>
   );
 });
+
+VideoPlayer.displayName = "VideoPlayer";
 
 export default VideoPlayer; 

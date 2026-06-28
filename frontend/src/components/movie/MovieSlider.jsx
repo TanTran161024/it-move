@@ -1,14 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, Typography, CardMedia, Button, Chip, IconButton } from '@mui/material';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
-import './MovieSlider.css';
 import { useNavigate } from 'react-router-dom';
 
 const MAX_VISIBLE = 8;
-const POSTER_WIDTH = 200 + 24;
+const POSTER_WIDTH = 200 + 24; // 200px width + 24px gap
 const FALLBACK_POSTER =
-  "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='450' viewBox='0 0 300 450'%3E%3Crect width='300' height='450' fill='%2323242a'/%3E%3Cpath d='M118 170v110l92-55z' fill='%23ffd600'/%3E%3Ctext x='150' y='330' fill='%23fff' font-family='Arial,sans-serif' font-size='20' text-anchor='middle'%3ENo poster%3C/text%3E%3C/svg%3E";
+  "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='450' viewBox='0 0 300 450'%3E%3Crect width='300' height='450' fill='%23111111'/%3E%3Cpath d='M118 170v110l92-55z' fill='%23E50914'/%3E%3Ctext x='150' y='330' fill='%23fff' font-family='Arial,sans-serif' font-size='20' text-anchor='middle'%3ENo poster%3C/text%3E%3C/svg%3E";
 
 export default function MovieSlider({ movies, title, categoryId, categoryName }) {
   const [startIndex, setStartIndex] = useState(0);
@@ -34,16 +32,10 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
 
   const handleSeeMore = () => {
     if (categoryId && categoryName) {
-      // Nếu có danh mục, chuyển đến trang danh sách phim với thông tin danh mục
       navigate('/movies', { 
-        state: { 
-          categoryId: categoryId, 
-          categoryName: categoryName,
-          filterType: 'category'
-        } 
+        state: { categoryId: categoryId, categoryName: categoryName, filterType: 'category' } 
       });
     } else {
-      // Nếu không có danh mục (Tất cả phim), chuyển đến trang danh sách phim bình thường
       navigate('/movies');
     }
   };
@@ -55,14 +47,13 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
       if (posterRefs.current[idx] && sliderRef.current) {
         const posterRect = posterRefs.current[idx].getBoundingClientRect();
         const sliderRect = sliderRef.current.getBoundingClientRect();
-        const popupWidth = 400;
+        const popupWidth = 350;
         let left = posterRect.left - sliderRect.left + posterRect.width / 2 - popupWidth / 2;
         left = Math.max(0, Math.min(left, sliderRect.width - popupWidth));
-        const top = posterRect.top - sliderRect.top - 100;
-        const adjustedTop = top + 30;
-        setPopupPos({ left, top: adjustedTop });
+        const top = posterRect.top - sliderRect.top - 100; // Float above
+        setPopupPos({ left, top });
       }
-    }, 800);
+    }, 600); // Wait 600ms before popup
   };
 
   const handleMouseLeave = () => {
@@ -75,9 +66,7 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
     }, 100);
   };
 
-  const handlePopupEnter = () => {
-    setPopupOpen(true);
-  };
+  const handlePopupEnter = () => setPopupOpen(true);
   const handlePopupLeave = () => {
     setPopupOpen(false);
     setHovered(null);
@@ -95,15 +84,11 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
     if (!isDragging) return;
     const clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
     let dx = clientX - dragStartX;
-    // Clamp dragDelta để không kéo lố
     const maxLeft = 0;
     const maxRight = -((displayMovies.length - visibleCount) * POSTER_WIDTH);
     const currentOffset = -startIndex * POSTER_WIDTH + dx;
-    if (currentOffset > maxLeft) {
-      dx = startIndex * POSTER_WIDTH; // chặn kéo lố trái
-    } else if (currentOffset < maxRight) {
-      dx = -((displayMovies.length - visibleCount - startIndex) * POSTER_WIDTH); // chặn kéo lố phải
-    }
+    if (currentOffset > maxLeft) { dx = startIndex * POSTER_WIDTH; } 
+    else if (currentOffset < maxRight) { dx = -((displayMovies.length - visibleCount - startIndex) * POSTER_WIDTH); }
     setDragDelta(dx);
   };
 
@@ -118,10 +103,9 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
     setDragDelta(0);
   };
 
-  // Responsive: cập nhật visibleCount khi resize
   useEffect(() => {
     function updateVisibleCount() {
-      const sliderWidth = window.innerWidth * 0.98; // trừ padding
+      const sliderWidth = window.innerWidth * 0.92; // Adjust for margins
       const count = Math.min(MAX_VISIBLE, Math.floor(sliderWidth / POSTER_WIDTH));
       setVisibleCount(count < 1 ? 1 : count);
     }
@@ -130,69 +114,57 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
     return () => window.removeEventListener('resize', updateVisibleCount);
   }, []);
 
-  // Đảm bảo startIndex không vượt quá giới hạn mới
   useEffect(() => {
     if (startIndex > Math.max(0, displayMovies.length - visibleCount)) {
       setStartIndex(Math.max(0, displayMovies.length - visibleCount));
     }
-  }, [visibleCount, displayMovies.length]);
+  }, [visibleCount, displayMovies.length, startIndex]);
 
   const canScroll = displayMovies.length > visibleCount;
 
   return (
-    <Box sx={{ position: 'relative', mt: 4 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 5 }}>
-        <Typography variant="h5" sx={{ color: '#fff', mr: 2 }}>{title}</Typography>
-        <Box
+    <div className="relative mt-4">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4 px-2 md:px-0">
+        <h2 className="text-xl md:text-2xl font-bold text-white font-heading tracking-wide">
+          {title}
+        </h2>
+        
+        <button
           onMouseEnter={() => setSeeMoreHover(true)}
           onMouseLeave={() => setSeeMoreHover(false)}
           onClick={handleSeeMore}
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            cursor: 'pointer',
-            transition: 'all 0.3s cubic-bezier(.4,2,.6,1)',
-            px: seeMoreHover ? 2 : 0,
-            py: 0,
-            borderRadius: 999,
-            border: '1.5px solid #bdbdbd',
-            bgcolor: 'transparent',
-            color: seeMoreHover ? '#FFD600' : '#bdbdbd',
-            minWidth: seeMoreHover ? 90 : 40,
-            height: 40,
-            overflow: 'hidden',
-            fontWeight: 600,
-            fontSize: 16,
-          }}
+          className={`flex items-center justify-center transition-all duration-300 ease-out rounded-full font-semibold text-sm ${
+            seeMoreHover ? 'text-white bg-primary px-4 py-1.5' : 'text-text-secondary px-0 py-1.5 hover:text-white'
+          }`}
         >
           {seeMoreHover ? (
             <>
-              Xem thêm
-              <ArrowForwardIosIcon sx={{ fontSize: 18, ml: 1 }} />
+              Xem tất cả <ArrowForwardIosIcon className="ml-1 text-sm" />
             </>
           ) : (
-            <ArrowForwardIosIcon sx={{ fontSize: 24, mx: 'auto' }} />
+            <span className="flex items-center text-sm font-medium">Xem tất cả <ArrowForwardIosIcon className="ml-1 text-xs" /></span>
           )}
-        </Box>
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
-        {/* Nút mũi tên trái */}
+        </button>
+      </div>
+
+      {/* Slider Container */}
+      <div className="relative flex items-center group/slider">
+        {/* Prev Arrow */}
         {canScroll && startIndex > 0 && (
-          <IconButton onClick={handlePrev} sx={{ position: 'absolute', left: -40, zIndex: 20, bgcolor: '#23242a', color: '#fff', '&:hover': { bgcolor: '#333' } }}>
-            <ArrowBackIosNewIcon />
-          </IconButton>
+          <button 
+            onClick={handlePrev} 
+            className="absolute -left-4 md:-left-8 z-20 w-10 md:w-14 h-full bg-black/40 hover:bg-black/80 text-white opacity-0 group-hover/slider:opacity-100 transition-opacity flex items-center justify-center rounded-r-md backdrop-blur-sm"
+          >
+            <ArrowBackIosNewIcon className="text-2xl md:text-4xl shadow-lg" />
+          </button>
         )}
-        {/* Danh sách poster với hiệu ứng chuyển động */}
-        <Box
+
+        {/* Track */}
+        <div
           ref={sliderRef}
-          className="movie-slider-track"
-          sx={{
-            width: `${visibleCount * POSTER_WIDTH}px`,
-            maxWidth: '100vw',
-            overflow: 'hidden',
-            position: 'relative',
-            cursor: isDragging && canScroll ? 'grabbing' : canScroll ? 'grab' : 'default',
-          }}
+          className="overflow-hidden w-full relative touch-pan-y"
+          style={{ width: `${visibleCount * POSTER_WIDTH}px`, maxWidth: '100vw', cursor: isDragging && canScroll ? 'grabbing' : canScroll ? 'grab' : 'default' }}
           onMouseDown={canScroll ? handleDragStart : undefined}
           onMouseMove={canScroll ? handleDragMove : undefined}
           onMouseUp={canScroll ? handleDragEnd : undefined}
@@ -201,214 +173,156 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
           onTouchMove={canScroll ? handleDragMove : undefined}
           onTouchEnd={canScroll ? handleDragEnd : undefined}
         >
-          <Box
-            sx={{
-              display: 'flex',
-              gap: 3,
-              transition: isDragging ? 'transform 0.2s cubic-bezier(.4,2,.6,1)' : 'transform 0.5s cubic-bezier(.4,2,.6,1)',
+          <div
+            className="flex gap-6"
+            style={{
+              transition: isDragging ? 'transform 0.15s ease-out' : 'transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)',
               transform: `translateX(-${canScroll ? (startIndex * POSTER_WIDTH - dragDelta) : 0}px)`,
               willChange: 'transform',
-              justifyContent: displayMovies.length < visibleCount ? 'flex-start' : 'initial',
             }}
           >
-            {displayMovies.map((movie, idx) => {
-              // Chỉ render card nổi cho các poster visible
-              const isVisible = idx >= startIndex && idx < startIndex + visibleCount;
-              return (
-                <Box
-                  key={movie.id || idx}
-                  sx={{ position: 'relative' }}
-                  onMouseEnter={() => handleMouseEnter(idx)}
-                  onMouseLeave={handleMouseLeave}
-                  ref={el => posterRefs.current[idx] = el}
-                >
-                  <CardMedia
-                    component="img"
-                    image={movie.poster}
+            {displayMovies.map((movie, idx) => (
+              <div
+                key={movie.id || idx}
+                className="relative flex-shrink-0 group/card w-[200px]"
+                onMouseEnter={() => handleMouseEnter(idx)}
+                onMouseLeave={handleMouseLeave}
+                ref={el => posterRefs.current[idx] = el}
+              >
+                <div className="relative overflow-hidden rounded-xl aspect-[2/3] shadow-lg transition-transform duration-300 group-hover/card:scale-105 group-hover/card:shadow-2xl bg-surface cursor-pointer" onClick={() => navigate(`/watch/${movie.id}`)}>
+                  <img
+                    src={movie.poster}
                     alt={movie.title}
                     referrerPolicy="no-referrer"
-                    sx={{
-                      width: 200,
-                      height: 300,
-                      borderRadius: 3,
-                      boxShadow: hovered === idx ? 6 : 1,
-                      transition: 'box-shadow 0.2s',
-                      cursor: 'pointer',
-                      zIndex: hovered === idx ? 2 : 1,
-                    }}
-                    onDragStart={e => e.preventDefault()}
-                    onError={(e) => {
-                      e.currentTarget.src = FALLBACK_POSTER;
-                    }}
-                    onClick={() => navigate(`/movies/${movie.id}`)}
+                    className="w-full h-full object-cover pointer-events-none"
+                    onError={(e) => { e.currentTarget.src = FALLBACK_POSTER; }}
                   />
-                  {/* Tên phim dưới poster */}
-                  <Box sx={{ textAlign: 'center', mt: 1 }}>
-                    <Typography
-                      variant="subtitle1"
-                      sx={{
-                        color: '#fff',
-                        fontWeight: 300,
-                        fontSize: 14,
-                        lineHeight: 1.25,
-                        mb: 0.2,
-                        wordBreak: 'break-word',
-                      }}
-                    >
-                      {movie.title}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: '#bdbdbd',
-                        fontSize: 14,
-                        lineHeight: 1.15,
-                        wordBreak: 'break-word',
-                      }}
-                    >
-                      {movie.originalTitle}
-                    </Typography>
-                  </Box>
-                  {/* Card nổi khi hover - KHÔNG render ở đây nữa */}
-                </Box>
-              );
-            })}
-          </Box>
-        </Box>
-        {/* Nút mũi tên phải */}
+                  {/* Rating Badge */}
+                  {movie.imdb_rating && (
+                    <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded border border-white/10 flex items-center gap-1 shadow-md">
+                      <span className="text-[#f5c518] text-xs font-bold">★</span>
+                      <span className="text-white text-xs font-bold">{Number(movie.imdb_rating).toFixed(1)}</span>
+                    </div>
+                  )}
+                  {/* Play Button Overlay */}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-full border-2 border-primary bg-primary/20 flex items-center justify-center backdrop-blur-sm text-primary group-hover/card:scale-110 transition-transform">
+                      <svg className="w-6 h-6 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 text-center px-1">
+                  <h3 className="text-white font-medium text-sm line-clamp-1 group-hover/card:text-primary transition-colors cursor-pointer" onClick={() => navigate(`/movies/${movie.id}`)}>
+                    {movie.title}
+                  </h3>
+                  <p className="text-text-secondary text-xs mt-0.5 line-clamp-1">
+                    {movie.originalTitle || movie.release_year}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Next Arrow */}
         {canScroll && startIndex < displayMovies.length - visibleCount && (
-          <IconButton onClick={handleNext} sx={{ position: 'absolute', right: -40, zIndex: 20, bgcolor: '#23242a', color: '#fff', '&:hover': { bgcolor: '#333' } }}>
-            <ArrowForwardIosIcon />
-          </IconButton>
+          <button 
+            onClick={handleNext} 
+            className="absolute -right-4 md:-right-8 z-20 w-10 md:w-14 h-full bg-black/40 hover:bg-black/80 text-white opacity-0 group-hover/slider:opacity-100 transition-opacity flex items-center justify-center rounded-l-md backdrop-blur-sm"
+          >
+            <ArrowForwardIosIcon className="text-2xl md:text-4xl shadow-lg" />
+          </button>
         )}
-        {/* Card nổi render ở ngoài slider, dùng position absolute */}
-        {hovered !== null && popupPos && (
-          <Box
-            key={hovered}
-            className="movie-slider-popup-appear"
-            sx={{
-              width: 450,
-              height: 450,
-              borderRadius: 3,
-              boxShadow: 8,
-              overflow: 'hidden',
-              bgcolor: 'transparent',
-              p: 0,
-              position: 'absolute',
-              top: popupPos.top,
+
+        {/* Hover Popup */}
+        {hovered !== null && popupPos && displayMovies[hovered] && (
+          <div
+            className="absolute z-[100] w-[350px] bg-[#141414] rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.8)] overflow-hidden border border-white/5 scale-100 origin-center"
+            style={{ 
+              top: popupPos.top, 
               left: popupPos.left,
-              zIndex: 200,
-              display: 'flex',
-              flexDirection: 'column',
+              animation: 'popup-fade-in 0.3s cubic-bezier(0.2, 0, 0, 1) forwards'
             }}
             onMouseEnter={handlePopupEnter}
             onMouseLeave={handlePopupLeave}
           >
-            {/* Ảnh nền */}
-            <Box sx={{ height: 200, width: '100%', position: 'relative' }}>
-              <CardMedia
-                component="img"
-                image={displayMovies[hovered].backdrop || displayMovies[hovered].poster}
+            {/* Custom Keyframe for Popup */}
+            <style>{`
+              @keyframes popup-fade-in {
+                from { opacity: 0; transform: translateY(20px) scale(0.95); }
+                to { opacity: 1; transform: translateY(0) scale(1); }
+              }
+            `}</style>
+            
+            {/* Backdrop Image */}
+            <div className="w-full aspect-video relative bg-black cursor-pointer group/popup-img overflow-hidden" onClick={() => navigate(`/watch/${displayMovies[hovered].id}`)}>
+              <img
+                src={displayMovies[hovered].backdrop || displayMovies[hovered].poster}
                 alt={displayMovies[hovered].title}
                 referrerPolicy="no-referrer"
-                onError={(e) => {
-                  e.currentTarget.src = FALLBACK_POSTER;
-                }}
-                sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                onError={(e) => { e.currentTarget.src = FALLBACK_POSTER; }}
+                className="w-full h-full object-cover transition-transform duration-700 group-hover/popup-img:scale-105"
               />
-              {/* Logo hoặc tiêu đề nổi trên ảnh nếu muốn */}
-            </Box>
-            {/* Phần thông tin phim */}
-            <Box
-              sx={{
-                flex: 1,
-                p: 2.5,
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                bgcolor: '#23242a',
-                borderBottomLeftRadius: 12,
-                borderBottomRightRadius: 12,
-              }}
-            >
-              {/* Tiêu đề phim */}
-              <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, mb: 0.5 }}>
-                {displayMovies[hovered].title}
-              </Typography>
-              <Typography variant="subtitle2" sx={{ color: '#FFD600', fontWeight: 400, mb: 1 }}>
-                {displayMovies[hovered].originalTitle}
-              </Typography>
-              {/* Nút và badge */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, mt: 2 }}>
-                <Button
-                  variant="contained"
-                  size="small"
-                  sx={{ bgcolor: '#FFD600', color: '#23242a', fontWeight: 700, borderRadius: 2, px: 2, py: 0.5, fontSize: 13, minHeight: 28, height: 28, lineHeight: '24px', boxShadow: 'none', '&:hover': { bgcolor: '#ffe082', color: '#23242a' } }}
+              <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-transparent to-transparent" />
+            </div>
+
+            {/* Content */}
+            <div className="px-5 pb-5 pt-2 relative z-10">
+              <h3 className="text-lg font-bold text-white leading-tight mb-1">{displayMovies[hovered].title}</h3>
+              {/* Actions */}
+              <div className="flex gap-2.5 mb-4 mt-2">
+                <button 
                   onClick={() => navigate(`/watch/${displayMovies[hovered].id}`)}
+                  className="w-10 h-10 bg-white hover:bg-white/80 text-black rounded-full flex items-center justify-center transition-transform hover:scale-110 shadow-md"
                 >
-                  Xem ngay
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  sx={{ color: '#fff', borderColor: '#fff', fontWeight: 600, borderRadius: 2, px: 1.5, py: 0.5, fontSize: 13, minHeight: 28, height: 28, lineHeight: '24px', boxShadow: 'none', display: 'flex', alignItems: 'center', '&:hover': { bgcolor: '#23242a', borderColor: '#FFD600', color: '#FFD600' } }}
-                  startIcon={<span style={{fontSize:13, display:'flex', alignItems:'center'}}>❤</span>}
-                >
-                  Thích
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  sx={{ color: '#fff', borderColor: '#fff', fontWeight: 600, borderRadius: 2, px: 1.5, py: 0.5, fontSize: 13, minHeight: 28, height: 28, lineHeight: '24px', boxShadow: 'none', '&:hover': { bgcolor: '#23242a', borderColor: '#FFD600', color: '#FFD600' } }}
-                  onClick={() => navigate(`/movies/${displayMovies[hovered].id}`)}
-                >
-                  Chi tiết
-                </Button>
-              </Box>
-              {/* Badge IMDb, năm, thời lượng, tuổi giới hạn */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                {/* IMDb badge */}
+                  <svg className="w-6 h-6 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                </button>
+                <button className="w-10 h-10 rounded-full border-2 border-white/40 hover:border-white hover:bg-white/10 text-white flex items-center justify-center transition-all hover:scale-110">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+                </button>
+                <button className="w-10 h-10 rounded-full border-2 border-white/40 hover:border-white hover:bg-white/10 text-white flex items-center justify-center transition-all hover:scale-110">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                </button>
+                <div className="flex-1" />
+                <button onClick={() => navigate(`/movies/${displayMovies[hovered].id}`)} className="w-10 h-10 rounded-full border-2 border-white/40 hover:border-white hover:bg-white/10 text-white flex items-center justify-center transition-all hover:scale-110">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 mb-3 text-xs font-semibold">
                 {displayMovies[hovered].imdb_rating && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', border: '2px solid #f5c518', borderRadius: 7, height: 24, padding: '0 5px', fontSize: 12, lineHeight: '24px', background: 'transparent', marginRight: 0 }}>
-                    <span style={{ color: '#f5c518', fontWeight: 700, fontSize: 12, marginRight: 3 }}>IMDb</span>
-                    <span style={{ color: '#fff', fontWeight: 600, fontSize: 12 }}>{Number(displayMovies[hovered].imdb_rating).toFixed(1)}</span>
-                  </span>
+                  <span className="text-green-400 font-bold">{Number(displayMovies[hovered].imdb_rating).toFixed(1)} Điểm</span>
                 )}
-                {/* Age limit badge */}
-                {displayMovies[hovered].age_limit && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', background: '#fff', color: '#222', borderRadius: 7, fontWeight: 700, fontSize: 12, fontFamily: 'monospace', padding: '0 5px', height: 24, lineHeight: '24px', marginRight: 0, border: 'none', minWidth: 0 }}>
-                    {displayMovies[hovered].age_limit}
-                  </span>
-                )}
-                {/* Release year badge */}
                 {displayMovies[hovered].release_year && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', background: 'transparent', color: '#fff', borderRadius: 7, fontWeight: 700, fontSize: 12, fontFamily: 'monospace', padding: '0 5px', height: 24, lineHeight: '24px', marginRight: 0, border: '2px solid #fff', minWidth: 0 }}>
-                    {displayMovies[hovered].release_year}
-                  </span>
+                  <span className="text-white/70">{displayMovies[hovered].release_year}</span>
                 )}
-                {/* Duration badge */}
+                {displayMovies[hovered].age_limit && (
+                  <span className="px-1.5 border border-white/30 text-white/70 rounded">{displayMovies[hovered].age_limit}</span>
+                )}
                 {displayMovies[hovered].duration && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', background: 'transparent', color: '#fff', borderRadius: 7, fontWeight: 700, fontSize: 12, fontFamily: 'monospace', padding: '0 5px', height: 24, lineHeight: '24px', marginRight: 0, border: '2px solid #fff', minWidth: 0 }}>
-                    {displayMovies[hovered].duration}
-                  </span>
+                  <span className="text-white/70">{displayMovies[hovered].duration}</span>
                 )}
-              </Box>
-              {/* Thể loại */}
+                {displayMovies[hovered].quality && (
+                  <span className="border border-white/30 px-1 rounded text-white/90 uppercase text-[10px] tracking-wider">{displayMovies[hovered].quality}</span>
+                )}
+              </div>
+
+              {/* Genres */}
               {displayMovies[hovered].genres && displayMovies[hovered].genres.length > 0 && (
-                <Box sx={{ mt: 1, mb: 0.5 }}>
-                  <span style={{ color: '#fff', fontSize: 15, fontWeight: 400 }}>
-                    {displayMovies[hovered].genres.map((tag, idx) => (
-                      <React.Fragment key={tag.name || tag}>
-                        {tag.name || tag}{idx < displayMovies[hovered].genres.length - 1 && <span style={{ margin: '0 7px', color: '#fff' }}>•</span>}
-                      </React.Fragment>
-                    ))}
-                  </span>
-                </Box>
+                <div className="flex flex-wrap items-center gap-1.5 mt-3">
+                  {displayMovies[hovered].genres.slice(0, 3).map((tag, idx) => (
+                    <React.Fragment key={tag.name || tag}>
+                      <span className="text-[13px] text-white/90 font-medium hover:text-white cursor-pointer" onClick={() => navigate(`/movies?genre=${encodeURIComponent(tag.name || tag)}`)}>{tag.name || tag}</span>
+                      {idx < Math.min(displayMovies[hovered].genres.length, 3) - 1 && <span className="text-white/30 text-[10px] mx-0.5">•</span>}
+                    </React.Fragment>
+                  ))}
+                </div>
               )}
-            </Box>
-          </Box>
+            </div>
+          </div>
         )}
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
-} 
+}

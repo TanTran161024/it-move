@@ -3,7 +3,6 @@ import CloseIcon from '@mui/icons-material/Close';
 import { useState } from 'react';
 import axios from 'axios';
 import GoogleLoginButton from './GoogleLoginButton';
-import './Auth.css';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 

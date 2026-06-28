@@ -275,6 +275,8 @@ export default function Admin() {
     }
   }, [selectedMenu]);
 
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
   if (!user.is_admin) return <Alert severity="error">Bạn không có quyền truy cập trang này!</Alert>;
 
   const handleOpen = async (movie) => {
@@ -442,7 +444,6 @@ export default function Admin() {
   const selectOverrideSx = { '& option': { color: '#111', background: '#fff' } };
 
   const currentUserId = user?.id;
-  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const menuItems = [
     { key: 'dashboard', icon: <BarChartIcon /> },

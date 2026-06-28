@@ -1,4 +1,3 @@
-import { Box } from '@mui/material';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import Banner from '../../components/layout/Banner';
@@ -53,24 +52,25 @@ export default function Home() {
   }, []);
 
   return (
-    <Box sx={{ width: '100%', maxWidth: 2000, mx: 'auto', px: { xs: 6, md: 9 } }}>
+    <div className="w-full bg-background min-h-screen pb-20">
+      {/* Banner is now truly edge-to-edge full width */}
       <Banner />
-      <Box sx={{ width: '100%', mt: 7, mb: 6 }}>
-        <Box sx={{ width: '100%', maxWidth: 2000, mx: 'auto' }}>
-          <MovieSlider movies={newMovies} title="Phim mới cập nhật" />
-          <MovieSlider movies={topViewedMovies} title="Phim xem nhiều nhất" />
+      
+      {/* Movie Sliders Container */}
+      <div className="w-full max-w-[2000px] mx-auto px-4 sm:px-8 md:px-12 lg:px-16 relative z-20 space-y-8 md:space-y-12">
+        <MovieSlider movies={newMovies} title="Phim mới cập nhật" />
+        <MovieSlider movies={topViewedMovies} title="Phim xem nhiều nhất" />
 
-          {categories.map((category) => (
-            <MovieSlider
-              key={category.id}
-              movies={moviesByCategory[category.id] || []}
-              title={category.name}
-              categoryId={category.id}
-              categoryName={category.name}
-            />
-          ))}
-        </Box>
-      </Box>
-    </Box>
+        {categories.map((category) => (
+          <MovieSlider
+            key={category.id}
+            movies={moviesByCategory[category.id] || []}
+            title={category.name}
+            categoryId={category.id}
+            categoryName={category.name}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
