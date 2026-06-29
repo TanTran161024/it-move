@@ -3,8 +3,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import { useState } from 'react';
 import axios from 'axios';
 import GoogleLoginButton from './GoogleLoginButton';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { API_BASE_URL as API } from '../../config/api';
 
 export default function LoginDialog({ open, onClose, onRegister, onForgot }) {
   const [identifier, setIdentifier] = useState('');

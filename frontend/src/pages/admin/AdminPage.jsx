@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Box, Container, Typography, Grid, Card, CardMedia, CardContent, CardActions, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Alert, Toolbar, Autocomplete, Tabs, Tab, Switch } from '@mui/material';
 import axios from 'axios';
 import MovieTable from '../../components/admin/MovieTable';
@@ -7,6 +7,7 @@ import EpisodeManager from '../../components/admin/EpisodeManager';
 import Sidebar from '../../components/admin/Sidebar';
 import CategoryManager from '../../components/admin/CategoryManager';
 import AdminFeedbackManager from '../../components/admin/AdminFeedbackManager';
+import SubtitleTranslator from '../../components/admin/SubtitleTranslator';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
@@ -22,6 +23,8 @@ import PeopleIcon from '@mui/icons-material/People';
 import HomeIcon from '@mui/icons-material/Home';
 import LogoutIcon from '@mui/icons-material/Logout';
 import RateReviewIcon from '@mui/icons-material/RateReview';
+import SubtitlesIcon from '@mui/icons-material/Subtitles';
+import { API_BASE_URL as API } from '../../config/api';
 
 export default function Admin() {
   const [movies, setMovies] = useState([]);
@@ -72,24 +75,16 @@ export default function Admin() {
   const [userForm, setUserForm] = useState({ username: '', email: '', gender: '', is_admin: false });
   const fetchUsers = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/users');
+      const res = await axios.get(`${API}/api/users`);
       setUsers(res.data);
     } catch (err) {
       setUserError(err.response?.data?.message || 'Lỗi');
     }
   };
   useEffect(() => { if (selectedMenu === 'users') fetchUsers(); }, [selectedMenu]);
-  const handleToggleAdmin = async (user) => {
-    try {
-      await axios.put(`http://localhost:5000/api/users/${user.id}/admin`, { is_admin: !user.is_admin });
-      fetchUsers();
-    } catch (err) {
-      setUserError(err.response?.data?.message || 'Lỗi');
-    }
-  };
   const handleToggleUserStatus = async (user) => {
     try {
-      await axios.put(`http://localhost:5000/api/users/${user.id}/status`, { is_active: !user.is_active });
+      await axios.put(`${API}/api/users/${user.id}/status`, { is_active: !user.is_active });
       fetchUsers();
     } catch (err) {
       setUserError(err.response?.data?.message || 'Lỗi');
@@ -98,7 +93,7 @@ export default function Admin() {
   const handleDeleteUser = async (id) => {
     if (!window.confirm('Xóa tài khoản này?')) return;
     try {
-      await axios.delete(`http://localhost:5000/api/users/${id}`);
+      await axios.delete(`${API}/api/users/${id}`);
       fetchUsers();
     } catch (err) {
       setUserError(err.response?.data?.message || 'Lỗi');
@@ -122,10 +117,10 @@ export default function Admin() {
       const oldUser = users.find(u => u.id === userEditId);
       // Nếu quyền admin thay đổi, cập nhật quyền trước
       if (typeof userForm.is_admin !== 'undefined' && oldUser && (Boolean(userForm.is_admin) !== Boolean(oldUser.is_admin))) {
-        await axios.put(`http://localhost:5000/api/users/${userEditId}/admin`, { is_admin: userForm.is_admin });
+        await axios.put(`${API}/api/users/${userEditId}/admin`, { is_admin: userForm.is_admin });
       }
       // Cập nhật các trường khác
-      await axios.put(`http://localhost:5000/api/users/${userEditId}`, {
+      await axios.put(`${API}/api/users/${userEditId}`, {
         username: userForm.username,
         email: userForm.email,
         gender: userForm.gender
@@ -139,10 +134,10 @@ export default function Admin() {
   // Lấy dữ liệu liên kết khi mở form
   const fetchRelations = async () => {
     const [g, c, a, d] = await Promise.all([
-      axios.get('http://localhost:5000/api/genres'),
-      axios.get('http://localhost:5000/api/countries'),
-      axios.get('http://localhost:5000/api/actors'),
-      axios.get('http://localhost:5000/api/directors'),
+      axios.get(`${API}/api/genres`),
+      axios.get(`${API}/api/countries`),
+      axios.get(`${API}/api/actors`),
+      axios.get(`${API}/api/directors`),
     ]);
     setGenres(g.data);
     setCountries(c.data);
@@ -150,30 +145,30 @@ export default function Admin() {
     setDirectors(d.data);
   };
 
-  const fetchMovies = () => {
-    axios.get('http://localhost:5000/api/movies?include_hidden=true', {
+  const fetchMovies = useCallback(() => {
+    axios.get(`${API}/api/movies?include_hidden=true`, {
       headers: { 'x-user-id': user.id },
     }).then(res => setMovies(res.data));
-  };
+  }, [user.id]);
 
   // Lấy danh sách banner
-  const fetchBanners = async () => {
-    const res = await axios.get('http://localhost:5000/api/banners');
+  const fetchBanners = useCallback(async () => {
+    const res = await axios.get(`${API}/api/banners`);
     setBanners(res.data);
-  };
+  }, []);
 
   // Lấy danh sách phim cho select movie
   const [allMovies, setAllMovies] = useState([]);
-  const fetchAllMovies = async () => {
-    const res = await axios.get('http://localhost:5000/api/movies?include_hidden=true', {
+  const fetchAllMovies = useCallback(async () => {
+    const res = await axios.get(`${API}/api/movies?include_hidden=true`, {
       headers: { 'x-user-id': user.id },
     });
     setAllMovies(res.data);
-  };
+  }, [user.id]);
 
   // Lấy danh sách tập phim cho 1 movie
   const fetchEpisodes = async (movieId) => {
-    const res = await axios.get(`http://localhost:5000/api/movies/${movieId}/episodes`);
+    const res = await axios.get(`${API}/api/movies/${movieId}/episodes`);
     setEpisodes(res.data);
   };
   const handleManageEpisodes = async (movie) => {
@@ -187,27 +182,27 @@ export default function Admin() {
     setEpisodes([]);
   };
   const handleAddEpisode = async (form) => {
-    await axios.post(`http://localhost:5000/api/movies/${episodeMovie.id}/episodes`, form);
+    await axios.post(`${API}/api/movies/${episodeMovie.id}/episodes`, form);
     await fetchEpisodes(episodeMovie.id);
   };
   const handleEditEpisode = async (id, form) => {
-    await axios.put(`http://localhost:5000/api/episodes/${id}`, form);
+    await axios.put(`${API}/api/episodes/${id}`, form);
     await fetchEpisodes(episodeMovie.id);
   };
   const handleDeleteEpisode = async (id) => {
     if (!window.confirm('Xóa tập này?')) return;
-    await axios.delete(`http://localhost:5000/api/episodes/${id}`);
+    await axios.delete(`${API}/api/episodes/${id}`);
     await fetchEpisodes(episodeMovie.id);
   };
 
   // Fetch data cho từng tab
   const fetchCategories = async () => {
     const [g, c, p, a, d] = await Promise.all([
-      axios.get('http://localhost:5000/api/genres'),
-      axios.get('http://localhost:5000/api/countries'),
-      axios.get('http://localhost:5000/api/producers'),
-      axios.get('http://localhost:5000/api/actors'),
-      axios.get('http://localhost:5000/api/directors'),
+      axios.get(`${API}/api/genres`),
+      axios.get(`${API}/api/countries`),
+      axios.get(`${API}/api/producers`),
+      axios.get(`${API}/api/actors`),
+      axios.get(`${API}/api/directors`),
     ]);
     setGenresList(g.data);
     setCountriesList(c.data);
@@ -237,9 +232,9 @@ export default function Admin() {
         url = 'directors'; data = { name: catForm.name, profile_pic_url: catForm.profile_pic_url, bio: catForm.bio };
       }
       if (catEditId) {
-        await axios.put(`http://localhost:5000/api/${url}/${catEditId}`, data);
+        await axios.put(`${API}/api/${url}/${catEditId}`, data);
       } else {
-        await axios.post(`http://localhost:5000/api/${url}`, data);
+        await axios.post(`${API}/api/${url}`, data);
       }
       fetchCategories(); handleCatCancel();
     } catch (err) {
@@ -254,7 +249,7 @@ export default function Admin() {
     else if (selectedTab === 2) url = 'producers';
     else if (selectedTab === 3) url = 'actors';
     else if (selectedTab === 4) url = 'directors';
-    await axios.delete(`http://localhost:5000/api/${url}/${id}`);
+    await axios.delete(`${API}/api/${url}/${id}`);
     fetchCategories();
   };
 
@@ -262,14 +257,14 @@ export default function Admin() {
     fetchMovies();
     fetchBanners();
     fetchAllMovies();
-  }, []);
+  }, [fetchMovies, fetchBanners, fetchAllMovies]);
 
   // State cho dashboard
   const [stats, setStats] = useState(null);
   const [statsError, setStatsError] = useState('');
   useEffect(() => {
     if (selectedMenu === 'dashboard') {
-      axios.get('http://localhost:5000/api/admin/stats')
+      axios.get(`${API}/api/admin/stats`)
         .then(res => setStats(res.data))
         .catch(err => setStatsError(err.response?.data?.message || 'Lỗi'));
     }
@@ -329,9 +324,9 @@ export default function Admin() {
       let movieId = editMovie?.id;
       const movieData = safeMovieData(form);
       if (editMovie) {
-        await axios.put(`http://localhost:5000/api/movies/${editMovie.id}`, movieData);
+        await axios.put(`${API}/api/movies/${editMovie.id}`, movieData);
       } else {
-        const res = await axios.post('http://localhost:5000/api/movies', movieData);
+        const res = await axios.post(`${API}/api/movies`, movieData);
         movieId = res.data.id || null;
         if (!movieId) {
           await fetchMovies();
@@ -341,10 +336,10 @@ export default function Admin() {
       }
       // Gắn các liên kết
       if (movieId) {
-        await axios.post(`http://localhost:5000/api/movies/${movieId}/genres`, { genre_ids: selectedGenres.map(g => g.id) });
-        await axios.post(`http://localhost:5000/api/movies/${movieId}/countries`, { country_ids: selectedCountries.map(c => c.id) });
-        await axios.post(`http://localhost:5000/api/movies/${movieId}/actors`, { actor_ids: selectedActors.map(a => a.id) });
-        await axios.post(`http://localhost:5000/api/movies/${movieId}/directors`, { director_ids: selectedDirectors.map(d => d.id) });
+        await axios.post(`${API}/api/movies/${movieId}/genres`, { genre_ids: selectedGenres.map(g => g.id) });
+        await axios.post(`${API}/api/movies/${movieId}/countries`, { country_ids: selectedCountries.map(c => c.id) });
+        await axios.post(`${API}/api/movies/${movieId}/actors`, { actor_ids: selectedActors.map(a => a.id) });
+        await axios.post(`${API}/api/movies/${movieId}/directors`, { director_ids: selectedDirectors.map(d => d.id) });
       }
       fetchMovies(); handleClose();
     } catch (err) {
@@ -355,7 +350,7 @@ export default function Admin() {
   const handleDelete = async (id) => {
     if (!window.confirm('Xóa phim này?')) return;
     try {
-      await axios.delete(`http://localhost:5000/api/movies/${id}`);
+      await axios.delete(`${API}/api/movies/${id}`);
       fetchMovies();
     } catch (err) {
       setError(err.response?.data?.message || 'Lỗi');
@@ -365,7 +360,7 @@ export default function Admin() {
   const handleToggleVisibility = async (movie) => {
     try {
       await axios.patch(
-        `http://localhost:5000/api/movies/${movie.id}/visibility`,
+        `${API}/api/movies/${movie.id}/visibility`,
         { is_visible: !movie.is_visible },
         { headers: { 'x-user-id': user.id } }
       );
@@ -408,9 +403,9 @@ export default function Admin() {
         thumbnails: bannerForm.thumbnails ? [bannerForm.thumbnails] : []
       };
       if (editBanner) {
-        await axios.put(`http://localhost:5000/api/banners/${editBanner.id}`, data);
+        await axios.put(`${API}/api/banners/${editBanner.id}`, data);
       } else {
-        await axios.post('http://localhost:5000/api/banners', data);
+        await axios.post(`${API}/api/banners`, data);
       }
       fetchBanners(); handleBannerClose();
     } catch (err) {
@@ -420,7 +415,7 @@ export default function Admin() {
   const handleBannerDelete = async (id) => {
     if (!window.confirm('Xóa banner này?')) return;
     try {
-      await axios.delete(`http://localhost:5000/api/banners/${id}`);
+      await axios.delete(`${API}/api/banners/${id}`);
       fetchBanners();
     } catch (err) {
       setBannerError(err.response?.data?.message || 'Lỗi');
@@ -450,6 +445,7 @@ export default function Admin() {
     { key: 'movies', icon: <MovieIcon /> },
     { key: 'banners', icon: <ImageIcon /> },
     { key: 'categories', icon: <CategoryIcon /> },
+    { key: 'subtitles', icon: <SubtitlesIcon /> },
     { key: 'users', icon: <PeopleIcon /> },
     { key: 'feedback', icon: <RateReviewIcon /> },
   ];
@@ -707,6 +703,9 @@ export default function Admin() {
         )}
         {selectedMenu === 'categories' && (
           <CategoryManager />
+        )}
+        {selectedMenu === 'subtitles' && (
+          <SubtitleTranslator />
         )}
         {selectedMenu === 'users' && (
           <Box sx={{ color: '#fff', mt: 4, maxWidth: '1400px', mx: 'auto' }}>

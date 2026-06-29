@@ -26,8 +26,7 @@ import ForgotPasswordDialog from '../auth/ForgotPasswordDialog';
 import LoginDialog from '../auth/LoginDialog';
 import RegisterDialog from '../auth/RegisterDialog';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { API_BASE_URL as API } from '../../config/api';
 
 const NAV_ITEMS = [
   { label: 'Thể loại', menu: 'genres' },
@@ -42,6 +41,8 @@ function buildMoviesUrl(query) {
   Object.entries(query).forEach(([key, value]) => params.set(key, value));
   return `/movies?${params.toString()}`;
 }
+
+const MotionDiv = motion.div;
 
 export default function Header() {
   const [openLogin, setOpenLogin] = useState(false);
@@ -206,7 +207,7 @@ export default function Header() {
           <div className="flex items-center justify-end relative">
             <AnimatePresence>
               {isSearchOpen && (
-                <motion.div
+                <MotionDiv
                   initial={{ width: 0, opacity: 0 }}
                   animate={{ width: 240, opacity: 1 }}
                   exit={{ width: 0, opacity: 0 }}
@@ -222,7 +223,7 @@ export default function Header() {
                     onKeyDown={handleSearchKeyDown}
                     autoFocus
                   />
-                </motion.div>
+                </MotionDiv>
               )}
             </AnimatePresence>
             <IconButton onClick={() => setIsSearchOpen(!isSearchOpen)} className="!text-white hover:!bg-white/10">

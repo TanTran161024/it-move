@@ -3,8 +3,7 @@ import axios from 'axios';
 import GoogleLoginButton from '../../components/auth/GoogleLoginButton';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { API_BASE_URL as API } from '../../config/api';
 
 export default function Login() {
   const location = useLocation();

@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import FilterBox from '../../components/filter/FilterBox';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import { API_BASE_URL as API } from '../../config/api';
 
 const PAGE_SIZE = 16;
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const FALLBACK_POSTER =
   "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='450' viewBox='0 0 300 450'%3E%3Crect width='300' height='450' fill='%23111111'/%3E%3Cpath d='M118 170v110l92-55z' fill='%23E50914'/%3E%3Ctext x='150' y='330' fill='%23fff' font-family='Arial,sans-serif' font-size='20' text-anchor='middle'%3ENo poster%3C/text%3E%3C/svg%3E";
@@ -29,12 +29,6 @@ export default function Movies() {
   const navigate = useNavigate();
 
   const categoryInfo = location.state;
-
-  const safeSetGenre = (val) => {
-    if (Array.isArray(val)) setGenre(val);
-    else if (typeof val === 'string') setGenre([val]);
-    else setGenre(['Tất cả']);
-  };
 
   function getIsSeries() {
     const params = new URLSearchParams(location.search);
@@ -61,6 +55,33 @@ export default function Movies() {
   }
   const tabParam = getTab();
   const isActorTab = tabParam === 'actor';
+
+  const fetchAllMovies = useCallback(() => {
+    fetch(`${API}/api/movies`)
+      .then(res => res.json())
+      .then(data => {
+        let filtered = data;
+        if (isSeries !== null) {
+          filtered = filtered.filter(m => !!m.is_series === isSeries);
+        }
+        if (genreParam) {
+          filtered = filtered.filter(m =>
+            (Array.isArray(m.genres) ? m.genres : (m.genres ? JSON.parse(m.genres) : [])).some(g =>
+              (g.name || g).toLowerCase() === genreParam.toLowerCase()
+            )
+          );
+        }
+        if (countryParam) {
+          filtered = filtered.filter(m =>
+            (Array.isArray(m.countries) ? m.countries : (m.countries ? JSON.parse(m.countries) : [])).some(c =>
+              (c.name || c).toLowerCase() === countryParam.toLowerCase()
+            )
+          );
+        }
+        setMovies(filtered);
+        setLoading(false);
+      });
+  }, [countryParam, genreParam, isSeries]);
 
   useEffect(() => {
     if (isActorTab) {
@@ -119,34 +140,7 @@ export default function Movies() {
         fetchAllMovies();
       }
     }
-  }, [isSeries, genreParam, countryParam, isActorTab, categoryInfo]);
-
-  const fetchAllMovies = () => {
-    fetch(`${API}/api/movies`)
-      .then(res => res.json())
-      .then(data => {
-        let filtered = data;
-        if (isSeries !== null) {
-          filtered = filtered.filter(m => !!m.is_series === isSeries);
-        }
-        if (genreParam) {
-          filtered = filtered.filter(m =>
-            (Array.isArray(m.genres) ? m.genres : (m.genres ? JSON.parse(m.genres) : [])).some(g =>
-              (g.name || g).toLowerCase() === genreParam.toLowerCase()
-            )
-          );
-        }
-        if (countryParam) {
-          filtered = filtered.filter(m =>
-            (Array.isArray(m.countries) ? m.countries : (m.countries ? JSON.parse(m.countries) : [])).some(c =>
-              (c.name || c).toLowerCase() === countryParam.toLowerCase()
-            )
-          );
-        }
-        setMovies(filtered);
-        setLoading(false);
-      });
-  };
+  }, [isSeries, genreParam, countryParam, isActorTab, categoryInfo, fetchAllMovies]);
 
   const handleFilter = (filters) => {
     if (categoryInfo && categoryInfo.filterType === 'category' && categoryInfo.categoryId) {

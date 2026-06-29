@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
@@ -9,17 +9,16 @@ import {
   Typography,
 } from '@mui/material';
 import axios from 'axios';
-
-const API = 'http://localhost:5000/api';
+import { API_URL as API } from '../../config/api';
 
 export default function AdminFeedbackManager() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const headers = { 'x-user-id': user.id };
+  const headers = useMemo(() => ({ 'x-user-id': user.id }), [user.id]);
   const [comments, setComments] = useState([]);
   const [reports, setReports] = useState([]);
   const [error, setError] = useState('');
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setError('');
       const [commentsRes, reportsRes] = await Promise.all([
@@ -31,11 +30,11 @@ export default function AdminFeedbackManager() {
     } catch (err) {
       setError(err.response?.data?.message || 'Không thể tải dữ liệu quản lý.');
     }
-  };
+  }, [headers]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const updateCommentStatus = async (id, status) => {
     await axios.patch(`${API}/admin/comments/${id}`, { status }, { headers });

@@ -2,8 +2,7 @@ import { Alert, Button, Dialog, IconButton, TextField } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { useState } from 'react';
 import axios from 'axios';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { API_BASE_URL as API } from '../../config/api';
 
 export default function ForgotPasswordDialog({ open, onClose, onLogin }) {
   const [email, setEmail] = useState('');

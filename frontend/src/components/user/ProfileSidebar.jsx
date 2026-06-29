@@ -28,7 +28,7 @@ export default function ProfileSidebar({ user = {}, profile = {} }) {
     navigate('/');
   };
 
-  const sidebarMenu = Boolean(user.is_admin)
+  const sidebarMenu = user.is_admin
     ? [...menu, { label: 'Admin', icon: <BarChartIcon sx={{ fontSize: 20 }} />, path: '/admin' }]
     : menu;
 

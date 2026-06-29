@@ -6,6 +6,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import { motion, AnimatePresence } from 'framer-motion';
+import { API_BASE_URL as API } from '../../config/api';
 
 function snakeToCamel(obj) {
   if (Array.isArray(obj)) {
@@ -40,6 +41,7 @@ function parseBannerFields(banner) {
 }
 
 const MAX_BANNERS = 6;
+const MotionDiv = motion.div;
 
 export default function Banner() {
   const [banners, setBanners] = useState([]);
@@ -59,7 +61,7 @@ export default function Banner() {
   };
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/banners')
+    fetch(`${API}/api/banners`)
       .then(res => res.json())
       .then(data => setBanners(data.map(snakeToCamel).map(parseBannerFields)))
       .catch(err => console.error('Lỗi fetch banner:', err));
@@ -134,7 +136,7 @@ export default function Banner() {
       onTouchEnd={() => { setIsPaused(false); handleDragEnd(); }}
     >
       <AnimatePresence mode="wait">
-        <motion.div
+        <MotionDiv
           key={selected}
           initial={{ opacity: 0, scale: 1.05 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -154,13 +156,13 @@ export default function Banner() {
           <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent opacity-80" />
           <div className="absolute bottom-0 left-0 right-0 h-[30vh] bg-gradient-to-t from-background to-transparent" />
           <div className="absolute inset-0 bg-black/20" />
-        </motion.div>
+        </MotionDiv>
       </AnimatePresence>
 
       {/* Content */}
       <div className="relative z-10 w-full container mx-auto px-4 md:px-8 max-w-7xl h-full flex flex-col justify-center pt-20 pb-10">
         <AnimatePresence mode="wait">
-          <motion.div
+          <MotionDiv
             key={selected}
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -215,7 +217,7 @@ export default function Banner() {
             {/* Tags/Genres */}
             {banner.genres && banner.genres.length > 0 && (
               <div className="flex flex-wrap items-center gap-2 mt-1">
-                {banner.genres.map((tag, idx) => (
+                {banner.genres.map((tag) => (
                   <button
                     key={tag}
                     onClick={(e) => { e.stopPropagation(); navigate(`/movies?genre=${encodeURIComponent(tag)}`); }}
@@ -254,7 +256,7 @@ export default function Banner() {
                 <FavoriteBorderIcon />
               </button>
             </div>
-          </motion.div>
+          </MotionDiv>
         </AnimatePresence>
       </div>
 

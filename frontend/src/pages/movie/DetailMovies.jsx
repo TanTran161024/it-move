@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import ForgotPasswordDialog from '../../components/auth/ForgotPasswordDialog';
 import LoginDialog from '../../components/auth/LoginDialog';
@@ -9,8 +9,7 @@ import FavoriteIcon from '@mui/icons-material/Favorite';
 import AddIcon from '@mui/icons-material/Add';
 import CheckIcon from '@mui/icons-material/Check';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import { API_URL as API } from '../../config/api';
 
 const reportReasons = [
   'Video không phát',
@@ -19,6 +18,9 @@ const reportReasons = [
   'Thông tin phim sai',
   'Lỗi khác',
 ];
+
+const FALLBACK_POSTER =
+  "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='450' viewBox='0 0 300 450'%3E%3Crect width='300' height='450' fill='%23111111'/%3E%3Cpath d='M118 170v110l92-55z' fill='%23E50914'/%3E%3Ctext x='150' y='330' fill='%23fff' font-family='Arial,sans-serif' font-size='20' text-anchor='middle'%3ENo poster%3C/text%3E%3C/svg%3E";
 
 const DetailMovies = () => {
   const { id } = useParams();
@@ -39,6 +41,9 @@ const DetailMovies = () => {
   const [reportReason, setReportReason] = useState(reportReasons[0]);
   const [reportText, setReportText] = useState('');
   const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [recommendedMovies, setRecommendedMovies] = useState([]);
+  const [recommendationLoading, setRecommendationLoading] = useState(false);
+  const [recommendationError, setRecommendationError] = useState('');
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
   const [registerPromptOpen, setRegisterPromptOpen] = useState(false);
   const [forgotPromptOpen, setForgotPromptOpen] = useState(false);
@@ -59,6 +64,34 @@ const DetailMovies = () => {
   }, [id]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    setRecommendationLoading(true);
+    setRecommendationError('');
+    setRecommendedMovies([]);
+
+    fetch(`${API}/recommendations?movie_id=${encodeURIComponent(id)}&limit=12`, {
+      signal: controller.signal,
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Không thể tải gợi ý tương tự');
+        return res.json();
+      })
+      .then((movies) => {
+        setRecommendedMovies(Array.isArray(movies) ? movies : []);
+      })
+      .catch((err) => {
+        if (err.name === 'AbortError') return;
+        setRecommendationError(err.message || 'Không thể tải gợi ý tương tự');
+        setRecommendedMovies([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setRecommendationLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [id]);
+
+  useEffect(() => {
     if (!user.id) return;
     fetch(`${API}/user/library-status/${id}`, { headers: { 'x-user-id': user.id } })
       .then((res) => res.json())
@@ -69,7 +102,7 @@ const DetailMovies = () => {
       .catch(() => {});
   }, [id, user.id]);
 
-  const fetchFeedback = () => {
+  const fetchFeedback = useCallback(() => {
     const headers = user.id ? { 'x-user-id': user.id } : {};
     Promise.all([
       fetch(`${API}/movies/${id}/ratings`, { headers }).then((res) => res.json()),
@@ -81,11 +114,11 @@ const DetailMovies = () => {
         setComments(Array.isArray(commentsData) ? commentsData : []);
       })
       .catch(() => {});
-  };
+  }, [id, user.id]);
 
   useEffect(() => {
     fetchFeedback();
-  }, [id, user.id]);
+  }, [fetchFeedback]);
 
   const handleGenreClick = (genre) => {
     navigate(`/movies?genre=${encodeURIComponent(genre)}`);
@@ -373,19 +406,52 @@ const DetailMovies = () => {
               {activeTab === 'suggested' && (
                 <div className="animate-in fade-in duration-500">
                   <h3 className="text-2xl font-bold text-white mb-6">Có thể bạn sẽ thích</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
-                    {data.suggested?.length > 0 ? data.suggested.map((movie) => (
-                      <button key={movie.id} onClick={() => navigate(`/movies/${movie.id}`)} className="group text-left focus:outline-none">
-                        <div className="relative overflow-hidden rounded-xl aspect-[2/3] mb-3">
-                          <img src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <PlayArrowIcon className="text-5xl text-white drop-shadow-lg" />
-                          </div>
+                  {recommendationLoading ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
+                      {Array.from({ length: 6 }).map((_, index) => (
+                        <div key={`recommendation-skeleton-${index}`} className="animate-pulse">
+                          <div className="rounded-xl aspect-[2/3] mb-3 bg-white/10" />
+                          <div className="h-4 rounded bg-white/10 w-4/5" />
+                          <div className="h-3 rounded bg-white/10 w-2/3 mt-2" />
                         </div>
-                        <h4 className="text-white font-bold text-sm line-clamp-2 group-hover:text-primary transition-colors">{movie.title}</h4>
-                      </button>
-                    )) : <div className="col-span-full text-text-secondary font-medium">Không có đề xuất phù hợp</div>}
-                  </div>
+                      ))}
+                    </div>
+                  ) : recommendationError ? (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-6 text-text-secondary">
+                      {recommendationError}
+                    </div>
+                  ) : recommendedMovies.length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
+                      {recommendedMovies.map((movie) => (
+                        <button key={movie.id} onClick={() => navigate(`/movies/${movie.id}`)} className="group text-left focus:outline-none">
+                          <div className="relative overflow-hidden rounded-xl aspect-[2/3] mb-3 bg-surface">
+                            <img
+                              src={movie.poster_url || FALLBACK_POSTER}
+                              alt={movie.title}
+                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                              onError={(event) => { event.currentTarget.src = FALLBACK_POSTER; }}
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <PlayArrowIcon className="text-5xl text-white drop-shadow-lg" />
+                            </div>
+                            {movie.imdb_rating && (
+                              <div className="absolute top-2 right-2 rounded bg-black/70 px-2 py-1 text-xs font-bold text-[#f5c518]">
+                                IMDb {Number(movie.imdb_rating).toFixed(1)}
+                              </div>
+                            )}
+                          </div>
+                          <h4 className="text-white font-bold text-sm line-clamp-2 group-hover:text-primary transition-colors">{movie.title}</h4>
+                          {Array.isArray(movie.match_reasons) && movie.match_reasons.length > 0 && (
+                            <p className="mt-1 text-xs text-text-secondary line-clamp-2">{movie.match_reasons.slice(0, 2).join(', ')}</p>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-6 text-text-secondary">
+                      Thử chọn một phim khác để xem thêm gợi ý phù hợp.
+                    </div>
+                  )}
                 </div>
               )}
             </div>

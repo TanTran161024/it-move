@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const { getSimilarMovies, getUserRecommendations, clampLimit } = require('./services/recommendationService');
 const { chatWithMovieAdvisor, getAiStatus } = require('./services/aiService');
+const { translateSubtitle } = require('./services/subtitleTranslatorService');
 
 const OTP_EXPIRATION_MINUTES = 10;
 const TEST_VIEW_MIN = Number(process.env.TEST_VIEW_MIN || 1000);
@@ -127,6 +128,17 @@ function getUserId(req) {
   return req.body?.user_id || req.query?.user_id || req.headers?.['x-user-id'];
 }
 
+function toPositiveInt(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : null;
+}
+
+function clampSeconds(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(0, Math.floor(number));
+}
+
 async function isAdminUser(db, userId) {
   if (!userId) return false;
   const [rows] = await db.execute('SELECT is_admin FROM users WHERE id = ?', [userId]);
@@ -165,6 +177,78 @@ async function recordMovieView(db, req, movieId) {
     [movieId, userId, ipAddress, userAgent]
   );
   await db.execute('UPDATE movies SET views = COALESCE(views, 0) + 1 WHERE id = ?', [movieId]);
+}
+
+async function getValidatedWatchProgressInput(db, body) {
+  const movieId = toPositiveInt(body?.movie_id);
+  const episodeId = body?.episode_id ? toPositiveInt(body.episode_id) : null;
+  const episodeNumber = body?.episode_number ? toPositiveInt(body.episode_number) : null;
+  let progress = clampSeconds(body?.progress_seconds);
+  let duration = clampSeconds(body?.duration_seconds);
+
+  if (!movieId) {
+    const error = new Error('Thiếu movie_id hợp lệ');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const [movieRows] = await db.execute('SELECT id FROM movies WHERE id = ? LIMIT 1', [movieId]);
+  if (!movieRows.length) {
+    const error = new Error('Phim không tồn tại');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  let normalizedEpisodeNumber = episodeNumber;
+  if (episodeId) {
+    const [episodeRows] = await db.execute(
+      'SELECT id, episode_number FROM episodes WHERE id = ? AND movie_id = ? LIMIT 1',
+      [episodeId, movieId]
+    );
+    if (!episodeRows.length) {
+      const error = new Error('Tập phim không tồn tại hoặc không thuộc phim này');
+      error.statusCode = 400;
+      throw error;
+    }
+    normalizedEpisodeNumber = episodeRows[0].episode_number;
+  }
+
+  if (duration > 0 && progress > duration) progress = duration;
+  const completed = body?.completed === undefined
+    ? duration > 0 && progress / duration >= 0.9
+    : Boolean(body.completed);
+
+  return {
+    movieId,
+    episodeId,
+    episodeNumber: normalizedEpisodeNumber,
+    progress,
+    duration,
+    completed,
+  };
+}
+
+async function upsertWatchProgress(db, userId, input) {
+  await db.execute(
+    `INSERT INTO user_watch_history
+     (user_id, movie_id, episode_id, episode_number, progress_seconds, duration_seconds, completed)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       episode_id = VALUES(episode_id),
+       progress_seconds = VALUES(progress_seconds),
+       duration_seconds = VALUES(duration_seconds),
+       completed = VALUES(completed),
+       last_watched_at = NOW()`,
+    [
+      userId,
+      input.movieId,
+      input.episodeId || null,
+      input.episodeNumber || null,
+      input.progress,
+      input.duration,
+      input.completed ? 1 : 0,
+    ]
+  );
 }
 
 async function getMovieCardsByJoin(db, tableName, userId, orderColumn = 'ul.created_at') {
@@ -406,6 +490,21 @@ router.post('/ai/chat', async (req, res) => {
       user_id: req.body?.user_id || req.headers?.['x-user-id'],
       history: req.body?.history,
       shown_movie_ids: req.body?.shown_movie_ids,
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.post('/ai/subtitles/translate', requireAdminMiddleware, async (req, res) => {
+  try {
+    const result = await translateSubtitle({
+      content: req.body?.content,
+      source_language: req.body?.source_language,
+      target_language: req.body?.target_language,
+      format: req.body?.format,
+      bilingual: req.body?.bilingual,
     });
     res.json(result);
   } catch (err) {
@@ -1368,39 +1467,77 @@ router.get('/user/continue', async (req, res) => {
   }
 });
 
+router.get('/watch-history/progress', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
+
+    const movieId = toPositiveInt(req.query.movie_id);
+    const episodeId = req.query.episode_id ? toPositiveInt(req.query.episode_id) : null;
+    const episodeNumber = req.query.episode_number ? toPositiveInt(req.query.episode_number) : null;
+
+    if (!movieId) return res.status(400).json({ message: 'Thiếu movie_id hợp lệ' });
+    if (!episodeId && !episodeNumber) {
+      return res.status(400).json({ message: 'Thiếu episode_id hoặc episode_number hợp lệ' });
+    }
+
+    const db = getDb(req);
+    const params = [userId, movieId, episodeId || episodeNumber];
+    const episodeCondition = episodeId ? 'h.episode_id = ?' : 'h.episode_number = ?';
+    const [rows] = await db.execute(
+      `SELECT h.id AS history_id, h.movie_id, h.episode_id, h.episode_number,
+              h.progress_seconds, h.duration_seconds, h.completed, h.last_watched_at
+       FROM user_watch_history h
+       WHERE h.user_id = ? AND h.movie_id = ? AND ${episodeCondition}
+       LIMIT 1`,
+      params
+    );
+
+    const progress = rows[0] || null;
+    const shouldResume = Boolean(
+      progress
+      && Number(progress.duration_seconds) > 0
+      && Number(progress.progress_seconds) > 5
+      && Number(progress.progress_seconds) / Number(progress.duration_seconds) < 0.9
+      && !progress.completed
+    );
+
+    res.json({ progress, should_resume: shouldResume });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.post('/watch-history/progress', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
+
+    const db = getDb(req);
+    const input = await getValidatedWatchProgressInput(db, req.body);
+    await upsertWatchProgress(db, userId, input);
+
+    res.json({
+      success: true,
+      progress_seconds: input.progress,
+      duration_seconds: input.duration,
+      completed: input.completed,
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
 router.post('/user/history', async (req, res) => {
   try {
     const userId = getUserId(req);
-    const {
-      movie_id,
-      episode_id,
-      episode_number,
-      progress_seconds = 0,
-      duration_seconds = 0,
-      completed,
-    } = req.body;
-    if (!userId || !movie_id) return res.status(400).json({ message: 'Thiếu user_id hoặc movie_id' });
-    const progress = Math.max(0, Math.floor(Number(progress_seconds) || 0));
-    const duration = Math.max(0, Math.floor(Number(duration_seconds) || 0));
-    const isCompleted = completed === undefined
-      ? duration > 0 && progress / duration >= 0.9
-      : Boolean(completed);
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
-    await db.execute(
-      `INSERT INTO user_watch_history
-       (user_id, movie_id, episode_id, episode_number, progress_seconds, duration_seconds, completed)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE
-         episode_id = VALUES(episode_id),
-         progress_seconds = VALUES(progress_seconds),
-         duration_seconds = VALUES(duration_seconds),
-         completed = VALUES(completed),
-         last_watched_at = NOW()`,
-      [userId, movie_id, episode_id || null, episode_number || null, progress, duration, isCompleted ? 1 : 0]
-    );
+    const input = await getValidatedWatchProgressInput(db, req.body);
+    await upsertWatchProgress(db, userId, input);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.statusCode || 500).json({ message: err.message });
   }
 });
 
@@ -1514,6 +1651,42 @@ router.post('/movies/:id/reports', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/movie-reports', async (req, res) => {
+  try {
+    const userId = getUserId(req) || null;
+    const movieId = toPositiveInt(req.body?.movie_id);
+    const episodeId = req.body?.episode_id ? toPositiveInt(req.body.episode_id) : null;
+    const reason = String(req.body?.reason || '').trim();
+    const description = String(req.body?.description || '').trim();
+
+    if (!movieId) return res.status(400).json({ message: 'Thiếu movie_id hợp lệ' });
+    if (!reason) return res.status(400).json({ message: 'Vui lòng chọn lý do báo lỗi' });
+
+    const db = getDb(req);
+    const [movieRows] = await db.execute('SELECT id FROM movies WHERE id = ? LIMIT 1', [movieId]);
+    if (!movieRows.length) return res.status(404).json({ message: 'Phim không tồn tại' });
+
+    if (episodeId) {
+      const [episodeRows] = await db.execute(
+        'SELECT id FROM episodes WHERE id = ? AND movie_id = ? LIMIT 1',
+        [episodeId, movieId]
+      );
+      if (!episodeRows.length) {
+        return res.status(400).json({ message: 'Tập phim không tồn tại hoặc không thuộc phim này' });
+      }
+    }
+
+    await db.execute(
+      'INSERT INTO movie_reports (user_id, movie_id, episode_id, reason, description) VALUES (?, ?, ?, ?, ?)',
+      [userId, movieId, episodeId, reason.slice(0, 100), description.slice(0, 1000) || null]
+    );
+
+    res.json({ success: true, message: 'Đã gửi báo lỗi video.' });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
   }
 });
 
@@ -2123,3 +2296,4 @@ router.post('/setup/category-countries', requireAdminMiddleware, async (req, res
 });
 
 module.exports = router; 
+

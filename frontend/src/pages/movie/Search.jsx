@@ -1,11 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import FilterBox from '../../components/filter/FilterBox';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import SearchIcon from '@mui/icons-material/Search';
+import { API_URL as API } from '../../config/api';
 
 const PAGE_SIZE = 16;
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 function useQuery() {
   return new URLSearchParams(useLocation().search);
@@ -26,7 +26,6 @@ export default function Search() {
   const [inputYear, setInputYear] = useState("");
   const [sort, setSort] = useState("Mới nhất");
   const [tab, setTab] = useState('movie');
-  const [actors, setActors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [allActors, setAllActors] = useState([]);
 

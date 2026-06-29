@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import { API_URL as API } from '../../config/api';
 let googleScriptPromise = null;
 
 function loadGoogleScript() {

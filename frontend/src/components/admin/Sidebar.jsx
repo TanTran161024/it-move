@@ -6,6 +6,7 @@ import PeopleIcon from '@mui/icons-material/People';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import ImageIcon from '@mui/icons-material/Image';
 import RateReviewIcon from '@mui/icons-material/RateReview';
+import SubtitlesIcon from '@mui/icons-material/Subtitles';
 import LogoutIcon from '@mui/icons-material/Logout';
 import HomeIcon from '@mui/icons-material/Home';
 import CloseIcon from '@mui/icons-material/Close';
@@ -16,6 +17,7 @@ const menuItems = [
   { key: 'banners', label: 'Quản lý banner', icon: <ImageIcon /> },
   { key: 'general', label: 'Quản lý chung', icon: <CategoryIcon /> }, // Đổi tên và key
   { key: 'categories', label: 'Quản lý danh mục', icon: <CategoryIcon /> }, // Thêm mục mới
+  { key: 'subtitles', label: 'Dịch phụ đề', icon: <SubtitlesIcon /> },
   { key: 'users', label: 'Quản lý user', icon: <PeopleIcon /> },
   { key: 'feedback', label: 'Quản lý phản hồi', icon: <RateReviewIcon /> },
 ];

@@ -2,8 +2,7 @@ import { useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import { API_URL as API } from '../../config/api';
 
 export default function Register() {
   const [username, setUsername] = useState('');

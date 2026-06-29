@@ -7,8 +7,7 @@ import {
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { API_BASE_URL as API } from '../../config/api';
 
 export default function CategoryManager() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -38,23 +37,20 @@ export default function CategoryManager() {
       const response = await fetch(`${API}/api/categories`);
       const data = await response.json();
       setCategories(data);
-    } catch (err) {
+    } catch {
       setError('Lỗi khi tải danh mục');
     }
   };
 
   const fetchGenres = async () => {
     try {
-      console.log('Fetching genres from:', `${API}/api/genres`);
       const response = await fetch(`${API}/api/genres`);
-      console.log('Genres response status:', response.status);
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log('Genres data:', data);
       setGenres(data);
     } catch (err) {
       console.error('Error fetching genres:', err);
@@ -145,17 +141,13 @@ export default function CategoryManager() {
       const url = editMode ? `${API}/api/categories/${editingCategoryId}` : `${API}/api/categories`;
       const method = editMode ? 'PUT' : 'POST';
 
-      console.log('Submitting form:', { editMode, editingCategoryId, url, method, form });
-
       const response = await fetch(url, {
         method,
         headers: adminHeaders,
         body: JSON.stringify(form)
       });
 
-      console.log('Response status:', response.status);
       const data = await response.json();
-      console.log('Response data:', data);
 
       if (response.ok) {
         setSuccess(data.message || (editMode ? 'Cập nhật thành công' : 'Thêm thành công'));
@@ -164,8 +156,7 @@ export default function CategoryManager() {
       } else {
         setError(data.message || 'Có lỗi xảy ra');
       }
-    } catch (err) {
-      console.error('Submit error:', err);
+    } catch {
       setError('Lỗi kết nối');
     }
   };
@@ -187,7 +178,7 @@ export default function CategoryManager() {
       } else {
         setError(data.message || 'Có lỗi xảy ra');
       }
-    } catch (err) {
+    } catch {
       setError('Lỗi kết nối');
     }
   };
@@ -212,8 +203,8 @@ export default function CategoryManager() {
         Thêm danh mục
       </Button>
 
-      {/* {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>} */}
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
       <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
         {categories.map(category => (

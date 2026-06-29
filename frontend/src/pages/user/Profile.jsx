@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import ProfileSidebar from '../../components/user/ProfileSidebar';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import { API_BASE_URL as API } from '../../config/api';
 
 const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
 
@@ -28,11 +29,11 @@ export default function Profile() {
   const avatar = profile.avatar_url || profile.avatar || '';
   const displayName = profile.username || user.username || '';
 
-  const showToast = (message, type = 'success') => {
+  const showToast = useCallback((message, type = 'success') => {
     setToast({ message, type });
     window.clearTimeout(showToast.timer);
     showToast.timer = window.setTimeout(() => setToast(null), 4200);
-  };
+  }, []);
 
   useEffect(() => {
     async function fetchProfile() {
@@ -44,7 +45,7 @@ export default function Profile() {
       }
 
       try {
-        const res = await fetch('http://localhost:5000/api/user/profile', {
+        const res = await fetch(`${API}/api/user/profile`, {
           credentials: 'include',
           headers: { 'x-user-id': user.id },
         });
@@ -66,7 +67,7 @@ export default function Profile() {
     }
 
     fetchProfile();
-  }, [user.id]);
+  }, [showToast, user.id]);
 
   const handleProfileChange = (field, value) => {
     setProfile((current) => ({ ...current, [field]: value }));
@@ -81,7 +82,7 @@ export default function Profile() {
 
     setSaving(true);
     try {
-      const res = await fetch('http://localhost:5000/api/user/profile', {
+      const res = await fetch(`${API}/api/user/profile`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'x-user-id': user.id },
         credentials: 'include',
@@ -124,7 +125,7 @@ export default function Profile() {
 
     setChangePwLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/user/change-password', {
+      const res = await fetch(`${API}/api/user/change-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-user-id': user.id },
         credentials: 'include',

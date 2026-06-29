@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FaPaperPlane, FaPlay, FaStar, FaTimes } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import './MovieChatbot.css';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { API_BASE_URL as API } from '../../config/api';
 
 const starterMessages = [
   'Tối nay xem gì cho cuốn?',
@@ -17,6 +16,14 @@ function formatMovieMeta(movie) {
     movie.release_year || null,
     Array.isArray(movie.genres) && movie.genres.length ? movie.genres[0] : null,
   ].filter(Boolean).join(' · ') || 'Sẵn sàng xem';
+}
+
+function getStoredUser() {
+  try {
+    return JSON.parse(localStorage.getItem('user') || '{}');
+  } catch {
+    return {};
+  }
 }
 
 export default function MovieChatbot() {
@@ -36,14 +43,6 @@ export default function MovieChatbot() {
       grounding: { no_fake_data: true },
     },
   ]);
-
-  const user = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem('user') || '{}');
-    } catch (_) {
-      return {};
-    }
-  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -67,6 +66,7 @@ export default function MovieChatbot() {
     setError('');
     setMessages((prev) => [...prev, { role: 'user', content: message, recommendations: [] }]);
     setLoading(true);
+    const user = getStoredUser();
 
     try {
       const response = await fetch(`${API}/api/ai/chat`, {
