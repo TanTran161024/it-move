@@ -36,6 +36,9 @@ const NAV_ITEMS = [
   { label: 'Diễn viên', query: { tab: 'actor' } },
 ];
 
+const SEARCH_FALLBACK_POSTER =
+  "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='144' viewBox='0 0 96 144'%3E%3Crect width='96' height='144' fill='%23111111'/%3E%3Cpath d='M38 54v36l30-18z' fill='%23E50914'/%3E%3C/svg%3E";
+
 function buildMoviesUrl(query) {
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => params.set(key, value));
@@ -50,6 +53,8 @@ export default function Header() {
   const [openForgot, setOpenForgot] = useState(false);
   const [searchValue, setSearchValue] = useState(() => localStorage.getItem('searchInputValue') || '');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchSuggestions, setSearchSuggestions] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   
   const [genres, setGenres] = useState([]);
@@ -82,9 +87,42 @@ export default function Header() {
   useEffect(() => {
     if (location.pathname.startsWith('/search')) {
       setSearchValue('');
+      setSearchSuggestions([]);
       localStorage.removeItem('searchInputValue');
     }
   }, [location.pathname]);
+
+  useEffect(() => {
+    const query = searchValue.trim();
+    if (!isSearchOpen || query.length < 2) {
+      setSearchSuggestions([]);
+      setSearchLoading(false);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      setSearchLoading(true);
+      fetch(`${API}/api/movies/smart-search?q=${encodeURIComponent(query)}&limit=6`, {
+        signal: controller.signal,
+      })
+        .then((res) => (res.ok ? res.json() : Promise.reject(new Error('search failed'))))
+        .then((payload) => {
+          setSearchSuggestions(Array.isArray(payload.movies) ? payload.movies : []);
+        })
+        .catch((error) => {
+          if (error.name !== 'AbortError') setSearchSuggestions([]);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setSearchLoading(false);
+        });
+    }, 250);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [isSearchOpen, searchValue]);
 
   useEffect(() => {
     Promise.all([
@@ -110,6 +148,24 @@ export default function Header() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const closeSearch = () => {
+    setIsSearchOpen(false);
+    setSearchSuggestions([]);
+  };
+
+  const goToSearchResults = () => {
+    const query = searchValue.trim();
+    if (!query) return;
+    closeSearch();
+    goTo(`/search?q=${encodeURIComponent(query)}`);
+  };
+
+  const goToMovie = (movieId) => {
+    closeSearch();
+    setSearchValue('');
+    goTo(`/movies/${movieId}`);
+  };
+
   const handleNavClick = (event, item) => {
     if (item.menu === 'genres') {
       setCountryAnchor(null);
@@ -128,8 +184,7 @@ export default function Header() {
 
   const handleSearchKeyDown = (event) => {
     if (event.key === 'Enter' && searchValue.trim()) {
-      goTo(`/search?q=${encodeURIComponent(searchValue.trim())}`);
-      setIsSearchOpen(false);
+      goToSearchResults();
     }
   };
 
@@ -209,24 +264,96 @@ export default function Header() {
               {isSearchOpen && (
                 <MotionDiv
                   initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: 240, opacity: 1 }}
+                  animate={{ width: 320, opacity: 1 }}
                   exit={{ width: 0, opacity: 0 }}
                   transition={{ duration: 0.3 }}
-                  className="absolute right-10"
+                  className="absolute right-10 top-1/2 -translate-y-1/2"
                 >
                   <input
                     type="text"
-                    placeholder="Tựa phim, đạo diễn..."
+                    placeholder="Tìm phim..."
                     className="w-full bg-surface/80 border border-border rounded-full py-1.5 px-4 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-primary/50"
                     value={searchValue}
                     onChange={(event) => setSearchValue(event.target.value)}
                     onKeyDown={handleSearchKeyDown}
                     autoFocus
                   />
+                  {searchValue.trim().length >= 2 && (
+                    <div className="absolute right-0 top-11 w-[320px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-white/10 bg-[#141414]/95 shadow-2xl shadow-black/60 backdrop-blur-xl">
+                      {searchLoading ? (
+                        <div className="p-3 space-y-3">
+                          {Array.from({ length: 3 }).map((_, index) => (
+                            <div key={index} className="flex gap-3 animate-pulse">
+                              <div className="w-12 h-16 rounded bg-white/10" />
+                              <div className="flex-1 py-1">
+                                <div className="h-3 rounded bg-white/10 w-3/4 mb-2" />
+                                <div className="h-3 rounded bg-white/10 w-1/2" />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : searchSuggestions.length > 0 ? (
+                        <>
+                          <div className="max-h-[420px] overflow-y-auto py-2">
+                            {searchSuggestions.map((movie) => (
+                              <button
+                                key={movie.id}
+                                type="button"
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  goToMovie(movie.id);
+                                }}
+                                className="w-full flex gap-3 px-3 py-2 text-left hover:bg-white/10 transition-colors"
+                              >
+                                <img
+                                  src={movie.poster_url || SEARCH_FALLBACK_POSTER}
+                                  alt={movie.title}
+                                  className="w-12 h-16 rounded-md object-cover bg-black flex-shrink-0"
+                                  onError={(event) => { event.currentTarget.src = SEARCH_FALLBACK_POSTER; }}
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-sm font-semibold text-white line-clamp-1">{movie.title}</div>
+                                  <div className="text-xs text-white/55 line-clamp-1 mt-0.5">{movie.original_title || movie.release_year || 'Phim'}</div>
+                                  <div className="flex items-center gap-2 mt-2 text-[11px] text-white/65">
+                                    {movie.release_year && <span>{movie.release_year}</span>}
+                                    {movie.imdb_rating && <span className="text-[#f5c518] font-bold">IMDb {Number(movie.imdb_rating).toFixed(1)}</span>}
+                                    {movie.quality && <span>{movie.quality}</span>}
+                                  </div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              goToSearchResults();
+                            }}
+                            className="w-full border-t border-white/10 px-4 py-3 text-sm font-semibold text-white hover:bg-white/10 transition-colors"
+                          >
+                            Xem tất cả kết quả
+                          </button>
+                        </>
+                      ) : (
+                        <div className="px-4 py-5 text-sm text-white/60">
+                          Thử tên phim, thể loại hoặc quốc gia khác.
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </MotionDiv>
               )}
             </AnimatePresence>
-            <IconButton onClick={() => setIsSearchOpen(!isSearchOpen)} className="!text-white hover:!bg-white/10">
+            <IconButton
+              onClick={() => {
+                setIsSearchOpen((value) => {
+                  const next = !value;
+                  if (!next) setSearchSuggestions([]);
+                  return next;
+                });
+              }}
+              className="!text-white hover:!bg-white/10"
+            >
               <SearchIcon />
             </IconButton>
           </div>

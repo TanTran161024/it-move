@@ -7,6 +7,7 @@ const nodemailer = require('nodemailer');
 const { getSimilarMovies, getUserRecommendations, clampLimit } = require('./services/recommendationService');
 const { chatWithMovieAdvisor, getAiStatus } = require('./services/aiService');
 const { translateSubtitle } = require('./services/subtitleTranslatorService');
+const { smartSearchMovies } = require('./services/smartSearchService');
 
 const OTP_EXPIRATION_MINUTES = 10;
 const TEST_VIEW_MIN = Number(process.env.TEST_VIEW_MIN || 1000);
@@ -473,6 +474,16 @@ router.get('/recommendations/user/:userId', async (req, res) => {
     const db = getDb(req);
     const recommendations = await getUserRecommendations(db, req.params.userId, clampLimit(req.query.limit));
     res.json(recommendations);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.get('/movies/smart-search', async (req, res) => {
+  try {
+    const db = getDb(req);
+    const result = await smartSearchMovies(db, req.query.q, { limit: req.query.limit });
+    res.json(result);
   } catch (err) {
     res.status(err.statusCode || 500).json({ message: err.message });
   }
