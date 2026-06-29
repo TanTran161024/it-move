@@ -230,7 +230,7 @@ export default function Header() {
         {/* Left Side: Brand & Nav */}
         <div className="flex items-center gap-8">
           <IconButton
-            className="md:hidden !text-white"
+            className="md:!hidden !text-white"
             onClick={(event) => setMobileAnchor(event.currentTarget)}
           >
             <MenuIcon />
@@ -394,6 +394,7 @@ export default function Header() {
         anchorEl={genreAnchor}
         open={Boolean(genreAnchor)}
         onClose={() => setGenreAnchor(null)}
+        disableScrollLock={true}
         PaperProps={{ sx: { ...modernPaperProps.sx, minWidth: 400, p: 2 } }}
       >
         <Typography variant="subtitle2" sx={{ color: '#B3B3B3', mb: 2 }}>Chọn thể loại</Typography>
@@ -414,6 +415,7 @@ export default function Header() {
         anchorEl={countryAnchor}
         open={Boolean(countryAnchor)}
         onClose={() => setCountryAnchor(null)}
+        disableScrollLock={true}
         PaperProps={{ sx: { ...modernPaperProps.sx, minWidth: 200, p: 2 } }}
       >
         <Typography variant="subtitle2" sx={{ color: '#B3B3B3', mb: 2 }}>Chọn quốc gia</Typography>
@@ -434,6 +436,7 @@ export default function Header() {
         anchorEl={mobileAnchor}
         open={Boolean(mobileAnchor)}
         onClose={() => setMobileAnchor(null)}
+        disableScrollLock={true}
         PaperProps={{ sx: { ...modernPaperProps.sx, width: 280 } }}
       >
         <div className="flex items-center justify-between p-4 pb-2">
@@ -450,6 +453,9 @@ export default function Header() {
         anchorEl={userAnchor}
         open={Boolean(userAnchor)}
         onClose={() => setUserAnchor(null)}
+        disableScrollLock={true}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         PaperProps={{ sx: { ...modernPaperProps.sx, width: 250 } }}
       >
         <div className="px-5 pt-4 pb-3 flex items-center gap-3">
@@ -478,6 +484,9 @@ export default function Header() {
         anchorEl={notificationAnchor}
         open={Boolean(notificationAnchor)}
         onClose={() => setNotificationAnchor(null)}
+        disableScrollLock={true}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         PaperProps={{ sx: { ...modernPaperProps.sx, width: 320, p: 2 } }}
       >
         <Typography variant="subtitle1" fontWeight="bold" mb={1}>Thông báo</Typography>
