@@ -6,6 +6,7 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import LogoutIcon from '@mui/icons-material/Logout';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { clearActiveProfile, getActiveProfile, profileInitial } from '../../utils/profile';
 
 const menu = [
   { label: 'Yêu thích', icon: <FavoriteBorderIcon sx={{ fontSize: 20 }} />, path: '/user/favorites' },
@@ -22,9 +23,12 @@ export default function ProfileSidebar({ user = {}, profile = {} }) {
   const displayName = profile.username || user.username || 'Người dùng';
   const email = profile.email || user.email || '';
   const avatar = profile.avatar || profile.avatar_url || user.avatar || user.avatar_url || '';
+  const activeProfile = getActiveProfile();
+  const visibleName = activeProfile.name || displayName;
 
   const handleLogout = () => {
     localStorage.removeItem('user');
+    clearActiveProfile();
     navigate('/');
   };
 
@@ -37,14 +41,17 @@ export default function ProfileSidebar({ user = {}, profile = {} }) {
       <div className="bg-surface/50 backdrop-blur-md border border-white/5 rounded-2xl p-6 shadow-2xl sticky top-24">
         <div className="text-lg font-heading font-bold text-white mb-6">Quản lý tài khoản</div>
         <div className="flex flex-col items-center mb-8">
-          {avatar ? (
+          {avatar && !activeProfile.id ? (
             <img src={avatar} alt="avatar" className="w-24 h-24 rounded-full object-cover border-4 border-white/10 shadow-xl mb-4" />
           ) : (
-            <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-primary/80 to-primary/20 flex items-center justify-center text-3xl font-bold border-4 border-white/10 shadow-xl mb-4 text-white">
-              {displayName ? displayName[0].toUpperCase() : '?'}
+            <div
+              className="w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold border-4 border-white/10 shadow-xl mb-4 text-white"
+              style={{ backgroundColor: activeProfile.avatar_color || '#E50914' }}
+            >
+              {profileInitial(visibleName)}
             </div>
           )}
-          <div className="text-xl font-bold text-white text-center line-clamp-1">{displayName}</div>
+          <div className="text-xl font-bold text-white text-center line-clamp-1">{visibleName}</div>
           <div className="text-sm text-text-secondary mt-1 text-center line-clamp-1">{email}</div>
         </div>
 
@@ -66,6 +73,10 @@ export default function ProfileSidebar({ user = {}, profile = {} }) {
         </nav>
 
         <div className="mt-6 pt-6 border-t border-white/5">
+          <button type="button" className="mb-3 flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all font-medium text-white/70 hover:bg-white/5 hover:text-white w-full" onClick={clearActiveProfile}>
+            <AccountCircleIcon sx={{ fontSize: 20 }} />
+            <span>Đổi profile</span>
+          </button>
           <button type="button" className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all font-medium text-red-400 hover:bg-red-500/10 hover:text-red-400 w-full" onClick={handleLogout}>
             <LogoutIcon sx={{ fontSize: 20 }} />
             <span>Đăng xuất</span>

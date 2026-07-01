@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { FaPaperPlane, FaPlay, FaStar, FaTimes } from 'react-icons/fa';
+import { FaPaperPlane, FaPlay, FaRedo, FaStar, FaTimes } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import './MovieChatbot.css';
 import { API_BASE_URL as API } from '../../config/api';
+import { getActiveProfile, getProfileHeaders } from '../../utils/profile';
+
+const CHAT_STORAGE_KEY = 'smart-movie-chatbot-session-v3';
+const CHAT_SESSION_ID_KEY = 'smart-movie-chatbot-session-id-v1';
+const MAX_MESSAGES = 24;
 
 const starterMessages = [
   'Tối nay xem gì cho cuốn?',
@@ -10,10 +15,22 @@ const starterMessages = [
   'Gợi ý phim tình cảm nhẹ nhàng',
 ];
 
+const followUpMessages = ['Phim khác', 'Nhẹ nhàng hơn', 'Ngắn thôi'];
+
+const welcomeMessage = {
+  role: 'assistant',
+  content: 'Tối nay bạn muốn xem gì?\nBạn có thể nói thể loại, tâm trạng, quốc gia hoặc yêu cầu tiếp như “phim khác”.',
+  recommendations: [],
+  source: 'system',
+  grounding: { no_fake_data: true },
+  suggestedReplies: starterMessages,
+};
+
 function formatMovieMeta(movie) {
   return [
     movie.imdb_rating ? `IMDb ${Number(movie.imdb_rating).toFixed(1)}` : null,
     movie.release_year || null,
+    movie.duration || null,
     Array.isArray(movie.genres) && movie.genres.length ? movie.genres[0] : null,
   ].filter(Boolean).join(' · ') || 'Sẵn sàng xem';
 }
@@ -26,6 +43,54 @@ function getStoredUser() {
   }
 }
 
+function normalizeStoredMessages(value) {
+  if (!Array.isArray(value)) return null;
+  const messages = value
+    .map((item) => ({
+      role: item?.role === 'user' ? 'user' : 'assistant',
+      content: String(item?.content || '').trim(),
+      recommendations: Array.isArray(item?.recommendations) ? item.recommendations.slice(0, 6) : [],
+      source: item?.source || 'session',
+      provider: item?.provider,
+      grounding: item?.grounding,
+      aiError: item?.aiError,
+      suggestedReplies: Array.isArray(item?.suggestedReplies) ? item.suggestedReplies.slice(0, 4) : [],
+    }))
+    .filter((item) => item.content);
+
+  return messages.length ? messages.slice(-MAX_MESSAGES) : null;
+}
+
+function loadMessagesFromSession() {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(CHAT_STORAGE_KEY) || 'null');
+    return normalizeStoredMessages(parsed) || [welcomeMessage];
+  } catch {
+    return [welcomeMessage];
+  }
+}
+
+function loadChatSessionId() {
+  try {
+    return sessionStorage.getItem(CHAT_SESSION_ID_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function getActiveSuggestions(messages) {
+  const latestAssistant = [...messages].reverse().find((item) => item.role === 'assistant');
+  if (latestAssistant?.suggestedReplies?.length) return latestAssistant.suggestedReplies;
+  return messages.length <= 1 ? starterMessages : followUpMessages;
+}
+
+function getVisibleMatchReasons(movie) {
+  if (!Array.isArray(movie?.match_reasons)) return [];
+  return movie.match_reasons
+    .filter((reason) => !String(reason || '').toLowerCase().startsWith('có từ khóa'))
+    .slice(0, 2);
+}
+
 export default function MovieChatbot() {
   const navigate = useNavigate();
   const inputRef = useRef(null);
@@ -34,15 +99,8 @@ export default function MovieChatbot() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: 'Tối nay bạn muốn xem gì?\nNói thể loại, tâm trạng hoặc quốc gia bạn thích nhé.',
-      recommendations: [],
-      source: 'system',
-      grounding: { no_fake_data: true },
-    },
-  ]);
+  const [messages, setMessages] = useState(loadMessagesFromSession);
+  const [chatSessionId, setChatSessionId] = useState(loadChatSessionId);
 
   useEffect(() => {
     if (open) {
@@ -50,12 +108,44 @@ export default function MovieChatbot() {
     }
   }, [messages, loading, open]);
 
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages.slice(-MAX_MESSAGES)));
+    } catch {
+      // Session memory is helpful, not required.
+    }
+  }, [messages]);
+
+  useEffect(() => {
+    try {
+      if (chatSessionId) sessionStorage.setItem(CHAT_SESSION_ID_KEY, chatSessionId);
+      else sessionStorage.removeItem(CHAT_SESSION_ID_KEY);
+    } catch {
+      // Session id persistence is optional.
+    }
+  }, [chatSessionId]);
+
+  const resetChat = () => {
+    setMessages([welcomeMessage]);
+    setChatSessionId('');
+    setError('');
+    setInput('');
+    try {
+      sessionStorage.removeItem(CHAT_STORAGE_KEY);
+      sessionStorage.removeItem(CHAT_SESSION_ID_KEY);
+    } catch {
+      // Ignore storage failures.
+    }
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
   const sendMessage = async (text) => {
     const message = String(text || input).trim();
     if (!message || loading) return;
+
     const history = messages
       .filter((item) => item.content)
-      .slice(-6)
+      .slice(-10)
       .map((item) => ({ role: item.role, content: item.content }));
     const shown_movie_ids = messages
       .flatMap((item) => item.recommendations || [])
@@ -64,20 +154,23 @@ export default function MovieChatbot() {
 
     setInput('');
     setError('');
-    setMessages((prev) => [...prev, { role: 'user', content: message, recommendations: [] }]);
+    setMessages((prev) => [...prev, { role: 'user', content: message, recommendations: [] }].slice(-MAX_MESSAGES));
     setLoading(true);
+
     const user = getStoredUser();
+    const profile = getActiveProfile();
 
     try {
       const response = await fetch(`${API}/api/ai/chat`, {
         method: 'POST',
-        headers: {
+        headers: getProfileHeaders({
           'Content-Type': 'application/json',
-          ...(user.id ? { 'x-user-id': user.id } : {}),
-        },
+        }),
         body: JSON.stringify({
+          session_id: chatSessionId || undefined,
           message,
           user_id: user.id || undefined,
+          profile_id: profile.id || undefined,
           history,
           shown_movie_ids,
         }),
@@ -88,18 +181,21 @@ export default function MovieChatbot() {
         throw new Error(body.message || 'Mình bị gián đoạn một chút.');
       }
 
+      if (body.session_id) setChatSessionId(body.session_id);
+
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
           content: body.reply || 'Mình chọn được vài phim khá hợp gu.\nBạn muốn mình lọc sâu hơn không?',
           recommendations: Array.isArray(body.recommendations) ? body.recommendations : [],
+          suggestedReplies: Array.isArray(body.suggested_replies) ? body.suggested_replies : followUpMessages,
           source: body.source || 'rule-based',
           provider: body.provider,
           grounding: body.grounding,
           aiError: body.ai_error,
         },
-      ]);
+      ].slice(-MAX_MESSAGES));
     } catch (err) {
       setError(err.message || 'Mình bị gián đoạn một chút.');
       setMessages((prev) => [
@@ -108,10 +204,11 @@ export default function MovieChatbot() {
           role: 'assistant',
           content: 'Mình bị gián đoạn một chút.\nBạn gửi lại gu phim nhé.',
           recommendations: [],
+          suggestedReplies: starterMessages,
           source: 'rule-based-fallback',
           grounding: { no_fake_data: true },
         },
-      ]);
+      ].slice(-MAX_MESSAGES));
     } finally {
       setLoading(false);
       setTimeout(() => inputRef.current?.focus(), 0);
@@ -153,13 +250,15 @@ export default function MovieChatbot() {
       <span className="movie-chatbot-card-body">
         <strong>{movie.title}</strong>
         <small>{formatMovieMeta(movie)}</small>
-        {Array.isArray(movie.match_reasons) && movie.match_reasons.length > 0 && (
-          <small className="movie-chatbot-reason">{movie.match_reasons.slice(0, 2).join(' · ')}</small>
+        {getVisibleMatchReasons(movie).length > 0 && (
+          <small className="movie-chatbot-reason">{getVisibleMatchReasons(movie).join(' · ')}</small>
         )}
         <em>Xem ngay</em>
       </span>
     </button>
   );
+
+  const suggestions = getActiveSuggestions(messages);
 
   return (
     <div className={`movie-chatbot${open ? ' open' : ''}`}>
@@ -170,10 +269,13 @@ export default function MovieChatbot() {
               <span className="movie-chatbot-avatar"><FaPlay /></span>
               <div>
                 <strong>Chọn phim tối nay</strong>
-                <small>Gợi ý theo gu của bạn</small>
+                <small>Nhớ gu trong phiên chat</small>
               </div>
             </div>
             <div className="movie-chatbot-header-actions">
+              <button type="button" className="movie-chatbot-close" onClick={resetChat} aria-label="Bắt đầu lại">
+                <FaRedo />
+              </button>
               <button type="button" className="movie-chatbot-close" onClick={() => setOpen(false)} aria-label="Đóng chatbot">
                 <FaTimes />
               </button>
@@ -181,17 +283,17 @@ export default function MovieChatbot() {
           </header>
 
           <div className="movie-chatbot-messages" aria-live="polite">
-            {messages.map((message, index) => (
-              <article className={`movie-chatbot-message ${message.role}`} key={`${message.role}-${index}`}>
-                <p>{message.content}</p>
-                {message.role === 'assistant' && message.recommendations?.length > 0 && (
+            {messages.map((chatMessage, index) => (
+              <article className={`movie-chatbot-message ${chatMessage.role}`} key={`${chatMessage.role}-${index}`}>
+                <p>{chatMessage.content}</p>
+                {chatMessage.role === 'assistant' && chatMessage.recommendations?.length > 0 && (
                   <div className="movie-chatbot-message-meta">
                     <span>Chọn riêng cho bạn</span>
                   </div>
                 )}
-                {message.recommendations?.length > 0 && (
+                {chatMessage.recommendations?.length > 0 && (
                   <div className="movie-chatbot-recommendations">
-                    {message.recommendations.slice(0, 4).map(renderMovieCard)}
+                    {chatMessage.recommendations.slice(0, 4).map(renderMovieCard)}
                   </div>
                 )}
               </article>
@@ -209,9 +311,9 @@ export default function MovieChatbot() {
             <div ref={messagesEndRef} />
           </div>
 
-          {messages.length <= 1 && (
+          {!loading && suggestions.length > 0 && (
             <div className="movie-chatbot-starters">
-              {starterMessages.map((item) => (
+              {suggestions.map((item) => (
                 <button type="button" key={item} onClick={() => sendMessage(item)}>
                   {item}
                 </button>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Avatar,
   Box,
@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import AddIcon from '@mui/icons-material/Add';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import CloseIcon from '@mui/icons-material/Close';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -27,8 +28,10 @@ import LoginDialog from '../auth/LoginDialog';
 import RegisterDialog from '../auth/RegisterDialog';
 import { motion, AnimatePresence } from 'framer-motion';
 import { API_BASE_URL as API } from '../../config/api';
+import { clearActiveProfile, getActiveProfile, PROFILE_CHANGE_EVENT, profileInitial } from '../../utils/profile';
 
 const NAV_ITEMS = [
+  { label: 'Dành cho bạn', path: '/for-you' },
   { label: 'Thể loại', menu: 'genres' },
   { label: 'Phim lẻ', query: { is_series: 0 } },
   { label: 'Phim bộ', query: { is_series: 1 } },
@@ -38,6 +41,15 @@ const NAV_ITEMS = [
 
 const SEARCH_FALLBACK_POSTER =
   "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='144' viewBox='0 0 96 144'%3E%3Crect width='96' height='144' fill='%23111111'/%3E%3Cpath d='M38 54v36l30-18z' fill='%23E50914'/%3E%3C/svg%3E";
+
+const SEARCH_EXAMPLES = [
+  'phim zombie Hàn Quốc',
+  'phim tình cảm học đường Nhật',
+  'phim hài gia đình nhẹ nhàng',
+  'phim hành động Hàn Quốc',
+];
+
+const RECENT_SEARCHES_KEY = 'movie_recent_searches';
 
 function buildMoviesUrl(query) {
   const params = new URLSearchParams();
@@ -55,6 +67,8 @@ export default function Header() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchSuggestions, setSearchSuggestions] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [recentSearches, setRecentSearches] = useState([]);
   const [isScrolled, setIsScrolled] = useState(false);
   
   const [genres, setGenres] = useState([]);
@@ -69,6 +83,9 @@ export default function Header() {
   const navigate = useNavigate();
   const location = useLocation();
   const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const [activeProfile, setActiveProfileState] = useState(() => getActiveProfile());
+  const searchInputRef = useRef(null);
+  const searchCacheRef = useRef({});
 
   useEffect(() => {
     const handleScroll = () => {
@@ -76,6 +93,16 @@ export default function Header() {
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const syncProfile = () => setActiveProfileState(getActiveProfile());
+    window.addEventListener(PROFILE_CHANGE_EVENT, syncProfile);
+    window.addEventListener('storage', syncProfile);
+    return () => {
+      window.removeEventListener(PROFILE_CHANGE_EVENT, syncProfile);
+      window.removeEventListener('storage', syncProfile);
+    };
   }, []);
 
   useEffect(() => {
@@ -93,25 +120,64 @@ export default function Header() {
   }, [location.pathname]);
 
   useEffect(() => {
+    if (!isSearchOpen) return undefined;
+
+    const savedRecent = JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) || '[]');
+    setRecentSearches(Array.isArray(savedRecent) ? savedRecent.slice(0, 6) : []);
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusTimer = window.setTimeout(() => searchInputRef.current?.focus(), 80);
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsSearchOpen(false);
+        setSearchSuggestions([]);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isSearchOpen]);
+
+  useEffect(() => {
     const query = searchValue.trim();
     if (!isSearchOpen || query.length < 2) {
       setSearchSuggestions([]);
       setSearchLoading(false);
+      setSearchError('');
       return undefined;
     }
 
     const controller = new AbortController();
     const timer = setTimeout(() => {
+      if (searchCacheRef.current[query]) {
+        setSearchSuggestions(searchCacheRef.current[query]);
+        setSearchLoading(false);
+        setSearchError('');
+        return;
+      }
+
       setSearchLoading(true);
-      fetch(`${API}/api/movies/smart-search?q=${encodeURIComponent(query)}&limit=6`, {
+      setSearchError('');
+      fetch(`${API}/api/movies/smart-search?q=${encodeURIComponent(query)}&limit=12`, {
         signal: controller.signal,
       })
         .then((res) => (res.ok ? res.json() : Promise.reject(new Error('search failed'))))
         .then((payload) => {
-          setSearchSuggestions(Array.isArray(payload.movies) ? payload.movies : []);
+          const movies = Array.isArray(payload.movies) ? payload.movies : [];
+          searchCacheRef.current[query] = movies;
+          setSearchSuggestions(movies);
         })
         .catch((error) => {
-          if (error.name !== 'AbortError') setSearchSuggestions([]);
+          if (error.name !== 'AbortError') {
+            setSearchSuggestions([]);
+            setSearchError('Không thể tìm kiếm lúc này. Thử lại sau ít phút.');
+          }
         })
         .finally(() => {
           if (!controller.signal.aborted) setSearchLoading(false);
@@ -151,22 +217,50 @@ export default function Header() {
   const closeSearch = () => {
     setIsSearchOpen(false);
     setSearchSuggestions([]);
+    setSearchLoading(false);
+    setSearchError('');
+  };
+
+  const openSearch = () => {
+    closeMenus();
+    setIsSearchOpen(true);
+  };
+
+  const addRecentSearch = (term) => {
+    const normalized = term.trim();
+    if (!normalized) return;
+    const updated = [normalized, ...recentSearches.filter((item) => item !== normalized)].slice(0, 6);
+    setRecentSearches(updated);
+    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
   };
 
   const goToSearchResults = () => {
     const query = searchValue.trim();
     if (!query) return;
+    addRecentSearch(query);
     closeSearch();
     goTo(`/search?q=${encodeURIComponent(query)}`);
   };
 
   const goToMovie = (movieId) => {
+    addRecentSearch(searchValue);
     closeSearch();
     setSearchValue('');
     goTo(`/movies/${movieId}`);
   };
 
+  const applySearchTerm = (term) => {
+    setSearchValue(term);
+    setIsSearchOpen(true);
+    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+  };
+
   const handleNavClick = (event, item) => {
+    if (item.path) {
+      goTo(item.path);
+      return;
+    }
+
     if (item.menu === 'genres') {
       setCountryAnchor(null);
       setGenreAnchor(event.currentTarget);
@@ -190,6 +284,7 @@ export default function Header() {
 
   const handleLogout = () => {
     localStorage.removeItem('user');
+    clearActiveProfile();
     setUserAnchor(null);
     navigate('/');
   };
@@ -258,105 +353,13 @@ export default function Header() {
 
         {/* Right Side: Search & User */}
         <div className="flex items-center gap-4">
-          {/* Animated Search Bar */}
-          <div className="flex items-center justify-end relative">
-            <AnimatePresence>
-              {isSearchOpen && (
-                <MotionDiv
-                  initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: 320, opacity: 1 }}
-                  exit={{ width: 0, opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="absolute right-10 top-1/2 -translate-y-1/2"
-                >
-                  <input
-                    type="text"
-                    placeholder="Tìm phim..."
-                    className="w-full bg-surface/80 border border-border rounded-full py-1.5 px-4 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-primary/50"
-                    value={searchValue}
-                    onChange={(event) => setSearchValue(event.target.value)}
-                    onKeyDown={handleSearchKeyDown}
-                    autoFocus
-                  />
-                  {searchValue.trim().length >= 2 && (
-                    <div className="absolute right-0 top-11 w-[320px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-white/10 bg-[#141414]/95 shadow-2xl shadow-black/60 backdrop-blur-xl">
-                      {searchLoading ? (
-                        <div className="p-3 space-y-3">
-                          {Array.from({ length: 3 }).map((_, index) => (
-                            <div key={index} className="flex gap-3 animate-pulse">
-                              <div className="w-12 h-16 rounded bg-white/10" />
-                              <div className="flex-1 py-1">
-                                <div className="h-3 rounded bg-white/10 w-3/4 mb-2" />
-                                <div className="h-3 rounded bg-white/10 w-1/2" />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : searchSuggestions.length > 0 ? (
-                        <>
-                          <div className="max-h-[420px] overflow-y-auto py-2">
-                            {searchSuggestions.map((movie) => (
-                              <button
-                                key={movie.id}
-                                type="button"
-                                onMouseDown={(event) => {
-                                  event.preventDefault();
-                                  goToMovie(movie.id);
-                                }}
-                                className="w-full flex gap-3 px-3 py-2 text-left hover:bg-white/10 transition-colors"
-                              >
-                                <img
-                                  src={movie.poster_url || SEARCH_FALLBACK_POSTER}
-                                  alt={movie.title}
-                                  className="w-12 h-16 rounded-md object-cover bg-black flex-shrink-0"
-                                  onError={(event) => { event.currentTarget.src = SEARCH_FALLBACK_POSTER; }}
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-sm font-semibold text-white line-clamp-1">{movie.title}</div>
-                                  <div className="text-xs text-white/55 line-clamp-1 mt-0.5">{movie.original_title || movie.release_year || 'Phim'}</div>
-                                  <div className="flex items-center gap-2 mt-2 text-[11px] text-white/65">
-                                    {movie.release_year && <span>{movie.release_year}</span>}
-                                    {movie.imdb_rating && <span className="text-[#f5c518] font-bold">IMDb {Number(movie.imdb_rating).toFixed(1)}</span>}
-                                    {movie.quality && <span>{movie.quality}</span>}
-                                  </div>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                          <button
-                            type="button"
-                            onMouseDown={(event) => {
-                              event.preventDefault();
-                              goToSearchResults();
-                            }}
-                            className="w-full border-t border-white/10 px-4 py-3 text-sm font-semibold text-white hover:bg-white/10 transition-colors"
-                          >
-                            Xem tất cả kết quả
-                          </button>
-                        </>
-                      ) : (
-                        <div className="px-4 py-5 text-sm text-white/60">
-                          Thử tên phim, thể loại hoặc quốc gia khác.
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </MotionDiv>
-              )}
-            </AnimatePresence>
-            <IconButton
-              onClick={() => {
-                setIsSearchOpen((value) => {
-                  const next = !value;
-                  if (!next) setSearchSuggestions([]);
-                  return next;
-                });
-              }}
-              className="!text-white hover:!bg-white/10"
-            >
-              <SearchIcon />
-            </IconButton>
-          </div>
+          <IconButton
+            onClick={openSearch}
+            className="!text-white hover:!bg-white/10"
+            aria-label="Mở tìm kiếm"
+          >
+            <SearchIcon />
+          </IconButton>
 
           {user?.username ? (
             <div className="flex items-center gap-2">
@@ -371,8 +374,18 @@ export default function Header() {
                 onClick={(event) => setUserAnchor(event.currentTarget)}
                 className="flex items-center gap-2 hover:bg-white/5 p-1 rounded-md transition-colors"
               >
-                <Avatar src={user.avatar || undefined} sx={{ width: 32, height: 32 }} className="border border-border">
-                  {!user.avatar && user.username[0]?.toUpperCase()}
+                <Avatar
+                  src={activeProfile?.id ? undefined : (user.avatar || undefined)}
+                  sx={{
+                    width: 32,
+                    height: 32,
+                    bgcolor: activeProfile?.avatar_color || '#E50914',
+                    color: 'white',
+                    fontWeight: 800,
+                  }}
+                  className="border border-border"
+                >
+                  {activeProfile?.id ? profileInitial(activeProfile.name) : (!user.avatar && user.username[0]?.toUpperCase())}
                 </Avatar>
                 <ExpandMoreIcon className="text-white/70" fontSize="small" />
               </button>
@@ -388,6 +401,197 @@ export default function Header() {
           )}
         </div>
       </div>
+
+      <AnimatePresence>
+        {isSearchOpen && (
+          <MotionDiv
+            className="fixed inset-0 z-[9998] bg-[#050505]/95 backdrop-blur-2xl text-white overflow-y-auto"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+          >
+            <button
+              type="button"
+              className="absolute inset-0 cursor-default"
+              aria-label="Đóng tìm kiếm"
+              onClick={closeSearch}
+            />
+
+            <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 pb-14 pt-20 md:px-8 md:pt-24">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-[0.28em] text-primary/90">Tìm kiếm</div>
+                  <h2 className="mt-2 text-2xl font-black tracking-tight text-white md:text-4xl">Bạn muốn xem gì?</h2>
+                </div>
+                <IconButton
+                  onClick={closeSearch}
+                  className="!h-11 !w-11 !bg-white/10 !text-white hover:!bg-white/20"
+                  aria-label="Đóng tìm kiếm"
+                >
+                  <CloseIcon />
+                </IconButton>
+              </div>
+
+              <form
+                className="relative mt-8"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  goToSearchResults();
+                }}
+              >
+                <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-white/45 md:!text-4xl" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchValue}
+                  onChange={(event) => setSearchValue(event.target.value)}
+                  onKeyDown={handleSearchKeyDown}
+                  placeholder="Tên phim, thể loại, quốc gia, tâm trạng..."
+                  className="w-full rounded-none border-0 border-b-2 border-white/20 bg-transparent py-4 pl-14 pr-4 text-2xl font-bold text-white outline-none transition-colors placeholder:text-white/30 focus:border-primary md:py-6 md:text-5xl"
+                />
+              </form>
+
+              <div className="mt-5 flex flex-wrap items-center gap-2">
+                {SEARCH_EXAMPLES.map((example) => (
+                  <button
+                    key={example}
+                    type="button"
+                    onClick={() => applySearchTerm(example)}
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/70 transition-colors hover:border-white/25 hover:bg-white/10 hover:text-white"
+                  >
+                    {example}
+                  </button>
+                ))}
+              </div>
+
+              {searchValue.trim().length < 2 ? (
+                <div className="mt-12 grid gap-8 md:grid-cols-[minmax(0,1fr)_360px]">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 md:p-8">
+                    <h3 className="text-lg font-bold text-white">Gợi ý tìm kiếm</h3>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-white/55">
+                      Gõ tên phim hoặc mô tả tự nhiên như “phim zombie Hàn Quốc”, “hài gia đình nhẹ nhàng”.
+                    </p>
+                    <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                      {SEARCH_EXAMPLES.map((example) => (
+                        <button
+                          key={`large-${example}`}
+                          type="button"
+                          onClick={() => applySearchTerm(example)}
+                          className="flex items-center justify-between rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-left text-sm font-semibold text-white/80 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-white"
+                        >
+                          <span>{example}</span>
+                          <SearchIcon fontSize="small" className="text-white/35" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+                    <h3 className="text-lg font-bold text-white">Tìm gần đây</h3>
+                    {recentSearches.length > 0 ? (
+                      <div className="mt-4 flex flex-col gap-2">
+                        {recentSearches.map((term) => (
+                          <button
+                            key={term}
+                            type="button"
+                            onClick={() => applySearchTerm(term)}
+                            className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                          >
+                            <SearchIcon fontSize="small" className="text-white/35" />
+                            <span className="truncate">{term}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-4 text-sm text-white/45">Các nội dung bạn tìm sẽ xuất hiện ở đây.</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-10">
+                  <div className="mb-5 flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-xl font-bold text-white">Kết quả nhanh</h3>
+                      <p className="mt-1 text-sm text-white/45">Chỉ hiển thị phim có trong hệ thống.</p>
+                    </div>
+                    {searchSuggestions.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={goToSearchResults}
+                        className="hidden rounded-full bg-white px-4 py-2 text-sm font-bold text-black transition-colors hover:bg-primary hover:text-white sm:inline-flex"
+                      >
+                        Xem tất cả
+                      </button>
+                    )}
+                  </div>
+
+                  {searchLoading ? (
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+                      {Array.from({ length: 12 }).map((_, index) => (
+                        <div key={index} className="animate-pulse">
+                          <div className="aspect-[2/3] rounded-lg bg-white/10" />
+                          <div className="mt-3 h-4 w-4/5 rounded bg-white/10" />
+                          <div className="mt-2 h-3 w-2/3 rounded bg-white/10" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : searchError ? (
+                    <div className="rounded-2xl border border-red-500/25 bg-red-500/10 px-5 py-6 text-red-100">
+                      {searchError}
+                    </div>
+                  ) : searchSuggestions.length > 0 ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+                        {searchSuggestions.map((movie) => (
+                          <button
+                            key={movie.id}
+                            type="button"
+                            onClick={() => goToMovie(movie.id)}
+                            className="group min-w-0 text-left"
+                          >
+                            <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-[#171717] shadow-xl">
+                              <img
+                                src={movie.poster_url || SEARCH_FALLBACK_POSTER}
+                                alt={movie.title}
+                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                onError={(event) => { event.currentTarget.src = SEARCH_FALLBACK_POSTER; }}
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+                              {movie.imdb_rating && (
+                                <span className="absolute right-2 top-2 rounded bg-black/75 px-2 py-1 text-[11px] font-bold text-[#f5c518]">
+                                  IMDb {Number(movie.imdb_rating).toFixed(1)}
+                                </span>
+                              )}
+                            </div>
+                            <div className="mt-3 font-bold text-white line-clamp-2 group-hover:text-primary">{movie.title}</div>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/45">
+                              {movie.release_year && <span>{movie.release_year}</span>}
+                              {movie.quality && <span>{movie.quality}</span>}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={goToSearchResults}
+                        className="mt-8 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-white/10 sm:hidden"
+                      >
+                        Xem tất cả kết quả
+                      </button>
+                    </>
+                  ) : (
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-10 text-center">
+                      <SearchIcon className="!text-5xl text-white/15" />
+                      <p className="mt-4 text-white/65">Thử tìm theo thể loại, quốc gia hoặc tên phim khác.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </MotionDiv>
+        )}
+      </AnimatePresence>
 
       {/* Menus using MUI (Keeping business logic intact) */}
       <Menu
@@ -444,6 +648,7 @@ export default function Header() {
           <IconButton onClick={() => setMobileAnchor(null)} size="small" className="!text-white hover:!bg-white/10"><CloseIcon /></IconButton>
         </div>
         <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)', mb: 1 }} />
+        <MenuItem onClick={() => goTo('/for-you')}>Dành cho bạn</MenuItem>
         <MenuItem onClick={() => goTo('/movies?is_series=0')}>Phim lẻ</MenuItem>
         <MenuItem onClick={() => goTo('/movies?is_series=1')}>Phim bộ</MenuItem>
         <MenuItem onClick={() => goTo('/movies?tab=actor')}>Diễn viên</MenuItem>
@@ -459,15 +664,30 @@ export default function Header() {
         PaperProps={{ sx: { ...modernPaperProps.sx, width: 250 } }}
       >
         <div className="px-5 pt-4 pb-3 flex items-center gap-3">
-          <Avatar src={user.avatar || undefined} sx={{ width: 40, height: 40, border: '2px solid rgba(255,255,255,0.1)' }}>
-            {!user.avatar && user.username?.[0]?.toUpperCase()}
+          <Avatar
+            src={activeProfile?.id ? undefined : (user.avatar || undefined)}
+            sx={{
+              width: 40,
+              height: 40,
+              border: '2px solid rgba(255,255,255,0.1)',
+              bgcolor: activeProfile?.avatar_color || '#E50914',
+              color: 'white',
+              fontWeight: 800,
+            }}
+          >
+            {activeProfile?.id ? profileInitial(activeProfile.name) : (!user.avatar && user.username?.[0]?.toUpperCase())}
           </Avatar>
           <div>
             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>Xin chào,</Typography>
-            <Typography variant="subtitle1" fontWeight="bold" sx={{ color: 'white', lineHeight: 1.2 }}>{user.username}</Typography>
+            <Typography variant="subtitle1" fontWeight="bold" sx={{ color: 'white', lineHeight: 1.2 }}>{activeProfile?.name || user.username}</Typography>
+            {activeProfile?.name && (
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>{user.username}</Typography>
+            )}
           </div>
         </div>
         <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)', my: 1 }} />
+        <MenuItem onClick={() => { setUserAnchor(null); navigate('/for-you'); }} sx={{ gap: 1.5 }}><AutoAwesomeIcon fontSize="small" /> Dành cho bạn</MenuItem>
+        <MenuItem onClick={() => { setUserAnchor(null); clearActiveProfile(); }} sx={{ gap: 1.5 }}><AccountCircleIcon fontSize="small" /> Đổi profile</MenuItem>
         <MenuItem onClick={() => { setUserAnchor(null); navigate('/user/favorites'); }} sx={{ gap: 1.5 }}><FavoriteBorderIcon fontSize="small" /> Yêu thích</MenuItem>
         <MenuItem onClick={() => { setUserAnchor(null); navigate('/user/list'); }} sx={{ gap: 1.5 }}><AddIcon fontSize="small" /> Danh sách</MenuItem>
         <MenuItem onClick={() => { setUserAnchor(null); navigate('/user/history'); }} sx={{ gap: 1.5 }}><HistoryIcon fontSize="small" /> Lịch sử xem</MenuItem>

@@ -5,6 +5,7 @@ import PropTypes from 'prop-types';
 import './FilterBox.css';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import { API_BASE_URL as API } from '../../config/api';
 
 export default function FilterBox({
   country, setCountry,
@@ -128,10 +129,10 @@ export default function FilterBox({
   const [genreOptions, setGenreOptions] = useState(["Tất cả"]);
 
   useEffect(() => {
-    axios.get('/api/countries').then(res => {
+    axios.get(`${API}/api/countries`).then(res => {
       setCountryOptions(["Tất cả", ...res.data.map(c => c.name)]);
     });
-    axios.get('/api/genres').then(res => {
+    axios.get(`${API}/api/genres`).then(res => {
       setGenreOptions(["Tất cả", ...res.data.map(g => g.name)]);
     });
   }, []);

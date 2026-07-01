@@ -16,6 +16,7 @@
     "migrate": "node scripts/migrate.js",
     "import:kkphim": "node scripts/import-kkphim.js",
     "seed:views": "node scripts/seed-random-views.js",
-    "check:gemini": "node scripts/check-gemini.js"
+    "check:gemini": "node scripts/check-gemini.js",
+    "test:chatbot": "node scripts/test-chatbot.js"
   }
 }

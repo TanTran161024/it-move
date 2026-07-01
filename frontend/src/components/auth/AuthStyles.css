@@ -1,0 +1,549 @@
+/* ============================================================
+   AUTH DIALOG STYLES — Cinematic Premium Dark Theme
+   Used by: LoginDialog, RegisterDialog, ForgotPasswordDialog
+   ============================================================ */
+
+/* --- Dialog Paper Override (MUI) --- */
+.auth-dialog-paper {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 20px !important;
+  overflow: hidden !important;
+  max-width: 880px !important;
+  width: 95vw !important;
+  margin: 16px !important;
+}
+
+/* --- Dialog Shell (Two-Column Layout) --- */
+.auth-dialog-shell {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  min-height: 580px;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 10, 10, 0.97);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+}
+
+.auth-dialog-shell.compact {
+  min-height: 480px;
+}
+
+/* --- Visual Side Panel --- */
+.auth-dialog-visual {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 40px 32px;
+  background:
+    linear-gradient(180deg,
+      rgba(229, 9, 20, 0.15) 0%,
+      rgba(10, 10, 10, 0.95) 100%),
+    linear-gradient(135deg,
+      #1a0005 0%,
+      #0a0a0a 40%,
+      #0d0d1a 100%);
+  overflow: hidden;
+}
+
+.auth-dialog-visual::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 20%,
+      rgba(229, 9, 20, 0.12) 0%,
+      transparent 70%);
+  pointer-events: none;
+}
+
+.auth-dialog-visual::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: repeating-conic-gradient(
+    rgba(255, 255, 255, 0.01) 0%,
+    transparent 1%
+  );
+  animation: auth-grain 8s steps(10) infinite;
+  pointer-events: none;
+}
+
+@keyframes auth-grain {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-5%, -10%); }
+  30% { transform: translate(3%, -15%); }
+  50% { transform: translate(12%, 9%); }
+  70% { transform: translate(9%, 4%); }
+  90% { transform: translate(-1%, 7%); }
+}
+
+/* --- Brand --- */
+.auth-brand {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 32px;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.03em;
+}
+
+.auth-brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #E50914, #b8070f);
+  font-size: 1rem;
+  box-shadow: 0 0 20px rgba(229, 9, 20, 0.4);
+}
+
+/* --- Visual Text --- */
+.auth-visual-title {
+  position: relative;
+  z-index: 1;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.35;
+  margin: 0 0 12px;
+}
+
+.auth-visual-text {
+  position: relative;
+  z-index: 1;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* --- Main Form Panel --- */
+.auth-dialog-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 40px 40px 36px;
+  overflow-y: auto;
+  max-height: 90vh;
+}
+
+/* --- Close Button --- */
+.auth-close {
+  position: absolute !important;
+  top: 16px;
+  right: 16px;
+  color: rgba(255, 255, 255, 0.45) !important;
+  transition: all 0.2s ease !important;
+  z-index: 10;
+}
+.auth-close:hover {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* --- Eyebrow --- */
+.auth-eyebrow {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: #E50914;
+  margin-bottom: 8px;
+}
+
+/* --- Title --- */
+.auth-title {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: #fff;
+  margin: 0 0 6px;
+  letter-spacing: -0.01em;
+}
+
+/* --- Switch Link (Already have account? / New here?) --- */
+.auth-switch {
+  font-size: 0.88rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0 0 24px;
+}
+
+.auth-link {
+  background: none;
+  border: none;
+  color: #E50914;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+.auth-link:hover {
+  color: #ff1a27;
+  text-decoration: underline;
+}
+
+/* --- Form --- */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* --- Input Field Overrides (MUI TextField variant="filled") --- */
+.auth-field .MuiFilledInput-root {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px !important;
+  transition: all 0.25s ease !important;
+}
+.auth-field .MuiFilledInput-root::before,
+.auth-field .MuiFilledInput-root::after {
+  display: none !important;
+}
+.auth-field .MuiFilledInput-root:hover {
+  background: rgba(255, 255, 255, 0.07) !important;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.auth-field .MuiFilledInput-root.Mui-focused {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(229, 9, 20, 0.6);
+  box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.12);
+}
+.auth-field .MuiFilledInput-input {
+  color: #fff !important;
+  font-size: 0.95rem;
+  padding: 24px 16px 8px !important;
+}
+.auth-field .MuiInputLabel-root {
+  color: rgba(255, 255, 255, 0.45) !important;
+  font-size: 0.9rem;
+}
+.auth-field .MuiInputLabel-root.Mui-focused {
+  color: rgba(229, 9, 20, 0.85) !important;
+}
+
+/* Password visibility toggle inside input */
+.auth-field .MuiInputAdornment-root .MuiIconButton-root {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+.auth-field .MuiInputAdornment-root .MuiIconButton-root:hover {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* --- Primary Button --- */
+.auth-primary-btn {
+  background: linear-gradient(135deg, #E50914 0%, #c2070f 100%) !important;
+  color: #fff !important;
+  font-weight: 700 !important;
+  font-size: 0.95rem !important;
+  text-transform: none !important;
+  border-radius: 12px !important;
+  padding: 13px 24px !important;
+  box-shadow:
+    0 4px 16px rgba(229, 9, 20, 0.25),
+    0 1px 3px rgba(0, 0, 0, 0.3) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  letter-spacing: 0.01em !important;
+  position: relative;
+  overflow: hidden;
+}
+.auth-primary-btn:hover {
+  background: linear-gradient(135deg, #ff1a27 0%, #E50914 100%) !important;
+  box-shadow:
+    0 6px 24px rgba(229, 9, 20, 0.35),
+    0 2px 6px rgba(0, 0, 0, 0.3) !important;
+  transform: translateY(-1px);
+}
+.auth-primary-btn:active {
+  transform: translateY(0);
+}
+.auth-primary-btn.Mui-disabled {
+  opacity: 0.55 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+}
+
+/* --- Secondary / Outlined Button --- */
+.auth-secondary-btn {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 12px !important;
+  padding: 11px 20px !important;
+  transition: all 0.25s ease !important;
+}
+.auth-secondary-btn:hover {
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: #fff !important;
+}
+
+/* --- Divider ("HOẶC") --- */
+.auth-divider {
+  margin: 20px 0 !important;
+  position: relative;
+}
+.auth-divider::before {
+  content: 'HOẶC';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(10, 10, 10, 0.97);
+  padding: 0 16px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: rgba(255, 255, 255, 0.35);
+  z-index: 1;
+}
+.auth-divider .MuiDivider-root,
+.auth-divider.MuiDivider-root {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* --- OTP Section --- */
+.auth-otp {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  animation: auth-fadeIn 0.35s ease;
+}
+
+.auth-otp-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.auth-otp-desc {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.auth-otp-email {
+  font-weight: 700;
+  color: #E50914;
+}
+
+/* OTP input special styling */
+.auth-otp-input .MuiFilledInput-input {
+  text-align: center !important;
+  letter-spacing: 0.4em !important;
+  font-weight: 700 !important;
+  font-size: 1.2rem !important;
+}
+
+/* --- Actions Row --- */
+.auth-actions-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+.auth-actions-row > * {
+  flex: 1;
+}
+
+/* --- Alert Overrides --- */
+.auth-alert {
+  border-radius: 10px !important;
+  font-size: 0.85rem !important;
+  margin-top: 8px;
+}
+.auth-alert.MuiAlert-standardError {
+  background: rgba(229, 57, 53, 0.1) !important;
+  border: 1px solid rgba(229, 57, 53, 0.25);
+  color: #ef9a9a !important;
+}
+.auth-alert.MuiAlert-standardSuccess {
+  background: rgba(76, 175, 80, 0.1) !important;
+  border: 1px solid rgba(76, 175, 80, 0.25);
+  color: #a5d6a7 !important;
+}
+
+/* --- Google Login Wrapper --- */
+.auth-google-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.auth-google-wrapper > div {
+  min-height: 40px;
+}
+
+.auth-google-status {
+  font-size: 0.75rem;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.auth-google-fallback {
+  width: 100%;
+  max-width: 320px;
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.03);
+  opacity: 0.5;
+  cursor: not-allowed;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-align: center;
+}
+
+/* --- Step Indicator (Forgot Password) --- */
+.auth-steps {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.auth-step-dot {
+  width: 32px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  transition: all 0.3s ease;
+}
+
+.auth-step-dot.active {
+  background: #E50914;
+  box-shadow: 0 0 8px rgba(229, 9, 20, 0.4);
+}
+
+.auth-step-dot.done {
+  background: rgba(76, 175, 80, 0.7);
+}
+
+.auth-step-label {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.35);
+  margin-left: auto;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* --- Loading Spinner --- */
+.auth-loading-spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: auth-spin 0.6s linear infinite;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+@keyframes auth-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* --- Fade in animation --- */
+@keyframes auth-fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.auth-fade-in {
+  animation: auth-fadeIn 0.35s ease;
+}
+
+/* ============================================================
+   RESPONSIVE — Mobile
+   ============================================================ */
+@media (max-width: 700px) {
+  .auth-dialog-paper {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+  }
+
+  .auth-dialog-shell,
+  .auth-dialog-shell.compact {
+    grid-template-columns: 1fr;
+    min-height: 100vh;
+    border-radius: 0;
+    border: none;
+  }
+
+  .auth-dialog-visual {
+    padding: 28px 24px 20px;
+    min-height: auto;
+  }
+
+  .auth-visual-title {
+    font-size: 1.1rem;
+  }
+
+  .auth-visual-text {
+    display: none;
+  }
+
+  .auth-dialog-panel {
+    padding: 24px 20px 32px;
+    max-height: none;
+    flex: 1;
+  }
+
+  .auth-title {
+    font-size: 1.4rem;
+  }
+
+  .auth-actions-row {
+    flex-direction: column;
+  }
+}
+
+/* Tablet */
+@media (min-width: 701px) and (max-width: 900px) {
+  .auth-dialog-shell {
+    grid-template-columns: 260px 1fr;
+  }
+
+  .auth-dialog-visual {
+    padding: 28px 20px;
+  }
+
+  .auth-dialog-panel {
+    padding: 32px 28px;
+  }
+}

@@ -6,8 +6,21 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const { getSimilarMovies, getUserRecommendations, clampLimit } = require('./services/recommendationService');
 const { chatWithMovieAdvisor, getAiStatus } = require('./services/aiService');
+const { ensureChatSession, getAiChatStats, saveChatExchange } = require('./services/chatSessionService');
 const { translateSubtitle } = require('./services/subtitleTranslatorService');
 const { smartSearchMovies } = require('./services/smartSearchService');
+const {
+  deleteEpisodeSubtitle,
+  ensureWebVtt,
+  getEpisodeSubtitleTracks,
+  getEpisodeSubtitle,
+  loadEpisodeSubtitleAsVtt,
+  loadStoredSubtitleAsVtt,
+  listEpisodeSubtitles,
+  normalizeSubtitleUrl,
+  saveEpisodeSubtitle,
+  updateEpisodeSubtitle,
+} = require('./services/subtitleService');
 
 const OTP_EXPIRATION_MINUTES = 10;
 const TEST_VIEW_MIN = Number(process.env.TEST_VIEW_MIN || 1000);
@@ -28,6 +41,28 @@ function hashOtp(otp) {
 function cleanImageUrl(value) {
   if (!value) return null;
   return String(value).replace(/&quot;?|"/g, '').trim() || null;
+}
+
+function attachSubtitleTracks(episodes, tracksByEpisode) {
+  return episodes.map((episode) => {
+    const storedTracks = tracksByEpisode.get(Number(episode.id)) || [];
+    const subtitleTracks = storedTracks.length
+      ? storedTracks
+      : normalizeSubtitleUrl(episode.subtitle_url)
+        ? [{
+            id: `legacy-${episode.id}`,
+            label: 'Phụ đề',
+            srclang: 'vi',
+            src: `/api/subtitles/episodes/${episode.id}.vtt`,
+            is_default: true,
+          }]
+        : [];
+
+    return {
+      ...episode,
+      subtitle_tracks: subtitleTracks,
+    };
+  });
 }
 
 function formatDateOnly(value) {
@@ -129,6 +164,10 @@ function getUserId(req) {
   return req.body?.user_id || req.query?.user_id || req.headers?.['x-user-id'];
 }
 
+function getProfileId(req) {
+  return req.body?.profile_id || req.query?.profile_id || req.headers?.['x-profile-id'];
+}
+
 function toPositiveInt(value) {
   const number = Number(value);
   return Number.isInteger(number) && number > 0 ? number : null;
@@ -144,6 +183,67 @@ async function isAdminUser(db, userId) {
   if (!userId) return false;
   const [rows] = await db.execute('SELECT is_admin FROM users WHERE id = ?', [userId]);
   return Boolean(rows[0]?.is_admin);
+}
+
+function normalizeProfilePayload(body = {}) {
+  const name = String(body.name || '').trim().slice(0, 60);
+  const avatarColor = String(body.avatar_color || '#E50914').trim().slice(0, 20);
+  const isKids = body.is_kids === true || body.is_kids === 1 || body.is_kids === '1';
+  return { name, avatarColor, isKids };
+}
+
+async function ensureDefaultProfile(db, userId) {
+  const [existing] = await db.execute(
+    `SELECT id, user_id, name, avatar_color, is_kids, is_default
+     FROM user_profiles
+     WHERE user_id = ?
+     ORDER BY is_default DESC, id ASC
+     LIMIT 1`,
+    [userId]
+  );
+  if (existing.length) return existing[0];
+
+  const [users] = await db.execute('SELECT username FROM users WHERE id = ? LIMIT 1', [userId]);
+  if (!users.length) return null;
+
+  const [result] = await db.execute(
+    'INSERT INTO user_profiles (user_id, name, avatar_color, is_kids, is_default) VALUES (?, ?, ?, 0, 1)',
+    [userId, users[0].username || 'Profile', '#E50914']
+  );
+  return {
+    id: result.insertId,
+    user_id: Number(userId),
+    name: users[0].username || 'Profile',
+    avatar_color: '#E50914',
+    is_kids: 0,
+    is_default: 1,
+  };
+}
+
+async function resolveProfileId(db, userId, requestedProfileId = null) {
+  const numericUserId = toPositiveInt(userId);
+  if (!numericUserId) return null;
+
+  const numericProfileId = toPositiveInt(requestedProfileId);
+  if (numericProfileId) {
+    const [rows] = await db.execute(
+      'SELECT id FROM user_profiles WHERE id = ? AND user_id = ? LIMIT 1',
+      [numericProfileId, numericUserId]
+    );
+    if (!rows.length) {
+      const error = new Error('Profile không thuộc tài khoản này');
+      error.statusCode = 403;
+      throw error;
+    }
+    return numericProfileId;
+  }
+
+  const profile = await ensureDefaultProfile(db, numericUserId);
+  return profile?.id || null;
+}
+
+function profileHeader(req) {
+  return getProfileId(req);
 }
 
 async function requireAdmin(req, res) {
@@ -229,11 +329,11 @@ async function getValidatedWatchProgressInput(db, body) {
   };
 }
 
-async function upsertWatchProgress(db, userId, input) {
+async function upsertWatchProgress(db, userId, profileId, input) {
   await db.execute(
     `INSERT INTO user_watch_history
-     (user_id, movie_id, episode_id, episode_number, progress_seconds, duration_seconds, completed)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+     (user_id, profile_id, movie_id, episode_id, episode_number, progress_seconds, duration_seconds, completed)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        episode_id = VALUES(episode_id),
        progress_seconds = VALUES(progress_seconds),
@@ -242,6 +342,7 @@ async function upsertWatchProgress(db, userId, input) {
        last_watched_at = NOW()`,
     [
       userId,
+      profileId,
       input.movieId,
       input.episodeId || null,
       input.episodeNumber || null,
@@ -252,17 +353,84 @@ async function upsertWatchProgress(db, userId, input) {
   );
 }
 
-async function getMovieCardsByJoin(db, tableName, userId, orderColumn = 'ul.created_at') {
+async function getMovieCardsByJoin(db, tableName, userId, profileId, orderColumn = 'ul.created_at') {
   const [rows] = await db.execute(
     `SELECT m.id, m.title, m.original_title, m.poster_url, m.release_year, m.duration,
             m.imdb_rating, m.quality, m.status, ul.created_at AS saved_at
      FROM ${tableName} ul
      JOIN movies m ON ul.movie_id = m.id
-     WHERE ul.user_id = ?
+     WHERE ul.user_id = ? AND ul.profile_id = ?
      ORDER BY ${orderColumn} DESC`,
-    [userId]
+    [userId, profileId]
   );
   return rows;
+}
+
+function toDateKey(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  return String(value).slice(0, 10);
+}
+
+function dateKeyToTime(key) {
+  return new Date(`${key}T00:00:00`).getTime();
+}
+
+function calculateWatchStreaks(dayRows) {
+  const dayKeys = [...new Set(dayRows.map((row) => toDateKey(row.watch_date)).filter(Boolean))]
+    .sort((left, right) => dateKeyToTime(left) - dateKeyToTime(right));
+
+  if (!dayKeys.length) {
+    return { current_streak_days: 0, longest_streak_days: 0 };
+  }
+
+  let longest = 1;
+  let currentRun = 1;
+
+  for (let index = 1; index < dayKeys.length; index += 1) {
+    const previous = dateKeyToTime(dayKeys[index - 1]);
+    const current = dateKeyToTime(dayKeys[index]);
+    const dayGap = Math.round((current - previous) / 86400000);
+
+    currentRun = dayGap === 1 ? currentRun + 1 : 1;
+    longest = Math.max(longest, currentRun);
+  }
+
+  let latestStreak = 1;
+  for (let index = dayKeys.length - 1; index > 0; index -= 1) {
+    const current = dateKeyToTime(dayKeys[index]);
+    const previous = dateKeyToTime(dayKeys[index - 1]);
+    const dayGap = Math.round((current - previous) / 86400000);
+    if (dayGap !== 1) break;
+    latestStreak += 1;
+  }
+
+  return { current_streak_days: latestStreak, longest_streak_days: longest };
+}
+
+function buildRecentWatchActivity(rows, days = 7) {
+  const byDate = new Map(rows.map((row) => [toDateKey(row.watch_date), row]));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (days - 1 - index));
+    const key = toDateKey(date);
+    const row = byDate.get(key) || {};
+
+    return {
+      date: key,
+      entries: Number(row.entries) || 0,
+      watch_seconds: Number(row.watch_seconds) || 0,
+      completed_entries: Number(row.completed_entries) || 0,
+    };
+  });
 }
 
 // Đăng ký tài khoản và gửi OTP xác nhận email
@@ -395,6 +563,110 @@ router.post('/auth/google', async (req, res) => {
   }
 });
 
+// ====== USER PROFILES API ======
+router.get('/profiles', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
+    const db = getDb(req);
+    await ensureDefaultProfile(db, userId);
+    const [rows] = await db.execute(
+      `SELECT id, user_id, name, avatar_color, is_kids, is_default, created_at, updated_at
+       FROM user_profiles
+       WHERE user_id = ?
+       ORDER BY is_default DESC, id ASC`,
+      [userId]
+    );
+    res.json(rows.map((profile) => ({
+      ...profile,
+      is_kids: Boolean(profile.is_kids),
+      is_default: Boolean(profile.is_default),
+    })));
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.post('/profiles', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
+    const db = getDb(req);
+    const { name, avatarColor, isKids } = normalizeProfilePayload(req.body);
+    if (!name) return res.status(400).json({ message: 'Tên profile không được để trống' });
+
+    const [[{ count }]] = await db.execute('SELECT COUNT(*) AS count FROM user_profiles WHERE user_id = ?', [userId]);
+    if (Number(count) >= 5) return res.status(400).json({ message: 'Mỗi tài khoản tối đa 5 profile' });
+
+    const isDefault = Number(count) === 0 ? 1 : 0;
+    const [result] = await db.execute(
+      'INSERT INTO user_profiles (user_id, name, avatar_color, is_kids, is_default) VALUES (?, ?, ?, ?, ?)',
+      [userId, name, avatarColor, isKids ? 1 : 0, isDefault]
+    );
+    const [rows] = await db.execute('SELECT * FROM user_profiles WHERE id = ? LIMIT 1', [result.insertId]);
+    res.status(201).json({ profile: rows[0] });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.put('/profiles/:profileId', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
+    const db = getDb(req);
+    const profileId = await resolveProfileId(db, userId, req.params.profileId);
+    const { name, avatarColor, isKids } = normalizeProfilePayload(req.body);
+    if (!name) return res.status(400).json({ message: 'Tên profile không được để trống' });
+
+    await db.execute(
+      'UPDATE user_profiles SET name = ?, avatar_color = ?, is_kids = ? WHERE id = ? AND user_id = ?',
+      [name, avatarColor, isKids ? 1 : 0, profileId, userId]
+    );
+    const [rows] = await db.execute('SELECT * FROM user_profiles WHERE id = ? LIMIT 1', [profileId]);
+    res.json({ profile: rows[0] });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.post('/profiles/:profileId/default', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
+    const db = getDb(req);
+    const profileId = await resolveProfileId(db, userId, req.params.profileId);
+    await db.execute('UPDATE user_profiles SET is_default = 0 WHERE user_id = ?', [userId]);
+    await db.execute('UPDATE user_profiles SET is_default = 1 WHERE id = ? AND user_id = ?', [profileId, userId]);
+    const [rows] = await db.execute('SELECT * FROM user_profiles WHERE id = ? LIMIT 1', [profileId]);
+    res.json({ profile: rows[0] });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.delete('/profiles/:profileId', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
+    const db = getDb(req);
+    const profileId = await resolveProfileId(db, userId, req.params.profileId);
+    const [[{ count }]] = await db.execute('SELECT COUNT(*) AS count FROM user_profiles WHERE user_id = ?', [userId]);
+    if (Number(count) <= 1) return res.status(400).json({ message: 'Tài khoản cần ít nhất 1 profile' });
+
+    const [rows] = await db.execute('SELECT is_default FROM user_profiles WHERE id = ? AND user_id = ? LIMIT 1', [profileId, userId]);
+    const wasDefault = Boolean(rows[0]?.is_default);
+    await db.execute('DELETE FROM user_profiles WHERE id = ? AND user_id = ?', [profileId, userId]);
+    if (wasDefault) {
+      const [nextRows] = await db.execute('SELECT id FROM user_profiles WHERE user_id = ? ORDER BY id ASC LIMIT 1', [userId]);
+      if (nextRows[0]) await db.execute('UPDATE user_profiles SET is_default = 1 WHERE id = ?', [nextRows[0].id]);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
 router.get('/movies', async (req, res) => {
   try {
     const db = getDb(req);
@@ -472,7 +744,8 @@ router.get('/recommendations', async (req, res) => {
 router.get('/recommendations/user/:userId', async (req, res) => {
   try {
     const db = getDb(req);
-    const recommendations = await getUserRecommendations(db, req.params.userId, clampLimit(req.query.limit));
+    const profileId = await resolveProfileId(db, req.params.userId, profileHeader(req));
+    const recommendations = await getUserRecommendations(db, req.params.userId, clampLimit(req.query.limit), profileId);
     res.json(recommendations);
   } catch (err) {
     res.status(err.statusCode || 500).json({ message: err.message });
@@ -493,16 +766,46 @@ router.get('/ai/status', (req, res) => {
   res.json(getAiStatus());
 });
 
+router.get('/admin/ai-health', requireAdminMiddleware, async (req, res) => {
+  try {
+    const db = getDb(req);
+    const chat = await getAiChatStats(db);
+    res.json({
+      status: getAiStatus(),
+      chat,
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
 router.post('/ai/chat', async (req, res) => {
   try {
     const db = getDb(req);
+    const userId = req.body?.user_id || req.headers?.['x-user-id'];
+    const profileId = req.body?.profile_id || req.headers?.['x-profile-id'];
+    const session = await ensureChatSession(db, {
+      sessionId: req.body?.session_id,
+      userId,
+      profileId,
+    });
     const result = await chatWithMovieAdvisor(db, {
       message: req.body?.message,
-      user_id: req.body?.user_id || req.headers?.['x-user-id'],
+      user_id: userId,
+      profile_id: profileId,
       history: req.body?.history,
       shown_movie_ids: req.body?.shown_movie_ids,
     });
-    res.json(result);
+    await saveChatExchange(db, {
+      sessionId: session.id,
+      userMessage: req.body?.message,
+      assistantResult: result,
+    });
+    res.json({
+      ...result,
+      session_id: session.id,
+      session_persisted: session.persisted,
+    });
   } catch (err) {
     res.status(err.statusCode || 500).json({ message: err.message });
   }
@@ -518,6 +821,98 @@ router.post('/ai/subtitles/translate', requireAdminMiddleware, async (req, res) 
       bilingual: req.body?.bilingual,
     });
     res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.post('/subtitles/preview', requireAdminMiddleware, async (req, res) => {
+  try {
+    const content = String(req.body?.content || '');
+    if (!content.trim()) return res.status(400).json({ message: 'Thiếu nội dung phụ đề' });
+    if (content.length > 500000) return res.status(413).json({ message: 'Phụ đề quá lớn' });
+
+    const format = String(req.body?.format || 'auto').toLowerCase();
+    const sourceName = format === 'auto' ? 'subtitle.txt' : `subtitle.${format}`;
+    res.json({
+      vtt_content: ensureWebVtt(content, sourceName),
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message || 'Cannot preview subtitle' });
+  }
+});
+
+router.get('/subtitles/episodes/:episodeId.vtt', async (req, res) => {
+  try {
+    const db = getDb(req);
+    const result = await loadEpisodeSubtitleAsVtt(db, req.params.episodeId);
+    res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(result.content);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message || 'Subtitle not available' });
+  }
+});
+
+router.get('/subtitles/episodes/:episodeId/:subtitleId.vtt', async (req, res) => {
+  try {
+    const db = getDb(req);
+    const result = await loadStoredSubtitleAsVtt(db, req.params.episodeId, req.params.subtitleId);
+    res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(result.content);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message || 'Subtitle not available' });
+  }
+});
+
+router.get('/subtitles/episodes/:episodeId/manage', requireAdminMiddleware, async (req, res) => {
+  try {
+    const db = getDb(req);
+    const result = await listEpisodeSubtitles(db, req.params.episodeId);
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message || 'Cannot load subtitles' });
+  }
+});
+
+router.post('/subtitles/episodes/:episodeId', requireAdminMiddleware, async (req, res) => {
+  try {
+    const db = getDb(req);
+    const subtitle = await saveEpisodeSubtitle(db, req.params.episodeId, req.body);
+    res.json({ message: 'Đã lưu phụ đề cho tập phim.', subtitle });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message || 'Cannot save subtitle' });
+  }
+});
+
+router.get('/subtitles/:subtitleId', requireAdminMiddleware, async (req, res) => {
+  try {
+    const db = getDb(req);
+    const subtitle = await getEpisodeSubtitle(db, req.params.subtitleId);
+    res.json({ subtitle });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message || 'Cannot load subtitle' });
+  }
+});
+
+router.put('/subtitles/:subtitleId', requireAdminMiddleware, async (req, res) => {
+  try {
+    const db = getDb(req);
+    const subtitle = await updateEpisodeSubtitle(db, req.params.subtitleId, req.body);
+    res.json({ message: 'Đã cập nhật phụ đề.', subtitle });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message || 'Cannot update subtitle' });
+  }
+});
+
+router.delete('/subtitles/:subtitleId', requireAdminMiddleware, async (req, res) => {
+  try {
+    const db = getDb(req);
+    await deleteEpisodeSubtitle(db, req.params.subtitleId);
+    res.json({ message: 'Đã xóa phụ đề.' });
   } catch (err) {
     res.status(err.statusCode || 500).json({ message: err.message });
   }
@@ -941,6 +1336,8 @@ router.get('/movie/:id', async (req, res) => {
     const [episodeRows] = await db.execute(
       `SELECT id, episode_number, title, video_url, subtitle_url FROM episodes WHERE movie_id = ? ORDER BY episode_number ASC`, [movieId]
     );
+    const subtitleTracksByEpisode = await getEpisodeSubtitleTracks(db, episodeRows.map((episode) => episode.id));
+    const episodes = attachSubtitleTracks(episodeRows, subtitleTracksByEpisode);
 
     // 8. Actors
     const [actorRows] = await db.execute(
@@ -966,7 +1363,7 @@ router.get('/movie/:id', async (req, res) => {
       countries,
       producers,
       directors,
-      episodes: episodeRows,
+      episodes,
       actors: actorRows,
       suggested: suggestedRows
     });
@@ -995,13 +1392,15 @@ router.get('/watch/:id', async (req, res) => {
 
     // 3. Danh sách tập
     const [episodeRows] = await db.execute(
-      `SELECT id, episode_number, title, video_url FROM episodes WHERE movie_id = ? ORDER BY episode_number ASC`, [movieId]
+      `SELECT id, episode_number, title, video_url, subtitle_url FROM episodes WHERE movie_id = ? ORDER BY episode_number ASC`, [movieId]
     );
+    const subtitleTracksByEpisode = await getEpisodeSubtitleTracks(db, episodeRows.map((episode) => episode.id));
+    const episodes = attachSubtitleTracks(episodeRows, subtitleTracksByEpisode);
 
     res.json({
       movie,
       genres: genreRows,
-      episodes: episodeRows
+      episodes
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -1345,9 +1744,10 @@ router.get('/user/favorites', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
-    res.json(await getMovieCardsByJoin(db, 'user_favorites', userId));
+    const profileId = await resolveProfileId(db, userId, profileHeader(req));
+    res.json(await getMovieCardsByJoin(db, 'user_favorites', userId, profileId));
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.statusCode || 500).json({ message: err.message });
   }
 });
 
@@ -1357,10 +1757,11 @@ router.post('/user/favorites', async (req, res) => {
     const { movie_id } = req.body;
     if (!userId || !movie_id) return res.status(400).json({ message: 'Thiếu user_id hoặc movie_id' });
     const db = getDb(req);
-    await db.execute('INSERT IGNORE INTO user_favorites (user_id, movie_id) VALUES (?, ?)', [userId, movie_id]);
+    const profileId = await resolveProfileId(db, userId, profileHeader(req));
+    await db.execute('INSERT IGNORE INTO user_favorites (user_id, profile_id, movie_id) VALUES (?, ?, ?)', [userId, profileId, movie_id]);
     res.json({ success: true, message: 'Da them vao yeu thich' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.statusCode || 500).json({ message: err.message });
   }
 });
 
@@ -1369,10 +1770,11 @@ router.delete('/user/favorites/:movieId', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
-    await db.execute('DELETE FROM user_favorites WHERE user_id=? AND movie_id=?', [userId, req.params.movieId]);
+    const profileId = await resolveProfileId(db, userId, profileHeader(req));
+    await db.execute('DELETE FROM user_favorites WHERE user_id=? AND profile_id=? AND movie_id=?', [userId, profileId, req.params.movieId]);
     res.json({ success: true, message: 'Da xoa khoi yeu thich' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.statusCode || 500).json({ message: err.message });
   }
 });
 
@@ -1381,9 +1783,10 @@ router.get('/user/watchlist', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
-    res.json(await getMovieCardsByJoin(db, 'user_watchlist', userId));
+    const profileId = await resolveProfileId(db, userId, profileHeader(req));
+    res.json(await getMovieCardsByJoin(db, 'user_watchlist', userId, profileId));
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.statusCode || 500).json({ message: err.message });
   }
 });
 
@@ -1393,10 +1796,11 @@ router.post('/user/watchlist', async (req, res) => {
     const { movie_id } = req.body;
     if (!userId || !movie_id) return res.status(400).json({ message: 'Thiếu user_id hoặc movie_id' });
     const db = getDb(req);
-    await db.execute('INSERT IGNORE INTO user_watchlist (user_id, movie_id) VALUES (?, ?)', [userId, movie_id]);
+    const profileId = await resolveProfileId(db, userId, profileHeader(req));
+    await db.execute('INSERT IGNORE INTO user_watchlist (user_id, profile_id, movie_id) VALUES (?, ?, ?)', [userId, profileId, movie_id]);
     res.json({ success: true, message: 'Da them vao danh sach' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.statusCode || 500).json({ message: err.message });
   }
 });
 
@@ -1405,10 +1809,11 @@ router.delete('/user/watchlist/:movieId', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
-    await db.execute('DELETE FROM user_watchlist WHERE user_id=? AND movie_id=?', [userId, req.params.movieId]);
+    const profileId = await resolveProfileId(db, userId, profileHeader(req));
+    await db.execute('DELETE FROM user_watchlist WHERE user_id=? AND profile_id=? AND movie_id=?', [userId, profileId, req.params.movieId]);
     res.json({ success: true, message: 'Da xoa khoi danh sach' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.statusCode || 500).json({ message: err.message });
   }
 });
 
@@ -1417,17 +1822,18 @@ router.get('/user/library-status/:movieId', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.json({ favorite: false, watchlist: false });
     const db = getDb(req);
+    const profileId = await resolveProfileId(db, userId, profileHeader(req));
     const [favoriteRows] = await db.execute(
-      'SELECT 1 FROM user_favorites WHERE user_id=? AND movie_id=? LIMIT 1',
-      [userId, req.params.movieId]
+      'SELECT 1 FROM user_favorites WHERE user_id=? AND profile_id=? AND movie_id=? LIMIT 1',
+      [userId, profileId, req.params.movieId]
     );
     const [watchlistRows] = await db.execute(
-      'SELECT 1 FROM user_watchlist WHERE user_id=? AND movie_id=? LIMIT 1',
-      [userId, req.params.movieId]
+      'SELECT 1 FROM user_watchlist WHERE user_id=? AND profile_id=? AND movie_id=? LIMIT 1',
+      [userId, profileId, req.params.movieId]
     );
     res.json({ favorite: favoriteRows.length > 0, watchlist: watchlistRows.length > 0 });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.statusCode || 500).json({ message: err.message });
   }
 });
 
@@ -1436,6 +1842,7 @@ router.get('/user/history', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
+    const profileId = await resolveProfileId(db, userId, profileHeader(req));
     const [rows] = await db.execute(
       `SELECT h.id AS history_id, h.episode_id, h.episode_number, h.progress_seconds,
               h.duration_seconds, h.completed, h.last_watched_at,
@@ -1444,9 +1851,9 @@ router.get('/user/history', async (req, res) => {
        FROM user_watch_history h
        JOIN movies m ON h.movie_id = m.id
        LEFT JOIN episodes e ON h.episode_id = e.id
-       WHERE h.user_id = ?
+       WHERE h.user_id = ? AND h.profile_id = ?
        ORDER BY h.last_watched_at DESC`,
-      [userId]
+      [userId, profileId]
     );
     res.json(rows);
   } catch (err) {
@@ -1459,6 +1866,7 @@ router.get('/user/continue', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
+    const profileId = await resolveProfileId(db, userId, profileHeader(req));
     const [rows] = await db.execute(
       `SELECT h.id AS history_id, h.episode_id, h.episode_number, h.progress_seconds,
               h.duration_seconds, h.completed, h.last_watched_at,
@@ -1467,14 +1875,156 @@ router.get('/user/continue', async (req, res) => {
        FROM user_watch_history h
        JOIN movies m ON h.movie_id = m.id
        LEFT JOIN episodes e ON h.episode_id = e.id
-       WHERE h.user_id = ?
+       WHERE h.user_id = ? AND h.profile_id = ?
          AND h.completed = 0
        ORDER BY h.last_watched_at DESC`,
-      [userId]
+      [userId, profileId]
     );
     res.json(rows);
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+router.get('/user/watch-stats', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: 'ChÆ°a Ä‘Äƒng nháº­p' });
+
+    const db = getDb(req);
+    const profileId = await resolveProfileId(db, userId, profileHeader(req));
+    const watchedSecondsSql = `
+      CASE
+        WHEN h.completed = 1 AND h.duration_seconds > 0 THEN h.duration_seconds
+        WHEN h.duration_seconds > 0 THEN LEAST(h.progress_seconds, h.duration_seconds)
+        ELSE h.progress_seconds
+      END
+    `;
+
+    const [[summary]] = await db.execute(
+      `SELECT
+         COUNT(*) AS total_entries,
+         COUNT(DISTINCT h.movie_id) AS total_movies,
+         SUM(CASE WHEN h.episode_id IS NOT NULL OR h.episode_number IS NOT NULL THEN 1 ELSE 0 END) AS total_episodes,
+         SUM(CASE WHEN h.completed = 1 THEN 1 ELSE 0 END) AS completed_episodes,
+         SUM(CASE WHEN h.completed = 0 THEN 1 ELSE 0 END) AS in_progress_count,
+         COALESCE(SUM(${watchedSecondsSql}), 0) AS watch_seconds,
+         COALESCE(AVG(CASE WHEN h.duration_seconds > 0 THEN LEAST(h.progress_seconds, h.duration_seconds) / h.duration_seconds ELSE NULL END), 0) AS avg_progress,
+         COUNT(DISTINCT DATE(h.last_watched_at)) AS active_days,
+         MIN(h.created_at) AS first_watched_at,
+         MAX(h.last_watched_at) AS last_watched_at
+       FROM user_watch_history h
+       WHERE h.user_id = ? AND h.profile_id = ?`,
+      [userId, profileId]
+    );
+
+    const [dayRows] = await db.execute(
+      `SELECT DISTINCT DATE(last_watched_at) AS watch_date
+       FROM user_watch_history
+       WHERE user_id = ? AND profile_id = ?
+       ORDER BY watch_date ASC`,
+      [userId, profileId]
+    );
+
+    const [recentRows] = await db.execute(
+      `SELECT DATE(h.last_watched_at) AS watch_date,
+              COUNT(*) AS entries,
+              COALESCE(SUM(${watchedSecondsSql}), 0) AS watch_seconds,
+              SUM(CASE WHEN h.completed = 1 THEN 1 ELSE 0 END) AS completed_entries
+       FROM user_watch_history h
+       WHERE h.user_id = ? AND h.profile_id = ?
+         AND h.last_watched_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+       GROUP BY DATE(h.last_watched_at)
+       ORDER BY watch_date ASC`,
+      [userId, profileId]
+    );
+
+    const [topGenres] = await db.execute(
+      `SELECT g.id, g.name,
+              COUNT(*) AS entries,
+              COUNT(DISTINCT h.movie_id) AS movies,
+              COALESCE(SUM(${watchedSecondsSql}), 0) AS watch_seconds
+       FROM user_watch_history h
+       JOIN movie_genres mg ON h.movie_id = mg.movie_id
+       JOIN genres g ON mg.genre_id = g.id
+       WHERE h.user_id = ? AND h.profile_id = ?
+       GROUP BY g.id, g.name
+       ORDER BY watch_seconds DESC, entries DESC, g.name ASC
+       LIMIT 5`,
+      [userId, profileId]
+    );
+
+    const [topCountries] = await db.execute(
+      `SELECT c.id, c.name,
+              COUNT(*) AS entries,
+              COUNT(DISTINCT h.movie_id) AS movies,
+              COALESCE(SUM(${watchedSecondsSql}), 0) AS watch_seconds
+       FROM user_watch_history h
+       JOIN movie_countries mc ON h.movie_id = mc.movie_id
+       JOIN countries c ON mc.country_id = c.id
+       WHERE h.user_id = ? AND h.profile_id = ?
+       GROUP BY c.id, c.name
+       ORDER BY watch_seconds DESC, entries DESC, c.name ASC
+       LIMIT 5`,
+      [userId, profileId]
+    );
+
+    const [topMovies] = await db.execute(
+      `SELECT m.id, m.title, m.original_title, m.poster_url,
+              COUNT(*) AS entries,
+              SUM(CASE WHEN h.completed = 1 THEN 1 ELSE 0 END) AS completed_entries,
+              COALESCE(SUM(${watchedSecondsSql}), 0) AS watch_seconds,
+              MAX(h.last_watched_at) AS last_watched_at
+       FROM user_watch_history h
+       JOIN movies m ON h.movie_id = m.id
+       WHERE h.user_id = ? AND h.profile_id = ?
+       GROUP BY m.id, m.title, m.original_title, m.poster_url
+       ORDER BY watch_seconds DESC, last_watched_at DESC
+       LIMIT 5`,
+      [userId, profileId]
+    );
+
+    const totalEntries = Number(summary.total_entries) || 0;
+    const completedEpisodes = Number(summary.completed_episodes) || 0;
+    const completionRate = totalEntries > 0 ? Math.round((completedEpisodes / totalEntries) * 100) : 0;
+    const streaks = calculateWatchStreaks(dayRows);
+
+    res.json({
+      total_entries: totalEntries,
+      total_movies: Number(summary.total_movies) || 0,
+      total_episodes: Number(summary.total_episodes) || totalEntries,
+      completed_episodes: completedEpisodes,
+      in_progress_count: Number(summary.in_progress_count) || 0,
+      watch_seconds: Number(summary.watch_seconds) || 0,
+      watch_minutes: Math.round((Number(summary.watch_seconds) || 0) / 60),
+      avg_progress_percent: Math.round((Number(summary.avg_progress) || 0) * 100),
+      active_days: Number(summary.active_days) || 0,
+      completion_rate: completionRate,
+      first_watched_at: summary.first_watched_at || null,
+      last_watched_at: summary.last_watched_at || null,
+      ...streaks,
+      recent_activity: buildRecentWatchActivity(recentRows),
+      top_genres: topGenres.map((item) => ({
+        ...item,
+        entries: Number(item.entries) || 0,
+        movies: Number(item.movies) || 0,
+        watch_seconds: Number(item.watch_seconds) || 0,
+      })),
+      top_countries: topCountries.map((item) => ({
+        ...item,
+        entries: Number(item.entries) || 0,
+        movies: Number(item.movies) || 0,
+        watch_seconds: Number(item.watch_seconds) || 0,
+      })),
+      top_movies: topMovies.map((item) => ({
+        ...item,
+        entries: Number(item.entries) || 0,
+        completed_entries: Number(item.completed_entries) || 0,
+        watch_seconds: Number(item.watch_seconds) || 0,
+      })),
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
   }
 });
 
@@ -1493,13 +2043,14 @@ router.get('/watch-history/progress', async (req, res) => {
     }
 
     const db = getDb(req);
-    const params = [userId, movieId, episodeId || episodeNumber];
+    const profileId = await resolveProfileId(db, userId, profileHeader(req));
+    const params = [userId, profileId, movieId, episodeId || episodeNumber];
     const episodeCondition = episodeId ? 'h.episode_id = ?' : 'h.episode_number = ?';
     const [rows] = await db.execute(
       `SELECT h.id AS history_id, h.movie_id, h.episode_id, h.episode_number,
               h.progress_seconds, h.duration_seconds, h.completed, h.last_watched_at
        FROM user_watch_history h
-       WHERE h.user_id = ? AND h.movie_id = ? AND ${episodeCondition}
+       WHERE h.user_id = ? AND h.profile_id = ? AND h.movie_id = ? AND ${episodeCondition}
        LIMIT 1`,
       params
     );
@@ -1525,8 +2076,9 @@ router.post('/watch-history/progress', async (req, res) => {
     if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
 
     const db = getDb(req);
+    const profileId = await resolveProfileId(db, userId, profileHeader(req));
     const input = await getValidatedWatchProgressInput(db, req.body);
-    await upsertWatchProgress(db, userId, input);
+    await upsertWatchProgress(db, userId, profileId, input);
 
     res.json({
       success: true,
@@ -1544,8 +2096,9 @@ router.post('/user/history', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
+    const profileId = await resolveProfileId(db, userId, profileHeader(req));
     const input = await getValidatedWatchProgressInput(db, req.body);
-    await upsertWatchProgress(db, userId, input);
+    await upsertWatchProgress(db, userId, profileId, input);
     res.json({ success: true });
   } catch (err) {
     res.status(err.statusCode || 500).json({ message: err.message });
@@ -1557,10 +2110,11 @@ router.delete('/user/history/:historyId', async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
-    await db.execute('DELETE FROM user_watch_history WHERE user_id=? AND id=?', [userId, req.params.historyId]);
+    const profileId = await resolveProfileId(db, userId, profileHeader(req));
+    await db.execute('DELETE FROM user_watch_history WHERE user_id=? AND profile_id=? AND id=?', [userId, profileId, req.params.historyId]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.statusCode || 500).json({ message: err.message });
   }
 });
 
@@ -1972,6 +2526,200 @@ router.put('/users/:id', requireAdminMiddleware, async (req, res) => {
 });
 
 // ===== ADMIN DASHBOARD STATS =====
+
+// ==================== ADMIN DASHBOARD STATS API ====================
+router.get('/admin/dashboard-stats', requireAdminMiddleware, async (req, res) => {
+  try {
+    const db = getDb(req);
+    const range = req.query.range || '7d';
+    
+    // Determine the date filter for queries that depend on range
+    let dateCondition = '';
+    let viewsDateCondition = '';
+    
+    if (range === '7d') {
+      dateCondition = '>= DATE_SUB(CURDATE(), INTERVAL 7 DAY)';
+      viewsDateCondition = '>= DATE_SUB(CURDATE(), INTERVAL 6 DAY)'; // Keep 7 days including today
+    } else if (range === '30d') {
+      dateCondition = '>= DATE_SUB(CURDATE(), INTERVAL 30 DAY)';
+      viewsDateCondition = '>= DATE_SUB(CURDATE(), INTERVAL 29 DAY)';
+    }
+
+    // 1. Overview Stats
+    const [[{ total_movies }]] = await db.query('SELECT COUNT(*) as total_movies FROM movies');
+    const [[{ total_episodes }]] = await db.query('SELECT COUNT(*) as total_episodes FROM episodes');
+    const [[{ total_users }]] = await db.query('SELECT COUNT(*) as total_users FROM users');
+    const [[{ total_views }]] = await db.query('SELECT COALESCE(SUM(views), 0) as total_views FROM movies');
+    const [[{ ongoing_movies }]] = await db.query("SELECT COUNT(*) as ongoing_movies FROM movies WHERE status='ongoing'");
+    
+    // Open reports
+    const [[{ open_reports }]] = await db.query("SELECT COUNT(*) as open_reports FROM movie_reports WHERE status='open'");
+    
+    // New comments (created today or within range, let's just count comments created in the range, or just today if all)
+    let newCommentsQuery = "SELECT COUNT(*) as new_comments FROM movie_comments";
+    if (dateCondition) {
+      newCommentsQuery += ` WHERE created_at ${dateCondition}`;
+    }
+    const [[{ new_comments }]] = await db.query(newCommentsQuery);
+
+    // 2. Charts Data
+    
+    // Daily views
+    let dailyViewsQuery = `
+      SELECT DATE(viewed_at) AS date, COUNT(*) AS views
+      FROM movie_views
+    `;
+    if (viewsDateCondition) {
+      dailyViewsQuery += ` WHERE viewed_at ${viewsDateCondition}`;
+    }
+    dailyViewsQuery += `
+      GROUP BY DATE(viewed_at)
+      ORDER BY DATE(viewed_at) ASC
+    `;
+    const [daily_views] = await db.query(dailyViewsQuery);
+
+    // Top movies
+    let topMoviesQuery = `
+      SELECT id, title, poster_url, views 
+      FROM movies 
+      ORDER BY views DESC, created_at DESC 
+      LIMIT 10
+    `;
+    // Note: since movie views aren't aggregated by date in the movies table, 
+    // the true 'top movies in range' would require joining movie_views.
+    // For simplicity and performance, if range is not 'all', we calculate top movies from movie_views.
+    if (dateCondition) {
+      topMoviesQuery = `
+        SELECT m.id, m.title, m.poster_url, COUNT(v.id) as views
+        FROM movies m
+        JOIN movie_views v ON m.id = v.movie_id
+        WHERE v.viewed_at ${dateCondition}
+        GROUP BY m.id, m.title, m.poster_url
+        ORDER BY views DESC
+        LIMIT 10
+      `;
+    }
+    const [top_movies] = await db.query(topMoviesQuery);
+
+    // Top genres
+    // Similar logic: if range provided, count from movie_views, else sum from movies
+    let topGenresQuery = `
+      SELECT g.name, COALESCE(SUM(m.views), 0) AS views
+      FROM genres g
+      JOIN movie_genres mg ON g.id = mg.genre_id
+      JOIN movies m ON mg.movie_id = m.id
+      GROUP BY g.id, g.name
+      ORDER BY views DESC
+      LIMIT 5
+    `;
+    if (dateCondition) {
+      topGenresQuery = `
+        SELECT g.name, COUNT(v.id) AS views
+        FROM genres g
+        JOIN movie_genres mg ON g.id = mg.genre_id
+        JOIN movie_views v ON mg.movie_id = v.movie_id
+        WHERE v.viewed_at ${dateCondition}
+        GROUP BY g.id, g.name
+        ORDER BY views DESC
+        LIMIT 5
+      `;
+    }
+    const [top_genres] = await db.query(topGenresQuery);
+
+    // Top countries
+    let topCountriesQuery = `
+      SELECT c.name, COALESCE(SUM(m.views), 0) AS views
+      FROM countries c
+      JOIN movie_countries mc ON c.id = mc.country_id
+      JOIN movies m ON mc.movie_id = m.id
+      GROUP BY c.id, c.name
+      ORDER BY views DESC
+      LIMIT 5
+    `;
+    if (dateCondition) {
+      topCountriesQuery = `
+        SELECT c.name, COUNT(v.id) AS views
+        FROM countries c
+        JOIN movie_countries mc ON c.id = mc.country_id
+        JOIN movie_views v ON mc.movie_id = v.movie_id
+        WHERE v.viewed_at ${dateCondition}
+        GROUP BY c.id, c.name
+        ORDER BY views DESC
+        LIMIT 5
+      `;
+    }
+    const [top_countries] = await db.query(topCountriesQuery);
+
+    // Movie Types (Single vs Series)
+    const [[{ series_count }]] = await db.query("SELECT COUNT(*) as series_count FROM movies WHERE is_series = 1");
+    const [[{ single_count }]] = await db.query("SELECT COUNT(*) as single_count FROM movies WHERE is_series = 0");
+    const movie_types = [
+      { name: 'Phim bộ', value: series_count },
+      { name: 'Phim lẻ', value: single_count }
+    ];
+
+    // Report Stats
+    let reportStatsQuery = `
+      SELECT status, COUNT(*) as count 
+      FROM movie_reports 
+    `;
+    if (dateCondition) {
+      reportStatsQuery += ` WHERE created_at ${dateCondition} `;
+    }
+    reportStatsQuery += ` GROUP BY status `;
+    const [reportStatsRows] = await db.query(reportStatsQuery);
+    
+    const report_stats = {
+      open: 0,
+      resolved: 0,
+      rejected: 0
+    };
+    reportStatsRows.forEach(row => {
+      if (report_stats[row.status] !== undefined) {
+        report_stats[row.status] = row.count;
+      }
+    });
+
+    // 3. Report Table (Recent reports)
+    let recentReportsQuery = `
+      SELECT r.*, m.title as movie_title, u.username as reporter_name
+      FROM movie_reports r
+      LEFT JOIN movies m ON r.movie_id = m.id
+      LEFT JOIN users u ON r.user_id = u.id
+    `;
+    if (dateCondition) {
+      recentReportsQuery += ` WHERE r.created_at ${dateCondition} `;
+    }
+    recentReportsQuery += ` ORDER BY r.created_at DESC LIMIT 10 `;
+    const [recent_reports] = await db.query(recentReportsQuery);
+
+    res.json({
+      overview: {
+        total_movies,
+        total_episodes,
+        total_users,
+        total_views: Number(total_views) || 0,
+        ongoing_movies,
+        open_reports,
+        new_comments
+      },
+      charts: {
+        daily_views,
+        top_movies,
+        top_genres,
+        top_countries,
+        movie_types,
+        report_stats
+      },
+      recent_reports
+    });
+
+  } catch (err) {
+    console.error('Dashboard Stats Error:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.get('/admin/stats', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);

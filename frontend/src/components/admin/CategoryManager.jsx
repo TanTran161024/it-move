@@ -2,12 +2,23 @@ import React, { useEffect, useState } from 'react';
 import {
   Box, Button, TextField, Typography, Dialog, DialogTitle, DialogContent, DialogActions,
   Chip, MenuItem, Select, InputLabel, FormControl, OutlinedInput, Alert, IconButton,
-  Card, CardContent, CardActions, Tooltip, Divider
+  Card, CardContent, CardActions, Tooltip
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import { API_BASE_URL as API } from '../../config/api';
+import '../../pages/admin/AdminStyles.css';
+
+const darkFieldSx = {
+  '& .MuiInputBase-input': { color: '#fff' },
+  '& .MuiInputLabel-root': { color: 'var(--admin-text-muted)' },
+  '& .MuiOutlinedInput-root': {
+    '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' },
+    '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.25)' },
+    '&.Mui-focused fieldset': { borderColor: 'var(--admin-accent)' },
+  },
+};
 
 export default function CategoryManager() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -184,9 +195,9 @@ export default function CategoryManager() {
   };
 
   return (
-    <Box sx={{ p: 4, pl: 12, pt: 0 }}>
+    <Box sx={{ p: { xs: 1, md: 3 }, maxWidth: 1400, mx: 'auto' }}>
       <Typography variant="h4" mb={3} sx={{ color: '#fff', fontWeight: 700 }}>
-        Quản lý danh mục
+        Quản lý danh mục Custom
       </Typography>
 
       <Button 
@@ -194,8 +205,8 @@ export default function CategoryManager() {
         startIcon={<AddIcon />}
         onClick={() => handleOpen()}
         sx={{ 
-          bgcolor: '#1976d2', 
-          '&:hover': { bgcolor: '#1565c0' },
+          bgcolor: 'var(--admin-accent)', 
+          '&:hover': { bgcolor: 'var(--admin-accent-hover)' },
           fontWeight: 600,
           mb: 3
         }}
@@ -206,114 +217,115 @@ export default function CategoryManager() {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
-      <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
-        {categories.map(category => (
-          <Card key={category.id} sx={{
-            bgcolor: '#23242a',
-            color: '#fff',
-            '&:hover': {
-              transform: 'translateY(-4px)',
-              boxShadow: 8,
-              bgcolor: '#23243a'
-            },
-            transition: 'all 0.3s ease'
-          }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                {category.name}
-              </Typography>
-              
-              {/* Hiển thị thể loại */}
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="body2" sx={{ color: '#bbb', mb: 1, fontWeight: 500 }}>
-                  Thể loại:
+      {categories.length === 0 ? (
+        <div className="admin-empty">
+          <Typography>Chưa có danh mục nào.</Typography>
+        </div>
+      ) : (
+        <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+          {categories.map(category => (
+            <Card key={category.id} className="admin-panel" sx={{ p: 0, mb: 0 }}>
+              <CardContent>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: 'var(--admin-accent)' }}>
+                  {category.name}
                 </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {category.genres && category.genres.length > 0 ? (
-                    category.genres.map((genre, index) => (
-                      <Chip
-                        key={index}
-                        label={genre.name}
-                        size="small"
-                        sx={{
-                          bgcolor: '#1976d2',
-                          color: '#fff',
-                          fontSize: '0.7rem',
-                          height: 20
-                        }}
-                      />
-                    ))
-                  ) : (
-                    <Typography variant="body2" sx={{ color: '#666', fontStyle: 'italic' }}>
-                      Chưa có thể loại
-                    </Typography>
-                  )}
+                
+                {/* Hiển thị thể loại */}
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2" sx={{ color: 'var(--admin-text-muted)', mb: 1, fontWeight: 600, textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em' }}>
+                    Thể loại:
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {category.genres && category.genres.length > 0 ? (
+                      category.genres.map((genre, index) => (
+                        <Chip
+                          key={index}
+                          label={genre.name}
+                          size="small"
+                          sx={{
+                            bgcolor: 'rgba(59, 130, 246, 0.15)',
+                            color: '#60a5fa',
+                            fontSize: '0.75rem',
+                            fontWeight: 500,
+                            border: '1px solid rgba(59, 130, 246, 0.3)'
+                          }}
+                        />
+                      ))
+                    ) : (
+                      <Typography variant="body2" sx={{ color: '#666', fontStyle: 'italic' }}>
+                        Chưa có thể loại
+                      </Typography>
+                    )}
+                  </Box>
                 </Box>
-              </Box>
 
-              {/* Hiển thị quốc gia */}
-              <Box sx={{ mb: 1 }}>
-                <Typography variant="body2" sx={{ color: '#bbb', mb: 1, fontWeight: 500 }}>
-                  Quốc gia:
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {category.countries && category.countries.length > 0 ? (
-                    category.countries.map((country, index) => (
-                      <Chip
-                        key={index}
-                        label={country.name}
-                        size="small"
-                        sx={{
-                          bgcolor: '#4caf50',
-                          color: '#fff',
-                          fontSize: '0.7rem',
-                          height: 20
-                        }}
-                      />
-                    ))
-                  ) : (
-                    <Typography variant="body2" sx={{ color: '#666', fontStyle: 'italic' }}>
-                      Chưa có quốc gia
-                    </Typography>
-                  )}
+                {/* Hiển thị quốc gia */}
+                <Box sx={{ mb: 1 }}>
+                  <Typography variant="body2" sx={{ color: 'var(--admin-text-muted)', mb: 1, fontWeight: 600, textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em' }}>
+                    Quốc gia:
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {category.countries && category.countries.length > 0 ? (
+                      category.countries.map((country, index) => (
+                        <Chip
+                          key={index}
+                          label={country.name}
+                          size="small"
+                          sx={{
+                            bgcolor: 'rgba(34, 197, 94, 0.15)',
+                            color: '#4ade80',
+                            fontSize: '0.75rem',
+                            fontWeight: 500,
+                            border: '1px solid rgba(34, 197, 94, 0.3)'
+                          }}
+                        />
+                      ))
+                    ) : (
+                      <Typography variant="body2" sx={{ color: '#666', fontStyle: 'italic' }}>
+                        Chưa có quốc gia
+                      </Typography>
+                    )}
+                  </Box>
                 </Box>
-              </Box>
-            </CardContent>
-            <CardActions sx={{ justifyContent: 'flex-end', p: 2 }}>
-              <Tooltip title="Sửa">
-                <IconButton
-                  color="primary"
-                  onClick={() => handleOpen(category)}
-                  sx={{
-                    bgcolor: '#333',
-                    '&:hover': { bgcolor: '#1976d2' }
-                  }}
-                >
-                  <EditIcon />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Xóa">
-                <IconButton
-                  color="error"
-                  onClick={() => handleDelete(category.id)}
-                  sx={{
-                    bgcolor: '#333',
-                    '&:hover': { bgcolor: '#d32f2f' }
-                  }}
-                >
-                  <DeleteIcon />
-                </IconButton>
-              </Tooltip>
-            </CardActions>
-          </Card>
-        ))}
-      </Box>
+              </CardContent>
+              <CardActions sx={{ justifyContent: 'flex-end', p: 2, borderTop: '1px solid var(--admin-border)' }}>
+                <Tooltip title="Sửa">
+                  <IconButton
+                    size="small"
+                    onClick={() => handleOpen(category)}
+                    sx={{
+                      bgcolor: 'rgba(255,255,255,0.05)',
+                      color: 'var(--admin-text)',
+                      '&:hover': { bgcolor: 'var(--admin-accent)', color: '#fff' }
+                    }}
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Xóa">
+                  <IconButton
+                    size="small"
+                    onClick={() => handleDelete(category.id)}
+                    sx={{
+                      bgcolor: 'rgba(255,255,255,0.05)',
+                      color: 'var(--admin-danger)',
+                      '&:hover': { bgcolor: 'var(--admin-danger)', color: '#fff' }
+                    }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </CardActions>
+            </Card>
+          ))}
+        </Box>
+      )}
 
-      <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ bgcolor: '#23242a', color: '#fff' }}>
+      <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth className="admin-dialog">
+        <DialogTitle>
           {editMode ? 'Sửa danh mục' : 'Thêm danh mục mới'}
         </DialogTitle>
-        <DialogContent sx={{ bgcolor: '#23242a', color: '#fff' }}>
+        <DialogContent>
           <TextField
             label="Tên danh mục"
             name="name"
@@ -321,18 +333,10 @@ export default function CategoryManager() {
             onChange={handleChange}
             fullWidth
             margin="normal"
-            sx={{
-              '& .MuiInputBase-input': { color: '#fff' },
-              '& .MuiInputLabel-root': { color: '#bbb' },
-              '& .MuiOutlinedInput-root': {
-                '& fieldset': { borderColor: '#444' },
-                '&:hover fieldset': { borderColor: '#2196f3' },
-                '&.Mui-focused fieldset': { borderColor: '#2196f3' }
-              }
-            }}
+            sx={{ ...darkFieldSx, mt: 2 }}
           />
-          <FormControl fullWidth margin="normal">
-            <InputLabel sx={{ color: '#bbb' }}>Chọn thể loại</InputLabel>
+          <FormControl fullWidth margin="normal" sx={darkFieldSx}>
+            <InputLabel>Chọn thể loại</InputLabel>
             <Select
               multiple
               name="genreIds"
@@ -348,13 +352,7 @@ export default function CategoryManager() {
                         key={id} 
                         label={genre ? genre.name : id} 
                         size="small"
-                        sx={{
-                          bgcolor: '#fff',
-                          color: '#333',
-                          '&:hover': {
-                            bgcolor: '#f5f5f5'
-                          }
-                        }}
+                        sx={{ bgcolor: 'var(--admin-accent)', color: '#fff' }}
                       />
                     );
                   })}
@@ -362,36 +360,21 @@ export default function CategoryManager() {
               )}
               MenuProps={{
                 PaperProps: {
-                  style: {
-                    maxHeight: 400,
-                  },
+                  style: { maxHeight: 400, background: 'var(--admin-surface)', color: '#fff', border: '1px solid var(--admin-border)' },
                 },
-                sx: {
-                  '& .MuiMenu-paper': {
-                    bgcolor: '#fff',
-                    color: '#111',
-                  }
-                }
               }}
-              sx={{
-                '& .MuiInputBase-input': { color: '#fff' },
-                '& .MuiOutlinedInput-root': {
-                  '& fieldset': { borderColor: '#444' },
-                  '&:hover fieldset': { borderColor: '#2196f3' },
-                  '&.Mui-focused fieldset': { borderColor: '#2196f3' }
-                }
-              }}
+              sx={{ '& .MuiSelect-icon': { color: 'var(--admin-text-muted)' } }}
             >
               {genres.map((genre) => (
-                <MenuItem key={genre.id} value={genre.id} sx={{ color: '#111' }}>
+                <MenuItem key={genre.id} value={genre.id} sx={{ '&:hover': { background: 'var(--admin-card-hover)' }, '&.Mui-selected': { background: 'rgba(99, 102, 241, 0.15)' } }}>
                   {genre.name}
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
 
-          <FormControl fullWidth margin="normal">
-            <InputLabel sx={{ color: '#bbb' }}>Chọn quốc gia</InputLabel>
+          <FormControl fullWidth margin="normal" sx={darkFieldSx}>
+            <InputLabel>Chọn quốc gia</InputLabel>
             <Select
               multiple
               name="countryIds"
@@ -407,13 +390,7 @@ export default function CategoryManager() {
                         key={id} 
                         label={country ? country.name : id} 
                         size="small"
-                        sx={{
-                          bgcolor: '#fff',
-                          color: '#333',
-                          '&:hover': {
-                            bgcolor: '#f5f5f5'
-                          }
-                        }}
+                        sx={{ bgcolor: 'var(--admin-success)', color: '#fff' }}
                       />
                     );
                   })}
@@ -421,65 +398,26 @@ export default function CategoryManager() {
               )}
               MenuProps={{
                 PaperProps: {
-                  style: {
-                    maxHeight: 400,
-                  },
+                  style: { maxHeight: 400, background: 'var(--admin-surface)', color: '#fff', border: '1px solid var(--admin-border)' },
                 },
-                sx: {
-                  '& .MuiMenu-paper': {
-                    bgcolor: '#fff',
-                    color: '#111',
-                  }
-                }
               }}
-              sx={{
-                '& .MuiInputBase-input': { color: '#fff' },
-                '& .MuiOutlinedInput-root': {
-                  '& fieldset': { borderColor: '#444' },
-                  '&:hover fieldset': { borderColor: '#2196f3' },
-                  '&.Mui-focused fieldset': { borderColor: '#2196f3' }
-                }
-              }}
+              sx={{ '& .MuiSelect-icon': { color: 'var(--admin-text-muted)' } }}
             >
               {countries.map((country) => (
-                <MenuItem key={country.id} value={country.id} sx={{ color: '#111' }}>
+                <MenuItem key={country.id} value={country.id} sx={{ '&:hover': { background: 'var(--admin-card-hover)' }, '&.Mui-selected': { background: 'rgba(99, 102, 241, 0.15)' } }}>
                   {country.name}
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
         </DialogContent>
-        <DialogActions sx={{ bgcolor: '#23242a', p: 3, gap: 2 }}>
-          <Button
-            onClick={handleClose}
-            variant="outlined"
-            sx={{
-              color: '#fff',
-              borderColor: '#666',
-              '&:hover': {
-                borderColor: '#999',
-                bgcolor: 'rgba(255,255,255,0.1)'
-              },
-              minWidth: 100,
-              fontWeight: 600
-            }}
-          >
-            Hủy
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            variant="contained"
-            sx={{
-              bgcolor: '#1976d2',
-              '&:hover': { bgcolor: '#1565c0' },
-              minWidth: 100,
-              fontWeight: 600
-            }}
-          >
+        <DialogActions>
+          <Button onClick={handleClose} sx={{ color: 'var(--admin-text-muted)' }}>Hủy</Button>
+          <Button onClick={handleSubmit} variant="contained" sx={{ bgcolor: 'var(--admin-accent)', '&:hover': { bgcolor: 'var(--admin-accent-hover)' } }}>
             {editMode ? 'Cập nhật' : 'Thêm'}
           </Button>
         </DialogActions>
       </Dialog>
     </Box>
   );
-} 
+}

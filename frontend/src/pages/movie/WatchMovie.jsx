@@ -3,7 +3,8 @@ import { FaArrowLeft, FaBug, FaLightbulb, FaTimes } from "react-icons/fa";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import VideoPlayer from "../../components/player/VideoPlayer";
-import { API_URL as API } from "../../config/api";
+import { API_BASE_URL, API_URL as API } from "../../config/api";
+import { getProfileHeaders } from "../../utils/profile";
 
 const REPORT_REASONS = [
   "Video không phát",
@@ -13,6 +14,13 @@ const REPORT_REASONS = [
   "Link die",
   "Khác",
 ];
+const PLAYER_SETTINGS_KEY = "itmove_player_settings";
+const DEFAULT_PLAYER_SETTINGS = {
+  autoplayNext: true,
+  cinemaDefault: false,
+  subtitleStyle: "default",
+  subtitleTrack: "auto",
+};
 
 function getStoredUser() {
   try {
@@ -20,6 +28,34 @@ function getStoredUser() {
   } catch {
     return {};
   }
+}
+
+function getStoredPlayerSettings() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PLAYER_SETTINGS_KEY) || "{}");
+    return { ...DEFAULT_PLAYER_SETTINGS, ...parsed };
+  } catch {
+    return DEFAULT_PLAYER_SETTINGS;
+  }
+}
+
+function NextEpisodeActionIcon({ size = 24 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" aria-hidden="true">
+      <path d="M9 8.5L27 20L9 31.5V8.5Z" stroke="currentColor" strokeWidth="3.4" strokeLinejoin="round" />
+      <path d="M31.5 8V32" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function EpisodeListActionIcon({ size = 25 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 44 44" fill="none" aria-hidden="true">
+      <path d="M18 9H35C36.7 9 38 10.3 38 12V25" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 15H31C32.7 15 34 16.3 34 18V31" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="6" y="21" width="24" height="15" rx="3" stroke="currentColor" strokeWidth="3.4" />
+    </svg>
+  );
 }
 
 const WatchMovie = () => {
@@ -30,19 +66,22 @@ const WatchMovie = () => {
   const epParam = Number.parseInt(query.get("ep"), 10);
   const urlResumeAt = Number(query.get("t") || 0);
   const user = useMemo(getStoredUser, []);
+  const initialPlayerSettings = useMemo(getStoredPlayerSettings, []);
 
   const [data, setData] = useState(null);
   const [selectedEpisode, setSelectedEpisode] = useState(null);
   const [resumeAt, setResumeAt] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [cinemaMode, setCinemaMode] = useState(false);
+  const [playerSettings, setPlayerSettings] = useState(initialPlayerSettings);
+  const [cinemaMode, setCinemaMode] = useState(Boolean(initialPlayerSettings.cinemaDefault));
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState(REPORT_REASONS[0]);
   const [reportDescription, setReportDescription] = useState("");
   const [reportStatus, setReportStatus] = useState({ type: "", message: "" });
 
   const videoRef = useRef(null);
+  const episodesPanelRef = useRef(null);
 
   const movie = data?.movie || null;
   const genres = useMemo(() => data?.genres || [], [data?.genres]);
@@ -51,6 +90,51 @@ const WatchMovie = () => {
     () => episodes.find((episode) => episode.episode_number === selectedEpisode) || episodes[0] || null,
     [episodes, selectedEpisode]
   );
+  const currentEpisodeIndex = useMemo(
+    () => episodes.findIndex((episode) => episode.episode_number === selectedEpisode),
+    [episodes, selectedEpisode]
+  );
+  const hasNextEpisode = currentEpisodeIndex >= 0 && currentEpisodeIndex < episodes.length - 1;
+  const currentSubtitleTracks = useMemo(() => {
+    const apiTracks = Array.isArray(currentEpisode?.subtitle_tracks) ? currentEpisode.subtitle_tracks : [];
+    if (apiTracks.length) {
+      return apiTracks
+        .map((track, index) => {
+          const src = String(track.src || track.url || "").trim();
+          if (!src) return null;
+          return {
+            id: track.id || `subtitle-${index + 1}`,
+            label: track.label || "Phụ đề",
+            srclang: track.srclang || "vi",
+            src: src.startsWith("http") ? src : `${API_BASE_URL}${src}`,
+          };
+        })
+        .filter(Boolean);
+    }
+
+    if (!currentEpisode?.id || !currentEpisode?.subtitle_url) return [];
+    return [
+      {
+        id: `episode-${currentEpisode.id}-vi`,
+        label: "Tiếng Việt",
+        srclang: "vi",
+        src: `${API}/subtitles/episodes/${currentEpisode.id}.vtt`,
+      },
+    ];
+  }, [currentEpisode?.id, currentEpisode?.subtitle_tracks, currentEpisode?.subtitle_url]);
+  const [episodesPanelHighlighted, setEpisodesPanelHighlighted] = useState(false);
+
+  const handlePlayerSettingChange = useCallback((key, value) => {
+    setPlayerSettings((current) => {
+      const next = { ...current, [key]: value };
+      localStorage.setItem(PLAYER_SETTINGS_KEY, JSON.stringify(next));
+      return next;
+    });
+
+    if (key === "cinemaDefault") {
+      setCinemaMode(Boolean(value));
+    }
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -108,7 +192,7 @@ const WatchMovie = () => {
     });
 
     fetch(`${API}/watch-history/progress?${params.toString()}`, {
-      headers: { "x-user-id": user.id },
+      headers: getProfileHeaders(),
       signal: controller.signal,
     })
       .then((res) => (res.ok ? res.json() : null))
@@ -144,10 +228,9 @@ const WatchMovie = () => {
 
     await fetch(`${API}/watch-history/progress`, {
       method: "POST",
-      headers: {
+      headers: getProfileHeaders({
         "Content-Type": "application/json",
-        "x-user-id": user.id,
-      },
+      }),
       body: JSON.stringify({
         movie_id: movie.id,
         episode_id: currentEpisode.id,
@@ -188,14 +271,29 @@ const WatchMovie = () => {
     navigate(`/watch/${id}?ep=${episode.episode_number}`, { replace: true });
   }, [id, navigate]);
 
+  const handleNextEpisode = useCallback(async (snapshot) => {
+    const nextEpisode = currentEpisodeIndex >= 0 ? episodes[currentEpisodeIndex + 1] : null;
+    if (!nextEpisode) return;
+    await saveProgress(snapshot);
+    handleSelectEpisode(nextEpisode);
+  }, [currentEpisodeIndex, episodes, handleSelectEpisode, saveProgress]);
+
+  const handleOpenEpisodeList = useCallback(() => {
+    episodesPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setEpisodesPanelHighlighted(true);
+    window.setTimeout(() => setEpisodesPanelHighlighted(false), 900);
+  }, []);
+
   const handleEnded = useCallback(async (snapshot) => {
     await saveProgress(snapshot, true);
+    if (!playerSettings.autoplayNext) return;
+
     const index = episodes.findIndex((episode) => episode.episode_number === selectedEpisode);
     const nextEpisode = index >= 0 ? episodes[index + 1] : null;
     if (nextEpisode) {
       handleSelectEpisode(nextEpisode);
     }
-  }, [episodes, handleSelectEpisode, saveProgress, selectedEpisode]);
+  }, [episodes, handleSelectEpisode, playerSettings.autoplayNext, saveProgress, selectedEpisode]);
 
   const handleReportSubmit = async (event) => {
     event.preventDefault();
@@ -248,7 +346,7 @@ const WatchMovie = () => {
     <div className="min-h-screen bg-background text-white flex flex-col">
       {cinemaMode && <div className="fixed inset-0 bg-black/85 z-30 pointer-events-none" />}
 
-      <div className="sticky top-0 z-50 flex items-center gap-4 px-6 py-4 bg-gradient-to-b from-black/80 to-transparent backdrop-blur-sm pointer-events-none">
+      <div className="sticky top-0 z-50 flex items-center gap-4 px-6 py-4 bg-transparent pointer-events-none">
         <button
           onClick={handleBack}
           className="pointer-events-auto flex items-center justify-center w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-md"
@@ -257,13 +355,13 @@ const WatchMovie = () => {
         >
           <FaArrowLeft />
         </button>
-        <h1 className="text-xl md:text-2xl font-bold drop-shadow-md truncate pointer-events-auto">
+        <h1 className="text-xl md:text-2xl font-bold drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)] truncate pointer-events-auto">
           {movie.title} {currentEpisode ? `- Tập ${currentEpisode.episode_number}` : ""}
         </h1>
       </div>
 
       <div className="w-full bg-black flex-shrink-0 -mt-20 z-40 relative shadow-2xl">
-        <div className="max-w-7xl mx-auto aspect-video">
+        <div className="max-w-[1600px] mx-auto aspect-video">
           {currentEpisode ? (
             <VideoPlayer
               ref={videoRef}
@@ -272,6 +370,16 @@ const WatchMovie = () => {
               resumeAt={resumeAt}
               onSnapshot={(snapshot) => saveProgress(snapshot)}
               onEnded={handleEnded}
+              hasNextEpisode={hasNextEpisode}
+              onNextEpisode={handleNextEpisode}
+              onOpenEpisodeList={handleOpenEpisodeList}
+              playerSettings={playerSettings}
+              onPlayerSettingChange={handlePlayerSettingChange}
+              subtitles={currentSubtitleTracks}
+              onReport={() => {
+                setReportOpen(true);
+                setReportStatus({ type: "", message: "" });
+              }}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-black text-white/70">
@@ -283,8 +391,31 @@ const WatchMovie = () => {
 
       <div className="relative z-40 border-b border-white/10 bg-black/40">
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm text-text-secondary">
-            {currentEpisode ? `Tập ${currentEpisode.episode_number}${currentEpisode.title ? ` - ${currentEpisode.title}` : ""}` : "Chưa có tập"}
+          <div className="flex min-w-0 flex-wrap items-center gap-2 md:gap-3">
+            <div className="text-sm text-text-secondary truncate">
+              {currentEpisode ? `Tập ${currentEpisode.episode_number}${currentEpisode.title ? ` - ${currentEpisode.title}` : ""}` : "Chưa có tập"}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => handleNextEpisode()}
+                disabled={!hasNextEpisode}
+                title={hasNextEpisode ? "Tập tiếp theo" : "Không còn tập tiếp theo"}
+                aria-label="Tập tiếp theo"
+                className={`flex h-9 w-9 items-center justify-center rounded-lg border transition-all duration-200 ${hasNextEpisode ? "border-white/10 bg-white/5 text-white hover:bg-white/10 hover:border-white/20" : "border-white/5 bg-white/[0.03] text-white/35 cursor-not-allowed"}`}
+              >
+                <NextEpisodeActionIcon />
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenEpisodeList}
+                title="Danh sách tập"
+                aria-label="Danh sách tập"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white transition-all duration-200 hover:bg-white/10 hover:border-white/20"
+              >
+                <EpisodeListActionIcon />
+              </button>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -359,7 +490,10 @@ const WatchMovie = () => {
           </div>
 
           <div className="w-full lg:w-1/3">
-            <div className="bg-surface/50 border border-white/10 rounded-2xl p-6 h-full flex flex-col">
+            <div
+              ref={episodesPanelRef}
+              className={`bg-surface/50 border border-white/10 rounded-2xl p-6 h-full flex flex-col transition-all duration-300 ${episodesPanelHighlighted ? "ring-2 ring-white/60 shadow-[0_0_28px_rgba(255,255,255,0.18)]" : ""}`}
+            >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-bold text-white">Danh sách tập</h3>
                 <span className="text-sm font-medium text-text-secondary">{episodes.length} tập</span>

@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { API_URL as API } from '../../config/api';
+import { clearActiveProfile } from '../../utils/profile';
+import './AuthStyles.css';
+
 let googleScriptPromise = null;
 
 function loadGoogleScript() {
@@ -49,9 +52,10 @@ export default function GoogleLoginButton({ onSuccess, onError }) {
           client_id: clientId,
           callback: async (response) => {
             try {
-              setStatus('Đang xử lý Google...');
+              setStatus('Đang xử lý đăng nhập Google...');
               const res = await axios.post(`${API}/auth/google`, { credential: response.credential });
               localStorage.setItem('user', JSON.stringify(res.data));
+              clearActiveProfile();
               setStatus('');
               onSuccess?.(res.data);
             } catch (err) {
@@ -85,25 +89,24 @@ export default function GoogleLoginButton({ onSuccess, onError }) {
   }, [clientId, onError, onSuccess]);
 
   return (
-    <div className="flex flex-col items-center gap-2 mt-4 w-full">
-      <div 
-        ref={containerRef} 
-        className="min-h-[40px]" 
-        style={{ display: clientId ? 'block' : 'none' }} 
+    <div className="auth-google-wrapper">
+      <div
+        ref={containerRef}
+        style={{ minHeight: 40, display: clientId ? 'block' : 'none' }}
       />
-      
+
       {status && (
-        <p className="text-xs text-center text-text-secondary">
+        <p className="auth-google-status">
           {status}
         </p>
       )}
-      
+
       {!clientId && (
-        <button 
-          disabled 
-          className="w-full max-w-[320px] py-2 px-4 border border-white/20 rounded text-text-secondary bg-white/5 opacity-50 cursor-not-allowed text-sm font-medium"
+        <button
+          disabled
+          className="auth-google-fallback"
         >
-          Google Sign-In chưa cấu hình
+          Google Sign-In chưa được cấu hình
         </button>
       )}
     </div>

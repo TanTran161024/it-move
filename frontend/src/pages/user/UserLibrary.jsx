@@ -6,7 +6,15 @@ import HistoryIcon from '@mui/icons-material/History';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import MovieFilterIcon from '@mui/icons-material/MovieFilter';
+import DoneAllIcon from '@mui/icons-material/DoneAll';
+import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
+import CategoryIcon from '@mui/icons-material/Category';
+import PublicIcon from '@mui/icons-material/Public';
 import ProfileSidebar from '../../components/user/ProfileSidebar';
+import { API_BASE_URL } from '../../config/api';
+import { getProfileHeaders } from '../../utils/profile';
 
 const PAGE_CONFIG = {
   '/user/favorites': {
@@ -51,8 +59,15 @@ const PAGE_CONFIG = {
   },
 };
 
+const WATCH_STATS_PATHS = new Set(['/user/history', '/user/continue']);
+
 function getUser() {
   return JSON.parse(localStorage.getItem('user') || '{}');
+}
+
+function apiUrl(path) {
+  if (!path) return '';
+  return `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
 function progressPercent(item) {
@@ -76,6 +91,197 @@ function formatWatchedAt(value) {
   return `Đã mở lúc ${date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
+function formatWatchDuration(seconds) {
+  const totalSeconds = Math.max(0, Number(seconds) || 0);
+  const totalMinutes = Math.round(totalSeconds / 60);
+  if (totalMinutes < 60) return `${totalMinutes} phút`;
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes ? `${hours} giờ ${minutes} phút` : `${hours} giờ`;
+}
+
+function formatCompactNumber(value) {
+  return new Intl.NumberFormat('vi-VN').format(Number(value) || 0);
+}
+
+function formatActivityDate(value) {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('vi-VN', { weekday: 'short' });
+}
+
+function WatchStatsSkeleton() {
+  return (
+    <div className="mb-8 animate-pulse">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="h-28 rounded-2xl bg-white/10" />
+        ))}
+      </div>
+      <div className="mt-4 h-40 rounded-2xl bg-white/10" />
+    </div>
+  );
+}
+
+function WatchStatCard({ icon, label, value, helper }) {
+  const IconComponent = icon;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/25 p-4 min-w-0">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-xs uppercase tracking-wide text-text-secondary font-bold">{label}</div>
+        <div className="w-9 h-9 rounded-full bg-primary/15 text-primary flex items-center justify-center flex-shrink-0">
+          <IconComponent sx={{ fontSize: 20 }} />
+        </div>
+      </div>
+      <div className="mt-3 text-2xl font-black text-white leading-tight">{value}</div>
+      {helper && <div className="mt-1 text-xs text-text-secondary line-clamp-1">{helper}</div>}
+    </div>
+  );
+}
+
+function WatchStatsPanel({ stats, loading, error }) {
+  if (loading) return <WatchStatsSkeleton />;
+
+  if (error) {
+    return (
+      <div className="mb-8 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-100">
+        {error}
+      </div>
+    );
+  }
+
+  if (!stats || !stats.total_entries) {
+    return (
+      <div className="mb-8 rounded-2xl border border-white/10 bg-black/20 px-5 py-4 text-sm text-text-secondary">
+        Chưa có dữ liệu xem để thống kê.
+      </div>
+    );
+  }
+
+  const recentActivity = Array.isArray(stats.recent_activity) ? stats.recent_activity : [];
+  const maxRecentSeconds = Math.max(...recentActivity.map((item) => Number(item.watch_seconds) || 0), 1);
+  const topGenres = Array.isArray(stats.top_genres) ? stats.top_genres : [];
+  const topCountries = Array.isArray(stats.top_countries) ? stats.top_countries : [];
+  const topMovies = Array.isArray(stats.top_movies) ? stats.top_movies : [];
+
+  const cards = [
+    {
+      icon: AccessTimeIcon,
+      label: 'Thời gian xem',
+      value: formatWatchDuration(stats.watch_seconds),
+      helper: `${formatCompactNumber(stats.active_days)} ngày hoạt động`,
+    },
+    {
+      icon: MovieFilterIcon,
+      label: 'Phim đã xem',
+      value: formatCompactNumber(stats.total_movies),
+      helper: `${formatCompactNumber(stats.total_episodes)} tập đã mở`,
+    },
+    {
+      icon: DoneAllIcon,
+      label: 'Hoàn thành',
+      value: formatCompactNumber(stats.completed_episodes),
+      helper: `${formatCompactNumber(stats.completion_rate)}% tỷ lệ hoàn thành`,
+    },
+    {
+      icon: LocalFireDepartmentIcon,
+      label: 'Chuỗi gần nhất',
+      value: `${formatCompactNumber(stats.current_streak_days)} ngày`,
+      helper: `Kỷ lục ${formatCompactNumber(stats.longest_streak_days)} ngày`,
+    },
+  ];
+
+  return (
+    <section className="mb-8 space-y-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4">
+        {cards.map((card) => (
+          <WatchStatCard key={card.label} {...card} />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+        <div className="xl:col-span-3 rounded-2xl border border-white/10 bg-black/25 p-4 md:p-5">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-white font-bold text-lg">Hoạt động 7 ngày</h2>
+              <p className="text-xs text-text-secondary mt-1">Tính theo thời lượng đã xem thực tế</p>
+            </div>
+            <AccessTimeIcon className="text-primary" />
+          </div>
+
+          <div className="h-32 flex items-end gap-2 md:gap-3">
+            {recentActivity.map((item) => {
+              const height = Math.max(8, Math.round(((Number(item.watch_seconds) || 0) / maxRecentSeconds) * 88));
+              return (
+                <div key={item.date} className="flex-1 min-w-0 flex flex-col items-center gap-2">
+                  <div className="w-full h-24 flex items-end justify-center rounded-xl bg-white/5 px-1">
+                    <div
+                      className="w-full max-w-8 rounded-t-lg bg-gradient-to-t from-primary to-red-300"
+                      style={{ height: `${height}px`, opacity: item.watch_seconds ? 1 : 0.25 }}
+                      title={formatWatchDuration(item.watch_seconds)}
+                    />
+                  </div>
+                  <div className="text-[10px] text-text-secondary uppercase truncate">{formatActivityDate(item.date)}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="xl:col-span-2 rounded-2xl border border-white/10 bg-black/25 p-4 md:p-5">
+          <h2 className="text-white font-bold text-lg mb-4">Gu xem nổi bật</h2>
+
+          <div className="space-y-4">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-bold text-white/90 mb-2">
+                <CategoryIcon sx={{ fontSize: 18 }} className="text-primary" />
+                Thể loại
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {topGenres.length > 0 ? topGenres.map((genre) => (
+                  <span key={genre.id || genre.name} className="px-3 py-1 rounded-full bg-white/10 text-xs text-white border border-white/10">
+                    {genre.name}
+                  </span>
+                )) : <span className="text-xs text-text-secondary">Chưa đủ dữ liệu</span>}
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2 text-sm font-bold text-white/90 mb-2">
+                <PublicIcon sx={{ fontSize: 18 }} className="text-primary" />
+                Quốc gia
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {topCountries.length > 0 ? topCountries.map((country) => (
+                  <span key={country.id || country.name} className="px-3 py-1 rounded-full bg-white/10 text-xs text-white border border-white/10">
+                    {country.name}
+                  </span>
+                )) : <span className="text-xs text-text-secondary">Chưa đủ dữ liệu</span>}
+              </div>
+            </div>
+
+            {topMovies.length > 0 && (
+              <div>
+                <div className="text-sm font-bold text-white/90 mb-2">Xem nhiều nhất</div>
+                <div className="space-y-2">
+                  {topMovies.slice(0, 3).map((movie) => (
+                    <div key={movie.id} className="flex items-center justify-between gap-3 text-xs">
+                      <span className="text-text-secondary line-clamp-1">{movie.title}</span>
+                      <span className="text-white/80 flex-shrink-0">{formatWatchDuration(movie.watch_seconds)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function UserLibrary() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -85,6 +291,10 @@ export default function UserLibrary() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const showWatchStats = WATCH_STATS_PATHS.has(location.pathname);
+  const [watchStats, setWatchStats] = useState(null);
+  const [watchStatsLoading, setWatchStatsLoading] = useState(false);
+  const [watchStatsError, setWatchStatsError] = useState('');
 
   useEffect(() => {
     if (!user.id) {
@@ -102,7 +312,7 @@ export default function UserLibrary() {
       return;
     }
 
-    fetch(config.endpoint, { headers: { 'x-user-id': user.id } })
+    fetch(apiUrl(config.endpoint), { headers: getProfileHeaders() })
       .then((res) => res.json())
       .then((data) => {
         setItems(Array.isArray(data) ? data : []);
@@ -114,12 +324,46 @@ export default function UserLibrary() {
       });
   }, [config.endpoint, user.id]);
 
+  useEffect(() => {
+    if (!user.id || !showWatchStats) {
+      setWatchStats(null);
+      setWatchStatsLoading(false);
+      setWatchStatsError('');
+      return;
+    }
+
+    const controller = new AbortController();
+    setWatchStatsLoading(true);
+    setWatchStatsError('');
+
+    fetch(apiUrl('/api/user/watch-stats'), {
+      headers: getProfileHeaders(),
+      signal: controller.signal,
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Không thể tải thống kê xem phim.');
+        return res.json();
+      })
+      .then((data) => {
+        setWatchStats(data);
+        setWatchStatsLoading(false);
+      })
+      .catch((err) => {
+        if (err.name === 'AbortError') return;
+        setWatchStats(null);
+        setWatchStatsError(err.message || 'Không thể tải thống kê xem phim.');
+        setWatchStatsLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [showWatchStats, user.id, items.length]);
+
   const handleRemove = async (item) => {
     if (!config.removeEndpoint) return;
     const endpoint = config.removeEndpoint(item.id, item);
-    await fetch(endpoint, {
+    await fetch(apiUrl(endpoint), {
       method: 'DELETE',
-      headers: { 'x-user-id': user.id },
+      headers: getProfileHeaders(),
     });
     setItems((current) => current.filter((movie) => movie !== item));
   };
@@ -150,6 +394,14 @@ export default function UserLibrary() {
               </div>
               <p className="text-text-secondary text-sm md:text-base">{config.description}</p>
             </div>
+
+            {showWatchStats && user.id && (
+              <WatchStatsPanel
+                stats={watchStats}
+                loading={watchStatsLoading}
+                error={watchStatsError}
+              />
+            )}
 
             {loading ? (
               <div className="flex items-center justify-center h-40 text-text-secondary animate-pulse">Đang tải...</div>

@@ -9,7 +9,19 @@ import {
   Typography,
 } from '@mui/material';
 import axios from 'axios';
-import { API_URL as API } from '../../config/api';
+import { API_BASE_URL as API } from '../../config/api';
+import '../../pages/admin/AdminStyles.css';
+
+const darkSelectSx = { 
+  color: '#fff', 
+  bgcolor: 'var(--admin-card)', 
+  minWidth: 130, 
+  borderRadius: 2,
+  '& .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--admin-border)' },
+  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
+  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--admin-accent)' },
+  '& .MuiSvgIcon-root': { color: 'var(--admin-text-muted)' } 
+};
 
 export default function AdminFeedbackManager() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -59,92 +71,126 @@ export default function AdminFeedbackManager() {
   };
 
   return (
-    <Box sx={{ color: '#fff', mt: 4, maxWidth: '1400px', mx: 'auto' }}>
-      <Typography variant="h4" gutterBottom sx={{ fontWeight: 800, mb: 3 }}>
-        Quản lý phản hồi phim
-      </Typography>
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+    <Box sx={{ maxWidth: '1400px', mx: 'auto', p: { xs: 1, md: 3 } }}>
+      <div className="admin-section-header">
+        <div>
+          <h2 className="admin-section-title">Quản lý phản hồi</h2>
+          <p className="admin-section-subtitle">Bình luận & Báo lỗi từ người dùng</p>
+        </div>
+      </div>
+      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
-      <Box sx={{ bgcolor: '#23242a', borderRadius: 3, p: 3, mb: 4, boxShadow: 4 }}>
-        <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, color: '#FFD600' }}>
-          Bình luận phim
-        </Typography>
-        {comments.length === 0 ? (
-          <Typography color="#aaa">Chưa có bình luận nào.</Typography>
-        ) : comments.map((comment) => (
-          <Box key={comment.id} sx={{ bgcolor: '#181a20', borderRadius: 2, p: 2, mb: 2 }}>
-            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'space-between', flexWrap: 'wrap', mb: 1 }}>
-              <Typography sx={{ fontWeight: 800 }}>{comment.movie_title}</Typography>
-              <Typography color="#aaa">{new Date(comment.created_at).toLocaleString('vi-VN')}</Typography>
-            </Box>
-            <Typography color="#cfd5e2" sx={{ mb: 1 }}>
-              {comment.username} - {comment.email}
-            </Typography>
-            <Typography sx={{ whiteSpace: 'pre-line', mb: 2 }}>{comment.content}</Typography>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Select
-                size="small"
-                value={comment.status}
-                onChange={(e) => updateCommentStatus(comment.id, e.target.value)}
-                sx={{ color: '#fff', bgcolor: '#23242a', minWidth: 130, '& .MuiSvgIcon-root': { color: '#fff' } }}
-              >
-                <MenuItem value="visible">Hiển thị</MenuItem>
-                <MenuItem value="hidden">Ẩn</MenuItem>
-              </Select>
-              <Button color="error" variant="outlined" onClick={() => deleteComment(comment.id)}>
-                Xóa
-              </Button>
-            </Box>
-          </Box>
-        ))}
-      </Box>
-
-      <Box sx={{ bgcolor: '#23242a', borderRadius: 3, p: 3, boxShadow: 4 }}>
-        <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, color: '#FFD600' }}>
-          Báo lỗi phim
-        </Typography>
-        {reports.length === 0 ? (
-          <Typography color="#aaa">Chưa có báo lỗi nào.</Typography>
-        ) : reports.map((report) => (
-          <Box key={report.id} sx={{ bgcolor: '#181a20', borderRadius: 2, p: 2, mb: 2 }}>
-            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'space-between', flexWrap: 'wrap', mb: 1 }}>
-              <Typography sx={{ fontWeight: 800 }}>
-                {report.movie_title}{report.episode_number ? ` - Tập ${report.episode_number}` : ''}
+      <div className="admin-panel" style={{ padding: 0, overflow: 'hidden', marginBottom: 30 }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--admin-border)', background: 'rgba(0,0,0,0.2)' }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: 'var(--admin-accent)' }}>
+            Bình luận phim
+          </Typography>
+        </div>
+        <Box sx={{ p: 3 }}>
+          {comments.length === 0 ? (
+            <div className="admin-empty">
+              <Typography>Chưa có bình luận nào.</Typography>
+            </div>
+          ) : comments.map((comment) => (
+            <Box key={comment.id} sx={{ bgcolor: 'var(--admin-surface)', borderRadius: 2, p: 2, mb: 2, border: '1px solid var(--admin-border)' }}>
+              <Box sx={{ display: 'flex', gap: 2, justifyContent: 'space-between', flexWrap: 'wrap', mb: 1 }}>
+                <Typography sx={{ fontWeight: 800, color: '#fff' }}>{comment.movie_title}</Typography>
+                <Typography sx={{ color: 'var(--admin-text-muted)', fontSize: '0.85rem' }}>{new Date(comment.created_at).toLocaleString('vi-VN')}</Typography>
+              </Box>
+              <Typography sx={{ color: 'var(--admin-accent-hover)', mb: 1, fontSize: '0.9rem', fontWeight: 600 }}>
+                {comment.username} <span style={{ color: 'var(--admin-text-muted)', fontWeight: 400 }}>— {comment.email}</span>
               </Typography>
-              <Typography color="#aaa">{new Date(report.created_at).toLocaleString('vi-VN')}</Typography>
+              <Typography sx={{ whiteSpace: 'pre-line', mb: 2, color: 'var(--admin-text)' }}>{comment.content}</Typography>
+              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap', pt: 1, borderTop: '1px dashed rgba(255,255,255,0.05)' }}>
+                <Select
+                  size="small"
+                  value={comment.status}
+                  onChange={(e) => updateCommentStatus(comment.id, e.target.value)}
+                  sx={darkSelectSx}
+                >
+                  <MenuItem value="visible">Hiển thị</MenuItem>
+                  <MenuItem value="hidden">Ẩn</MenuItem>
+                </Select>
+                <Button color="error" variant="outlined" size="small" onClick={() => deleteComment(comment.id)} sx={{ borderRadius: 2 }}>
+                  Xóa
+                </Button>
+                {comment.status === 'visible' ? (
+                  <span className="admin-badge success" style={{ marginLeft: 'auto' }}>Đang hiển thị</span>
+                ) : (
+                  <span className="admin-badge warning" style={{ marginLeft: 'auto' }}>Đang ẩn</span>
+                )}
+              </Box>
             </Box>
-            <Typography color="#cfd5e2" sx={{ mb: 1 }}>
-              Người gửi: {report.username || 'Khách'} {report.email ? `- ${report.email}` : ''}
-            </Typography>
-            <Typography sx={{ mb: 1 }}><strong>Lý do:</strong> {report.reason}</Typography>
-            {report.description && (
-              <Typography sx={{ whiteSpace: 'pre-line', mb: 2 }}>{report.description}</Typography>
-            )}
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Select
-                size="small"
-                value={report.status}
-                onChange={(e) => updateReport(report, e.target.value)}
-                sx={{ color: '#fff', bgcolor: '#23242a', minWidth: 130, '& .MuiSvgIcon-root': { color: '#fff' } }}
-              >
-                <MenuItem value="open">Đang mở</MenuItem>
-                <MenuItem value="resolved">Đã xử lý</MenuItem>
-                <MenuItem value="rejected">Từ chối</MenuItem>
-              </Select>
-              <TextField
-                size="small"
-                defaultValue={report.admin_note || ''}
-                placeholder="Ghi chú admin"
-                onBlur={(e) => updateReport(report, report.status, e.target.value)}
-                sx={{ minWidth: 260, bgcolor: '#23242a', input: { color: '#fff' }, '& fieldset': { borderColor: '#444' } }}
-              />
-              <Button color="error" variant="outlined" onClick={() => deleteReport(report.id)}>
-                Xóa
-              </Button>
+          ))}
+        </Box>
+      </div>
+
+      <div className="admin-panel" style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--admin-border)', background: 'rgba(0,0,0,0.2)' }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: 'var(--admin-danger)' }}>
+            Báo lỗi phim
+          </Typography>
+        </div>
+        <Box sx={{ p: 3 }}>
+          {reports.length === 0 ? (
+            <div className="admin-empty">
+              <Typography>Chưa có báo lỗi nào.</Typography>
+            </div>
+          ) : reports.map((report) => (
+            <Box key={report.id} sx={{ bgcolor: 'var(--admin-surface)', borderRadius: 2, p: 2, mb: 2, border: '1px solid var(--admin-border)' }}>
+              <Box sx={{ display: 'flex', gap: 2, justifyContent: 'space-between', flexWrap: 'wrap', mb: 1 }}>
+                <Typography sx={{ fontWeight: 800, color: '#fff', fontSize: '1.1rem' }}>
+                  {report.movie_title}{report.episode_number ? ` - Tập ${report.episode_number}` : ''}
+                </Typography>
+                <Typography sx={{ color: 'var(--admin-text-muted)', fontSize: '0.85rem' }}>{new Date(report.created_at).toLocaleString('vi-VN')}</Typography>
+              </Box>
+              <Typography sx={{ color: 'var(--admin-accent-hover)', mb: 2, fontSize: '0.9rem', fontWeight: 600 }}>
+                {report.username || 'Khách'} {report.email ? <span style={{ color: 'var(--admin-text-muted)', fontWeight: 400 }}>— {report.email}</span> : ''}
+              </Typography>
+              <Box sx={{ bgcolor: 'rgba(239, 68, 68, 0.05)', p: 1.5, borderRadius: 2, borderLeft: '3px solid var(--admin-danger)', mb: 2 }}>
+                <Typography sx={{ mb: 0.5, color: 'var(--admin-danger)', fontWeight: 600 }}>Lý do: {report.reason}</Typography>
+                {report.description && (
+                  <Typography sx={{ whiteSpace: 'pre-line', color: 'var(--admin-text)', fontSize: '0.9rem' }}>{report.description}</Typography>
+                )}
+              </Box>
+              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap', pt: 1 }}>
+                <Select
+                  size="small"
+                  value={report.status}
+                  onChange={(e) => updateReport(report, e.target.value)}
+                  sx={darkSelectSx}
+                >
+                  <MenuItem value="open">Đang mở</MenuItem>
+                  <MenuItem value="resolved">Đã xử lý</MenuItem>
+                  <MenuItem value="rejected">Từ chối</MenuItem>
+                </Select>
+                <TextField
+                  size="small"
+                  defaultValue={report.admin_note || ''}
+                  placeholder="Ghi chú admin..."
+                  onBlur={(e) => updateReport(report, report.status, e.target.value)}
+                  sx={{ 
+                    minWidth: 260, 
+                    bgcolor: 'var(--admin-card)', 
+                    input: { color: '#fff' }, 
+                    '& fieldset': { borderColor: 'var(--admin-border)' },
+                    '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.2)' },
+                    '&.Mui-focused fieldset': { borderColor: 'var(--admin-accent)' },
+                    borderRadius: 2
+                  }}
+                />
+                <Button color="error" variant="outlined" size="small" onClick={() => deleteReport(report.id)} sx={{ borderRadius: 2 }}>
+                  Xóa
+                </Button>
+                
+                {report.status === 'open' && <span className="admin-badge danger" style={{ marginLeft: 'auto' }}>Đang mở</span>}
+                {report.status === 'resolved' && <span className="admin-badge success" style={{ marginLeft: 'auto' }}>Đã xử lý</span>}
+                {report.status === 'rejected' && <span className="admin-badge warning" style={{ marginLeft: 'auto' }}>Từ chối</span>}
+              </Box>
             </Box>
-          </Box>
-        ))}
-      </Box>
+          ))}
+        </Box>
+      </div>
     </Box>
   );
 }

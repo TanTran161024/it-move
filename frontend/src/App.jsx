@@ -11,9 +11,11 @@ import Movies from './pages/movie/Movies';
 import DetailMovies from './pages/movie/DetailMovies';
 import WatchMovie from './pages/movie/WatchMovie';
 import Search from './pages/movie/Search';
+import ForYou from './pages/movie/ForYou';
 import Profile from './pages/user/Profile';
 import UserLibrary from './pages/user/UserLibrary';
 import MovieChatbot from './components/ai/MovieChatbot';
+import ProfileGate from './components/profile/ProfileGate';
 
 const theme = createTheme({
   palette: {
@@ -30,34 +32,38 @@ const theme = createTheme({
 function App() {
   const location = useLocation();
   const isAdminPage = location.pathname.startsWith('/admin');
+  const isWatchPage = location.pathname.startsWith('/watch/');
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <div className="flex flex-col min-h-screen w-full bg-background text-white selection:bg-primary/30 selection:text-white">
-        {!isAdminPage && <Header />}
+        {!isAdminPage && !isWatchPage && <Header />}
         
-        {/* Main Content Area */}
-        <main className="flex-1 w-full">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/admin" element={<Admin />} />
-            <Route path="/movies" element={<Movies />} />
-            <Route path="/movies/:id" element={<DetailMovies />} />
-            <Route path="/watch/:id" element={<WatchMovie />} />
-            <Route path="/search" element={<Search />} />
-            <Route path="/user/profile" element={<Profile />} />
-            <Route path="/user/favorites" element={<UserLibrary />} />
-            <Route path="/user/list" element={<UserLibrary />} />
-            <Route path="/user/history" element={<UserLibrary />} />
-            <Route path="/user/continue" element={<UserLibrary />} />
-            <Route path="/user/notifications" element={<UserLibrary />} />
-          </Routes>
-        </main>
+        <ProfileGate disabled={isAdminPage}>
+          {/* Main Content Area */}
+          <main className="flex-1 w-full">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/admin" element={<Admin />} />
+              <Route path="/movies" element={<Movies />} />
+              <Route path="/movies/:id" element={<DetailMovies />} />
+              <Route path="/watch/:id" element={<WatchMovie />} />
+              <Route path="/search" element={<Search />} />
+              <Route path="/for-you" element={<ForYou />} />
+              <Route path="/user/profile" element={<Profile />} />
+              <Route path="/user/favorites" element={<UserLibrary />} />
+              <Route path="/user/list" element={<UserLibrary />} />
+              <Route path="/user/history" element={<UserLibrary />} />
+              <Route path="/user/continue" element={<UserLibrary />} />
+              <Route path="/user/notifications" element={<UserLibrary />} />
+            </Routes>
+          </main>
+        </ProfileGate>
         
-        {!isAdminPage && <Footer />}
-        {!isAdminPage && <MovieChatbot />}
+        {!isAdminPage && !isWatchPage && <Footer />}
+        {!isAdminPage && !isWatchPage && <MovieChatbot />}
       </div>
       <ScrollToTop />
     </ThemeProvider>

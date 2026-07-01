@@ -9,7 +9,9 @@ import FavoriteIcon from '@mui/icons-material/Favorite';
 import AddIcon from '@mui/icons-material/Add';
 import CheckIcon from '@mui/icons-material/Check';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
+import MovieCard, { MovieCardSkeleton } from '../../components/movie/MovieCard';
 import { API_URL as API } from '../../config/api';
+import { getProfileHeaders } from '../../utils/profile';
 
 const reportReasons = [
   'Video không phát',
@@ -18,9 +20,6 @@ const reportReasons = [
   'Thông tin phim sai',
   'Lỗi khác',
 ];
-
-const FALLBACK_POSTER =
-  "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='450' viewBox='0 0 300 450'%3E%3Crect width='300' height='450' fill='%23111111'/%3E%3Cpath d='M118 170v110l92-55z' fill='%23E50914'/%3E%3Ctext x='150' y='330' fill='%23fff' font-family='Arial,sans-serif' font-size='20' text-anchor='middle'%3ENo poster%3C/text%3E%3C/svg%3E";
 
 const DetailMovies = () => {
   const { id } = useParams();
@@ -93,7 +92,7 @@ const DetailMovies = () => {
 
   useEffect(() => {
     if (!user.id) return;
-    fetch(`${API}/user/library-status/${id}`, { headers: { 'x-user-id': user.id } })
+    fetch(`${API}/user/library-status/${id}`, { headers: getProfileHeaders() })
       .then((res) => res.json())
       .then((status) => setLibraryStatus({
         favorite: Boolean(status.favorite),
@@ -142,7 +141,7 @@ const DetailMovies = () => {
       method: active ? 'DELETE' : 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-user-id': user.id,
+        ...getProfileHeaders(),
       },
       body: active ? undefined : JSON.stringify({ movie_id: id }),
     });
@@ -409,11 +408,7 @@ const DetailMovies = () => {
                   {recommendationLoading ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
                       {Array.from({ length: 6 }).map((_, index) => (
-                        <div key={`recommendation-skeleton-${index}`} className="animate-pulse">
-                          <div className="rounded-xl aspect-[2/3] mb-3 bg-white/10" />
-                          <div className="h-4 rounded bg-white/10 w-4/5" />
-                          <div className="h-3 rounded bg-white/10 w-2/3 mt-2" />
-                        </div>
+                        <MovieCardSkeleton key={`recommendation-skeleton-${index}`} />
                       ))}
                     </div>
                   ) : recommendationError ? (
@@ -423,28 +418,17 @@ const DetailMovies = () => {
                   ) : recommendedMovies.length > 0 ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
                       {recommendedMovies.map((movie) => (
-                        <button key={movie.id} onClick={() => navigate(`/movies/${movie.id}`)} className="group text-left focus:outline-none">
-                          <div className="relative overflow-hidden rounded-xl aspect-[2/3] mb-3 bg-surface">
-                            <img
-                              src={movie.poster_url || FALLBACK_POSTER}
-                              alt={movie.title}
-                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                              onError={(event) => { event.currentTarget.src = FALLBACK_POSTER; }}
-                            />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <PlayArrowIcon className="text-5xl text-white drop-shadow-lg" />
-                            </div>
-                            {movie.imdb_rating && (
-                              <div className="absolute top-2 right-2 rounded bg-black/70 px-2 py-1 text-xs font-bold text-[#f5c518]">
-                                IMDb {Number(movie.imdb_rating).toFixed(1)}
-                              </div>
-                            )}
-                          </div>
-                          <h4 className="text-white font-bold text-sm line-clamp-2 group-hover:text-primary transition-colors">{movie.title}</h4>
+                        <div key={movie.id} className="min-w-0">
+                          <MovieCard
+                            movie={movie}
+                            onClick={() => navigate(`/movies/${movie.id}`)}
+                            onPlay={() => navigate(`/watch/${movie.id}`)}
+                            showScore={Number(movie.score) > 0}
+                          />
                           {Array.isArray(movie.match_reasons) && movie.match_reasons.length > 0 && (
                             <p className="mt-1 text-xs text-text-secondary line-clamp-2">{movie.match_reasons.slice(0, 2).join(', ')}</p>
                           )}
-                        </button>
+                        </div>
                       ))}
                     </div>
                   ) : (

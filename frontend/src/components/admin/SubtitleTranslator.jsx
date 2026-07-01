@@ -18,6 +18,7 @@ import DownloadIcon from '@mui/icons-material/Download';
 import SubtitlesIcon from '@mui/icons-material/Subtitles';
 import axios from 'axios';
 import { API_BASE_URL as API } from '../../config/api';
+import '../../pages/admin/AdminStyles.css';
 
 const SAMPLE_SRT = `1
 00:00:01,000 --> 00:00:03,000

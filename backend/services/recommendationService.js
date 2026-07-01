@@ -10,7 +10,13 @@ const STOP_WORDS = new Set([
 function clampLimit(value, fallback = DEFAULT_LIMIT) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
-  return Math.min(parsed, 30);
+  return Math.min(parsed, 50);
+}
+
+function clampPoolLimit(value, fallback = MAX_POOL_SIZE) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
+  return Math.min(parsed, MAX_POOL_SIZE);
 }
 
 function parseIdList(value) {
@@ -128,6 +134,11 @@ function overlap(left, right) {
   return left.filter((item) => rightSet.has(item));
 }
 
+function nameOverlap(left, right) {
+  const leftSet = new Set(left.map(normalizeText));
+  return right.filter((item) => leftSet.has(normalizeText(item)));
+}
+
 function hydrateProfile(row) {
   return {
     id: row.id,
@@ -138,6 +149,7 @@ function hydrateProfile(row) {
     poster_url: row.poster_url,
     release_year: row.release_year,
     duration: row.duration,
+    is_series: row.is_series,
     imdb_rating: row.imdb_rating,
     quality: row.quality,
     status: row.status,
@@ -162,13 +174,16 @@ function toMovieCard(profile, extra = {}) {
     poster_url: profile.poster_url,
     release_year: profile.release_year,
     duration: profile.duration,
+    is_series: profile.is_series,
     imdb_rating: profile.imdb_rating,
     quality: profile.quality,
     status: profile.status,
     description: profile.description,
     genres: profile.genres,
     countries: profile.countries,
-    match_score: extra.score,
+    score: extra.score || 0,
+    matched: extra.matched || { genres: [], countries: [], actors: [], directors: [] },
+    match_score: extra.score || 0,
     match_reasons: extra.reasons || [],
   };
 }
@@ -187,12 +202,12 @@ async function getMovieProfiles(db, options = {}) {
     params.push(...options.excludeIds);
   }
 
-  const limit = clampLimit(options.limit, MAX_POOL_SIZE);
+  const limit = clampPoolLimit(options.limit, MAX_POOL_SIZE);
   const [rows] = await db.execute(
     `
       SELECT
         m.id, m.title, m.original_title, m.slug, m.description, m.poster_url,
-        m.release_year, m.duration, m.imdb_rating, m.quality, m.status,
+        m.release_year, m.duration, m.is_series, m.imdb_rating, m.quality, m.status,
         COALESCE(m.views, 0) AS views,
         GROUP_CONCAT(DISTINCT mg.genre_id) AS genre_ids,
         GROUP_CONCAT(DISTINCT mc.country_id) AS country_ids,
@@ -214,7 +229,7 @@ async function getMovieProfiles(db, options = {}) {
       WHERE ${where.join(' AND ')}
       GROUP BY
         m.id, m.title, m.original_title, m.slug, m.description, m.poster_url,
-        m.release_year, m.duration, m.imdb_rating, m.quality, m.status, m.views
+        m.release_year, m.duration, m.is_series, m.imdb_rating, m.quality, m.status, m.views
       ORDER BY COALESCE(m.views, 0) DESC, COALESCE(m.imdb_rating, 0) DESC, m.created_at DESC
       LIMIT ${limit}
     `,
@@ -226,50 +241,85 @@ async function getMovieProfiles(db, options = {}) {
 
 function scoreAgainstSeed(seed, candidate) {
   const reasons = [];
+  const matched = { genres: [], countries: [], actors: [], directors: [] };
   let score = 0;
+  let contentScore = 0;
 
   const genreMatches = overlap(seed.genre_ids, candidate.genre_ids);
   if (genreMatches.length) {
-    score += genreMatches.length * 55;
+    const points = genreMatches.length * 40;
+    score += points;
+    contentScore += points;
+    matched.genres = nameOverlap(seed.genres, candidate.genres);
     reasons.push(`Trùng ${genreMatches.length} thể loại`);
   }
 
   const countryMatches = overlap(seed.country_ids, candidate.country_ids);
   if (countryMatches.length) {
-    score += countryMatches.length * 18;
+    const points = countryMatches.length * 25;
+    score += points;
+    contentScore += points;
+    matched.countries = nameOverlap(seed.countries, candidate.countries);
     reasons.push('Cùng quốc gia');
   }
 
   const actorMatches = overlap(seed.actor_ids, candidate.actor_ids);
   if (actorMatches.length) {
-    score += Math.min(actorMatches.length * 16, 48);
+    const points = actorMatches.length * 20;
+    score += points;
+    contentScore += points;
+    matched.actors = nameOverlap(seed.actors, candidate.actors);
     reasons.push(`Chung ${actorMatches.length} diễn viên`);
   }
 
   const directorMatches = overlap(seed.director_ids, candidate.director_ids);
   if (directorMatches.length) {
-    score += directorMatches.length * 22;
+    const points = directorMatches.length * 20;
+    score += points;
+    contentScore += points;
+    matched.directors = nameOverlap(seed.directors, candidate.directors);
     reasons.push('Cùng đạo diễn');
+  }
+
+  if (
+    seed.is_series !== null
+    && seed.is_series !== undefined
+    && candidate.is_series !== null
+    && candidate.is_series !== undefined
+    && Boolean(seed.is_series) === Boolean(candidate.is_series)
+  ) {
+    score += 10;
+    contentScore += 10;
+    reasons.push(Boolean(candidate.is_series) ? 'Cùng là phim bộ' : 'Cùng là phim lẻ');
   }
 
   if (seed.release_year && candidate.release_year) {
     const yearGap = Math.abs(Number(seed.release_year) - Number(candidate.release_year));
     if (yearGap <= 2) {
-      score += 12;
-      reasons.push('Cùng giai đoạn phát hành');
+      score += 15;
+      contentScore += 15;
+      reasons.push('Năm phát hành gần nhau');
     } else if (yearGap <= 5) {
-      score += 6;
+      score += 8;
+      contentScore += 8;
     }
   }
 
   if (seed.imdb_rating && candidate.imdb_rating) {
     const ratingGap = Math.abs(Number(seed.imdb_rating) - Number(candidate.imdb_rating));
-    if (ratingGap <= 0.7) score += 8;
-    else if (ratingGap <= 1.5) score += 4;
+    if (ratingGap <= 0.5) score += 8;
+    else if (ratingGap <= 1) score += 4;
   }
 
-  score += Math.min(Math.log10((candidate.views || 0) + 1) * 2, 10);
-  return { score, reasons };
+  if (candidate.imdb_rating) score += Math.min(Number(candidate.imdb_rating), 10);
+  score += Math.min(Math.log10((candidate.views || 0) + 1) * 2, 8);
+
+  return {
+    score: Math.round(score),
+    contentScore,
+    reasons: unique(reasons).slice(0, 4),
+    matched,
+  };
 }
 
 async function getPopularMovies(db, options = {}) {
@@ -280,10 +330,12 @@ async function getPopularMovies(db, options = {}) {
   return profiles.map((profile) => toMovieCard(profile, {
     score: 0,
     reasons: ['Đang được xem nhiều'],
+    matched: { genres: [], countries: [], actors: [], directors: [] },
   }));
 }
 
 async function getSimilarMovies(db, movieId, limit = DEFAULT_LIMIT) {
+  const targetLimit = clampLimit(limit);
   const numericId = Number(movieId);
   if (!Number.isInteger(numericId) || numericId <= 0) {
     const error = new Error('movie_id không hợp lệ');
@@ -304,34 +356,82 @@ async function getSimilarMovies(db, movieId, limit = DEFAULT_LIMIT) {
       const result = scoreAgainstSeed(seed, candidate);
       return { candidate, ...result };
     })
+    .filter((item) => item.contentScore > 0)
     .sort((left, right) => right.score - left.score || (right.candidate.views || 0) - (left.candidate.views || 0))
-    .slice(0, clampLimit(limit))
+    .slice(0, targetLimit)
     .map((item) => toMovieCard(item.candidate, item));
 
-  return ranked.length ? ranked : getPopularMovies(db, { excludeIds: [numericId], limit });
+  if (ranked.length >= targetLimit) return ranked;
+
+  const fallback = await getPopularMovies(db, {
+    excludeIds: [numericId, ...ranked.map((movie) => movie.id)],
+    limit: targetLimit - ranked.length,
+  });
+
+  return [...ranked, ...fallback];
 }
 
-async function getUserSeedMovieIds(db, userId) {
+async function ensureUserExists(db, userId) {
+  const [rows] = await db.execute('SELECT id FROM users WHERE id = ? LIMIT 1', [userId]);
+  return rows.length > 0;
+}
+
+async function getCompletedMovieIds(db, userId, profileId = null) {
+  const [rows] = await db.execute(
+    `SELECT DISTINCT movie_id
+     FROM user_watch_history
+     WHERE user_id = ?
+       AND (? IS NULL OR profile_id = ?)
+       AND completed = 1`,
+    [userId, profileId, profileId]
+  );
+  return rows.map((row) => Number(row.movie_id)).filter(Boolean);
+}
+
+async function getUserSeedMovies(db, userId, profileId = null) {
   const [rows] = await db.execute(
     `
       SELECT movie_id, MAX(weight) AS weight, MAX(last_seen) AS last_seen
       FROM (
-        SELECT movie_id, 5 AS weight, created_at AS last_seen FROM user_favorites WHERE user_id = ?
+        SELECT movie_id, 5 AS weight, created_at AS last_seen
+        FROM user_favorites
+        WHERE user_id = ? AND (? IS NULL OR profile_id = ?)
         UNION ALL
-        SELECT movie_id, 4 AS weight, created_at AS last_seen FROM user_watchlist WHERE user_id = ?
+        SELECT movie_id, 4 AS weight, created_at AS last_seen
+        FROM user_watchlist
+        WHERE user_id = ? AND (? IS NULL OR profile_id = ?)
         UNION ALL
-        SELECT movie_id, 3 AS weight, last_watched_at AS last_seen FROM user_watch_history WHERE user_id = ?
+        SELECT
+          movie_id,
+          CASE
+            WHEN rating >= 8 THEN 5
+            WHEN rating >= 6 THEN 4
+            ELSE 2
+          END AS weight,
+          updated_at AS last_seen
+        FROM movie_ratings
+        WHERE user_id = ?
+        UNION ALL
+        SELECT movie_id, 3 AS weight, last_watched_at AS last_seen
+        FROM user_watch_history
+        WHERE user_id = ? AND (? IS NULL OR profile_id = ?)
       ) seeds
       GROUP BY movie_id
       ORDER BY weight DESC, last_seen DESC
       LIMIT 10
     `,
-    [userId, userId, userId]
+    [userId, profileId, profileId, userId, profileId, profileId, userId, userId, profileId, profileId]
   );
-  return rows.map((row) => Number(row.movie_id)).filter(Boolean);
+  return rows
+    .map((row) => ({
+      movie_id: Number(row.movie_id),
+      weight: Number(row.weight) || 1,
+    }))
+    .filter((row) => row.movie_id > 0);
 }
 
-async function getUserRecommendations(db, userId, limit = DEFAULT_LIMIT) {
+async function getUserRecommendations(db, userId, limit = DEFAULT_LIMIT, profileId = null) {
+  const targetLimit = clampLimit(limit);
   const numericUserId = Number(userId);
   if (!Number.isInteger(numericUserId) || numericUserId <= 0) {
     const error = new Error('userId không hợp lệ');
@@ -339,34 +439,79 @@ async function getUserRecommendations(db, userId, limit = DEFAULT_LIMIT) {
     throw error;
   }
 
-  const seedIds = await getUserSeedMovieIds(db, numericUserId);
-  if (!seedIds.length) {
-    return getPopularMovies(db, { limit });
+  const userExists = await ensureUserExists(db, numericUserId);
+  if (!userExists) {
+    const error = new Error('Không tìm thấy người dùng');
+    error.statusCode = 404;
+    throw error;
   }
 
+  const [completedIds, seedRows] = await Promise.all([
+    getCompletedMovieIds(db, numericUserId, profileId),
+    getUserSeedMovies(db, numericUserId, profileId),
+  ]);
+
+  if (!seedRows.length) {
+    return getPopularMovies(db, { excludeIds: completedIds, limit: targetLimit });
+  }
+
+  const seedIds = seedRows.map((row) => row.movie_id);
+  const seedWeights = new Map(seedRows.map((row) => [row.movie_id, row.weight]));
   const seeds = await getMovieProfiles(db, { ids: seedIds, limit: seedIds.length });
-  const candidates = await getMovieProfiles(db, { excludeIds: seedIds, limit: MAX_POOL_SIZE });
+  const candidates = await getMovieProfiles(db, {
+    excludeIds: [...new Set([...seedIds, ...completedIds])],
+    limit: MAX_POOL_SIZE,
+  });
   const scores = new Map();
 
   for (const candidate of candidates) {
     let total = 0;
+    let contentTotal = 0;
     const reasonSet = new Set();
+    const matched = { genres: new Set(), countries: new Set(), actors: new Set(), directors: new Set() };
+
     for (const seed of seeds) {
       const result = scoreAgainstSeed(seed, candidate);
-      total += result.score;
+      if (result.contentScore <= 0) continue;
+
+      const weight = seedWeights.get(seed.id) || 1;
+      total += result.score * weight;
+      contentTotal += result.contentScore * weight;
       result.reasons.forEach((reason) => reasonSet.add(reason));
+      Object.entries(result.matched).forEach(([key, values]) => {
+        values.forEach((value) => matched[key].add(value));
+      });
     }
+
+    if (contentTotal <= 0) continue;
+
     scores.set(candidate.id, {
       candidate,
-      score: total,
-      reasons: [...reasonSet].slice(0, 3),
+      score: Math.round(total),
+      contentScore: contentTotal,
+      matched: {
+        genres: [...matched.genres],
+        countries: [...matched.countries],
+        actors: [...matched.actors],
+        directors: [...matched.directors],
+      },
+      reasons: [...reasonSet].slice(0, 4),
     });
   }
 
-  return [...scores.values()]
+  const ranked = [...scores.values()]
     .sort((left, right) => right.score - left.score || (right.candidate.views || 0) - (left.candidate.views || 0))
-    .slice(0, clampLimit(limit))
+    .slice(0, targetLimit)
     .map((item) => toMovieCard(item.candidate, item));
+
+  if (ranked.length >= targetLimit) return ranked;
+
+  const fallback = await getPopularMovies(db, {
+    excludeIds: [...new Set([...seedIds, ...completedIds, ...ranked.map((movie) => movie.id)])],
+    limit: targetLimit - ranked.length,
+  });
+
+  return [...ranked, ...fallback];
 }
 
 function messageSignals(message) {

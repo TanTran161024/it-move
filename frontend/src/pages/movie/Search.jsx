@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import FilterBox from '../../components/filter/FilterBox';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import SearchIcon from '@mui/icons-material/Search';
+import MovieCard, { MovieCardSkeleton } from '../../components/movie/MovieCard';
 import { API_URL as API } from '../../config/api';
 
 const PAGE_SIZE = 16;
@@ -11,9 +11,7 @@ const SEARCH_EXAMPLES = [
   'phim tình cảm học đường Nhật',
   'phim hài gia đình nhẹ nhàng',
 ];
-
-const FALLBACK_POSTER =
-  "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='450' viewBox='0 0 300 450'%3E%3Crect width='300' height='450' fill='%23111111'/%3E%3Cpath d='M118 170v110l92-55z' fill='%23E50914'/%3E%3Ctext x='150' y='330' fill='%23fff' font-family='Arial,sans-serif' font-size='20' text-anchor='middle'%3ENo poster%3C/text%3E%3C/svg%3E";
+const ALL_OPTION = 'Tất cả';
 
 function useQuery() {
   return new URLSearchParams(useLocation().search);
@@ -42,6 +40,64 @@ function getSmartFilterLabels(filters) {
   ].filter(Boolean);
 }
 
+function selectedValues(value) {
+  if (Array.isArray(value)) return value.filter((item) => item && item !== ALL_OPTION);
+  return value && value !== ALL_OPTION ? [value] : [];
+}
+
+function includesAny(values, selected) {
+  if (!selected.length) return true;
+  const normalizedValues = (Array.isArray(values) ? values : [values]).map(normalizeText).filter(Boolean);
+  return selected.some((item) => normalizedValues.some((value) => value === normalizeText(item)));
+}
+
+function getMovieYear(movie) {
+  return Number(movie.release_year || String(movie.release_date || '').slice(0, 4)) || null;
+}
+
+function getMovieTime(movie) {
+  const value = movie.updated_at || movie.created_at || movie.release_date || movie.release_year;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function matchesMovieFilters(movie, filters) {
+  const selectedCountries = selectedValues(filters.country);
+  const selectedGenres = selectedValues(filters.genre);
+  const selectedRatings = selectedValues(filters.rating);
+  const selectedYears = selectedValues(filters.year);
+
+  if (!includesAny(movie.countries || movie.country, selectedCountries)) return false;
+  if (!includesAny(movie.genres || movie.genre, selectedGenres)) return false;
+
+  if (selectedRatings.length && !selectedRatings.includes(movie.age_limit)) return false;
+
+  if (selectedYears.length) {
+    const movieYear = getMovieYear(movie);
+    if (!selectedYears.map(Number).includes(movieYear)) return false;
+  }
+
+  if (filters.type === 'Phim lẻ' && Number(movie.is_series) === 1) return false;
+  if (filters.type === 'Phim bộ' && Number(movie.is_series) !== 1) return false;
+
+  return true;
+}
+
+function sortMovies(movies, sort) {
+  return [...movies].sort((left, right) => {
+    if (sort === 'Điểm IMDb') {
+      return (Number(right.imdb_rating) || 0) - (Number(left.imdb_rating) || 0);
+    }
+    if (sort === 'Lượt xem') {
+      return (Number(right.views) || 0) - (Number(left.views) || 0);
+    }
+    if (sort === 'Mới cập nhật') {
+      return getMovieTime(right) - getMovieTime(left);
+    }
+    return (getMovieYear(right) || 0) - (getMovieYear(left) || 0) || getMovieTime(right) - getMovieTime(left);
+  });
+}
+
 export default function Search() {
   const [movies, setMovies] = useState([]);
   const [page, setPage] = useState(1);
@@ -66,6 +122,10 @@ export default function Search() {
     setLocalSearchTerm(searchTerm);
     setPage(1);
   }, [searchTerm]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [country, type, rating, genre, year, inputYear, sort]);
 
   const handleSearchSubmit = (event) => {
     event.preventDefault();
@@ -130,7 +190,17 @@ export default function Search() {
     return () => controller.abort();
   }, [searchTerm]);
 
-  const filteredMovies = movies;
+  const filterYear = inputYear && /^\d{4}$/.test(inputYear) ? [inputYear] : year;
+  const filteredMovies = sortMovies(
+    movies.filter((movie) => matchesMovieFilters(movie, {
+      country,
+      type,
+      rating,
+      genre,
+      year: filterYear,
+    })),
+    sort
+  );
   const pagedMovies = filteredMovies.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const totalPages = Math.ceil(filteredMovies.length / PAGE_SIZE);
   const smartFilterLabels = getSmartFilterLabels(smartMeta?.filters);
@@ -219,7 +289,10 @@ export default function Search() {
               inputYear={inputYear} setInputYear={setInputYear}
               sort={sort} setSort={setSort}
               onClose={() => setShowFilter(false)}
-              onFilter={() => {}}
+              onFilter={() => {
+                setPage(1);
+                setShowFilter(false);
+              }}
             />
           </div>
         )}
@@ -227,40 +300,19 @@ export default function Search() {
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
             {Array.from({ length: 12 }).map((_, index) => (
-              <div key={index} className="animate-pulse flex flex-col gap-2">
-                <div className="bg-white/10 rounded-xl aspect-[2/3] w-full" />
-                <div className="bg-white/10 h-4 rounded w-3/4 mx-auto mt-2" />
-              </div>
+              <MovieCardSkeleton key={index} />
             ))}
           </div>
         ) : pagedMovies.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6 animate-in fade-in duration-500">
             {pagedMovies.map((movie) => (
-              <div key={movie.id} className="relative flex flex-col group/card cursor-pointer" onClick={() => navigate(`/movies/${movie.id}`)}>
-                <div className="relative overflow-hidden rounded-xl aspect-[2/3] shadow-lg transition-transform duration-300 group-hover/card:scale-105 group-hover/card:shadow-2xl bg-surface">
-                  <img src={movie.poster_url} alt={movie.title} className="w-full h-full object-cover pointer-events-none" onError={(event) => { event.currentTarget.src = FALLBACK_POSTER; }} />
-                  {movie.imdb_rating && (
-                    <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded border border-white/10 flex items-center gap-1 shadow-md">
-                      <span className="text-[#f5c518] text-xs font-bold">★</span>
-                      <span className="text-white text-xs font-bold">{Number(movie.imdb_rating).toFixed(1)}</span>
-                    </div>
-                  )}
-                  {movie.score > 0 && searchTerm && (
-                    <div className="absolute top-2 left-2 bg-primary/80 backdrop-blur-md px-2 py-1 rounded text-[11px] font-bold">
-                      {movie.score}
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                    <button onClick={(event) => { event.stopPropagation(); navigate(`/watch/${movie.id}`); }} className="w-12 h-12 rounded-full border-2 border-primary bg-primary/20 flex items-center justify-center backdrop-blur-sm text-primary group-hover/card:scale-110 transition-transform">
-                      <PlayArrowIcon />
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-3 text-center px-1">
-                  <h3 className="text-white font-medium text-sm line-clamp-1 group-hover/card:text-primary transition-colors">{movie.title}</h3>
-                  <p className="text-text-secondary text-xs mt-0.5 line-clamp-1">{movie.original_title || movie.release_year}</p>
-                </div>
-              </div>
+              <MovieCard
+                key={movie.id}
+                movie={movie}
+                showScore={Boolean(searchTerm)}
+                onClick={() => navigate(`/movies/${movie.id}`)}
+                onPlay={() => navigate(`/watch/${movie.id}`)}
+              />
             ))}
           </div>
         ) : (

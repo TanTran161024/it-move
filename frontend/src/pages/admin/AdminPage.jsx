@@ -8,6 +8,7 @@ import Sidebar from '../../components/admin/Sidebar';
 import CategoryManager from '../../components/admin/CategoryManager';
 import AdminFeedbackManager from '../../components/admin/AdminFeedbackManager';
 import SubtitleTranslator from '../../components/admin/SubtitleTranslator';
+import AdminDashboardStats from '../../components/admin/AdminDashboardStats';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
@@ -260,15 +261,7 @@ export default function Admin() {
   }, [fetchMovies, fetchBanners, fetchAllMovies]);
 
   // State cho dashboard
-  const [stats, setStats] = useState(null);
-  const [statsError, setStatsError] = useState('');
-  useEffect(() => {
-    if (selectedMenu === 'dashboard') {
-      axios.get(`${API}/api/admin/stats`)
-        .then(res => setStats(res.data))
-        .catch(err => setStatsError(err.response?.data?.message || 'Lỗi'));
-    }
-  }, [selectedMenu]);
+  // Removed old stats state for AdminDashboardStats
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -811,102 +804,8 @@ export default function Admin() {
         {selectedMenu === 'feedback' && (
           <AdminFeedbackManager />
         )}
-        {selectedMenu === 'dashboard' && (
-          <Box sx={{ width: '100%', maxWidth: '1100px', mx: 'auto', px: { xs: 1, md: 3 }, mt: 4 }}>
-            <Typography variant="h4" gutterBottom sx={{ color: '#fff', fontWeight: 700, textAlign: 'center', mb: 4, letterSpacing: 1 }}>Thống kê & Báo cáo</Typography>
-            {statsError && <Alert severity="error">{statsError}</Alert>}
-            {stats && (
-              <>
-                <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
-                  <Box sx={{ bgcolor: '#23242a', color: '#fff', borderRadius: 3, p: 3, minWidth: 180, flex: 1, boxShadow: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: 220 }}>
-                    <svg width="36" height="36" fill="#FFD600" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><path d="M7 17.97V6.03c0-.55.45-1 1-1s1 .45 1 1v11.94c0 .55-.45 1-1 1s-1-.45-1-1zM11 17.97V6.03c0-.55.45-1 1-1s1 .45 1 1v11.94c0 .55-.45 1-1 1s-1-.45-1-1zM15 17.97V6.03c0-.55.45-1 1-1s1 .45 1 1v11.94c0 .55-.45 1-1 1s-1-.45-1-1z"/></svg>
-                    <Typography variant="subtitle2" sx={{ mt: 1 }}>Tổng số phim</Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700 }}>{stats.total_movies}</Typography>
-                  </Box>
-                  <Box sx={{ bgcolor: '#23242a', color: '#fff', borderRadius: 3, p: 3, minWidth: 180, flex: 1, boxShadow: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: 220 }}>
-                    <svg width="36" height="36" fill="#42a5f5" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><path d="M7 17.97V6.03c0-.55.45-1 1-1s1 .45 1 1v11.94c0 .55-.45 1-1 1s-1-.45-1-1z"/></svg>
-                    <Typography variant="subtitle2" sx={{ mt: 1 }}>Thể loại</Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700 }}>{stats.total_genres}</Typography>
-                  </Box>
-                  <Box sx={{ bgcolor: '#23242a', color: '#fff', borderRadius: 3, p: 3, minWidth: 180, flex: 1, boxShadow: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: 220 }}>
-                    <svg width="36" height="36" fill="#66bb6a" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 7v5l4.28 2.54a1 1 0 0 0 1-1.73l-5-3V7a1 1 0 1 0-2 0v6a1 1 0 0 0 .47.85l6 3.6a1 1 0 0 0 1-1.73l-5-3V7z"/></svg>
-                    <Typography variant="subtitle2" sx={{ mt: 1 }}>Quốc gia</Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700 }}>{stats.total_countries}</Typography>
-                  </Box>
-                  <Box sx={{ bgcolor: '#23242a', color: '#fff', borderRadius: 3, p: 3, minWidth: 180, flex: 1, boxShadow: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: 220 }}>
-                    <svg width="36" height="36" fill="#ff7043" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10z"/></svg>
-                    <Typography variant="subtitle2" sx={{ mt: 1 }}>Người dùng</Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700 }}>{stats.total_users}</Typography>
-                  </Box>
-                  <Box sx={{ bgcolor: '#23242a', color: '#fff', borderRadius: 3, p: 3, minWidth: 180, flex: 1, boxShadow: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: 220 }}>
-                    <svg width="36" height="36" fill="#ab47bc" viewBox="0 0 24 24"><path d="M12 5c5.5 0 9.4 4.5 10.7 6.2.4.5.4 1.1 0 1.6C21.4 14.5 17.5 19 12 19S2.6 14.5 1.3 12.8a1.3 1.3 0 0 1 0-1.6C2.6 9.5 6.5 5 12 5Zm0 3.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"/></svg>
-                    <Typography variant="subtitle2" sx={{ mt: 1 }}>Tổng lượt xem</Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 700 }}>{stats.total_views || 0}</Typography>
-                  </Box>
-                </Box>
-                <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
-                  <Box sx={{ bgcolor: '#23242a', color: '#fff', borderRadius: 3, p: 3, minWidth: 220, flex: 1, boxShadow: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: 300 }}>
-                    <Typography variant="subtitle2">Phim đang chiếu</Typography>
-                    <Typography variant="h5" sx={{ fontWeight: 700 }}>{stats.ongoing_movies}</Typography>
-                  </Box>
-                  <Box sx={{ bgcolor: '#23242a', color: '#fff', borderRadius: 3, p: 3, minWidth: 220, flex: 1, boxShadow: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: 300 }}>
-                    <Typography variant="subtitle2">Phim đã hoàn thành</Typography>
-                    <Typography variant="h5" sx={{ fontWeight: 700 }}>{stats.completed_movies}</Typography>
-                  </Box>
-                  <Box sx={{ bgcolor: '#23242a', color: '#fff', borderRadius: 3, p: 3, minWidth: 220, flex: 1, boxShadow: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: 300 }}>
-                    <Typography variant="subtitle2">Lượt xem hôm nay</Typography>
-                    <Typography variant="h5" sx={{ fontWeight: 700 }}>{stats.today_views || 0}</Typography>
-                  </Box>
-                </Box>
-                <Box sx={{ mt: 4 }}>
-                  <Typography variant="h5" gutterBottom sx={{ fontWeight: 700, color: '#FFD600', textAlign: 'center', mb: 2 }}>Top phim xem nhiều</Typography>
-                  <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', justifyContent: 'center' }}>
-                    {(stats.top_viewed_movies || []).map(movie => (
-                      <Box key={movie.id} sx={{ bgcolor: '#23242a', color: '#fff', borderRadius: 3, p: 2, minWidth: 180, maxWidth: 200, textAlign: 'center', boxShadow: 3 }}>
-                        <img src={movie.poster_url} alt={movie.title} style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 10, marginBottom: 10 }} />
-                        <Typography variant="subtitle1" noWrap sx={{ fontWeight: 700, color: '#fff', fontSize: 17 }}>{movie.title}</Typography>
-                        <Typography variant="caption" color="#FFD600">{movie.views || 0} lượt xem</Typography>
-                      </Box>
-                    ))}
-                  </Box>
-                </Box>
-                <Box sx={{ mt: 4, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 3 }}>
-                  <Box sx={{ bgcolor: '#23242a', color: '#fff', borderRadius: 3, p: 3, boxShadow: 3 }}>
-                    <Typography variant="h6" sx={{ color: '#FFD600', fontWeight: 700, mb: 2 }}>Lượt xem 7 ngày</Typography>
-                    {(stats.daily_views || []).map(item => (
-                      <Box key={item.date} sx={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #333', py: 1 }}>
-                        <span>{new Date(item.date).toLocaleDateString('vi-VN')}</span>
-                        <strong>{item.views}</strong>
-                      </Box>
-                    ))}
-                  </Box>
-                  <Box sx={{ bgcolor: '#23242a', color: '#fff', borderRadius: 3, p: 3, boxShadow: 3 }}>
-                    <Typography variant="h6" sx={{ color: '#FFD600', fontWeight: 700, mb: 2 }}>Lượt xem theo thể loại</Typography>
-                    {(stats.genre_views || []).map(item => (
-                      <Box key={item.name} sx={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #333', py: 1 }}>
-                        <span>{item.name}</span>
-                        <strong>{item.views}</strong>
-                      </Box>
-                    ))}
-                  </Box>
-                </Box>
-                <Box sx={{ mt: 4 }}>
-                  <Typography variant="h5" gutterBottom sx={{ fontWeight: 700, color: '#FFD600', textAlign: 'center', mb: 2 }}>Top phim mới thêm gần đây</Typography>
-                  <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', justifyContent: 'center' }}>
-                    {stats.recent_movies.map(movie => (
-                      <Box key={movie.id} sx={{ bgcolor: '#23242a', color: '#fff', borderRadius: 3, p: 2, minWidth: 180, maxWidth: 200, textAlign: 'center', boxShadow: 3, transition: 'transform 0.15s, box-shadow 0.15s', '&:hover': { transform: 'translateY(-4px) scale(1.03)', boxShadow: 8, background: '#23243a' } }}>
-                        <img src={movie.poster_url} alt={movie.title} style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 10, marginBottom: 10 }} />
-                        <Typography variant="subtitle1" noWrap sx={{ fontWeight: 700, color: '#fff', fontSize: 17 }}>{movie.title}</Typography>
-                        <Typography variant="caption" color="#aaa">{new Date(movie.created_at).toLocaleDateString()}</Typography>
-                      </Box>
-                    ))}
-                  </Box>
-                </Box>
-              </>
-            )}
-          </Box>
-        )}
+        {selectedMenu === 'dashboard' && <AdminDashboardStats />}
       </Box>
     </Box>
   );
-} 
+}

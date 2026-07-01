@@ -2,11 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import { useNavigate } from 'react-router-dom';
+import { FALLBACK_POSTER, MovieRatingBadge } from './MovieCard';
 
 const MAX_VISIBLE = 8;
 const POSTER_WIDTH = 200 + 24; // 200px width + 24px gap
-const FALLBACK_POSTER =
-  "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='450' viewBox='0 0 300 450'%3E%3Crect width='300' height='450' fill='%23111111'/%3E%3Cpath d='M118 170v110l92-55z' fill='%23E50914'/%3E%3Ctext x='150' y='330' fill='%23fff' font-family='Arial,sans-serif' font-size='20' text-anchor='middle'%3ENo poster%3C/text%3E%3C/svg%3E";
 
 export default function MovieSlider({ movies, title, categoryId, categoryName }) {
   const [startIndex, setStartIndex] = useState(0);
@@ -191,19 +190,13 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
               >
                 <div className="relative overflow-hidden rounded-xl aspect-[2/3] shadow-lg transition-transform duration-300 group-hover/card:scale-105 group-hover/card:shadow-2xl bg-surface cursor-pointer" onClick={() => navigate(`/watch/${movie.id}`)}>
                   <img
-                    src={movie.poster}
+                    src={movie.poster_url || movie.poster || FALLBACK_POSTER}
                     alt={movie.title}
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover pointer-events-none"
                     onError={(e) => { e.currentTarget.src = FALLBACK_POSTER; }}
                   />
-                  {/* Rating Badge */}
-                  {movie.imdb_rating && (
-                    <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded border border-white/10 flex items-center gap-1 shadow-md">
-                      <span className="text-[#f5c518] text-xs font-bold">★</span>
-                      <span className="text-white text-xs font-bold">{Number(movie.imdb_rating).toFixed(1)}</span>
-                    </div>
-                  )}
+                  <MovieRatingBadge rating={movie.imdb_rating} />
                   {/* Play Button Overlay */}
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                     <div className="w-12 h-12 rounded-full border-2 border-primary bg-primary/20 flex items-center justify-center backdrop-blur-sm text-primary group-hover/card:scale-110 transition-transform">
@@ -258,7 +251,7 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
             {/* Backdrop Image */}
             <div className="w-full aspect-video relative bg-black cursor-pointer group/popup-img overflow-hidden" onClick={() => navigate(`/watch/${displayMovies[hovered].id}`)}>
               <img
-                src={displayMovies[hovered].backdrop || displayMovies[hovered].poster}
+                src={displayMovies[hovered].backdrop || displayMovies[hovered].backdrop_url || displayMovies[hovered].poster_url || displayMovies[hovered].poster || FALLBACK_POSTER}
                 alt={displayMovies[hovered].title}
                 referrerPolicy="no-referrer"
                 onError={(e) => { e.currentTarget.src = FALLBACK_POSTER; }}

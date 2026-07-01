@@ -3,15 +3,19 @@ import axios from 'axios';
 import GoogleLoginButton from '../../components/auth/GoogleLoginButton';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { API_BASE_URL as API } from '../../config/api';
+import { clearActiveProfile } from '../../utils/profile';
 
 export default function Login() {
   const location = useLocation();
   const navigate = useNavigate();
   const redirectTo = location.state?.from || '/movies';
-  
+
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [verifyEmail, setVerifyEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
@@ -20,8 +24,8 @@ export default function Login() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!identifier || !password) {
-      setError('Vui lòng nhập đầy đủ email và mật khẩu');
+    if (!identifier.trim() || !password) {
+      setError('Vui lòng nhập đầy đủ email/tên đăng nhập và mật khẩu.');
       return;
     }
     setError('');
@@ -30,6 +34,7 @@ export default function Login() {
     try {
       const res = await axios.post(`${API}/api/auth/login`, { username: identifier, password });
       localStorage.setItem('user', JSON.stringify(res.data));
+      clearActiveProfile();
       navigate(redirectTo, { replace: true });
     } catch (err) {
       if (err.response?.data?.requiresVerification) {
@@ -42,8 +47,8 @@ export default function Login() {
   };
 
   const handleVerify = async () => {
-    if (!otp) {
-      setError('Vui lòng nhập mã OTP');
+    if (!otp.trim()) {
+      setError('Vui lòng nhập mã OTP.');
       return;
     }
     setError('');
@@ -51,11 +56,25 @@ export default function Login() {
     setIsLoading(true);
     try {
       await axios.post(`${API}/api/auth/verify-email`, { email: verifyEmail, otp });
-      setMessage('Xác nhận email thành công. Bạn có thể đăng nhập.');
+      setMessage('Xác nhận email thành công! Bạn có thể đăng nhập.');
       setOtp('');
       setVerifyEmail('');
     } catch (err) {
-      setError(err.response?.data?.message || 'Xác nhận email thất bại');
+      setError(err.response?.data?.message || 'Xác nhận email thất bại.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setError('');
+    setMessage('');
+    setIsLoading(true);
+    try {
+      await axios.post(`${API}/api/auth/resend-verification`, { email: verifyEmail || identifier });
+      setMessage('Mã OTP mới đã được gửi đến email của bạn.');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Không gửi lại được mã OTP.');
     } finally {
       setIsLoading(false);
     }
@@ -65,9 +84,9 @@ export default function Login() {
     <div className="min-h-screen bg-black text-white relative flex items-center justify-center overflow-hidden">
       {/* Background Image & Overlay */}
       <div className="absolute inset-0 z-0">
-        <img 
-          src="https://assets.nflxext.com/ffe/siteui/vlv3/f85718e8-fc6d-4954-bca0-f5eaf78e0842/ea44b42b-ba19-4f35-ad27-45090e34a897/VN-vi-20230918-popsignuptwoweeks-perspective_alpha_website_large.jpg" 
-          alt="Background" 
+        <img
+          src="https://assets.nflxext.com/ffe/siteui/vlv3/f85718e8-fc6d-4954-bca0-f5eaf78e0842/ea44b42b-ba19-4f35-ad27-45090e34a897/VN-vi-20230918-popsignuptwoweeks-perspective_alpha_website_large.jpg"
+          alt="Background"
           className="w-full h-full object-cover opacity-40 blur-[2px]"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-black/80" />
@@ -86,14 +105,14 @@ export default function Login() {
         {/* Login Card */}
         <div className="bg-black/70 backdrop-blur-xl border border-white/10 rounded-3xl p-8 md:p-12 shadow-2xl">
           <h1 className="text-3xl font-bold mb-8 text-white">Đăng nhập</h1>
-          
+
           {error && (
-            <div className="bg-red-500/10 border border-red-500/50 text-red-500 px-4 py-3 rounded-lg mb-6 text-sm font-medium">
+            <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-xl mb-6 text-sm font-medium">
               {error}
             </div>
           )}
           {message && (
-            <div className="bg-green-500/10 border border-green-500/50 text-green-500 px-4 py-3 rounded-lg mb-6 text-sm font-medium">
+            <div className="bg-green-500/10 border border-green-500/50 text-green-400 px-4 py-3 rounded-xl mb-6 text-sm font-medium">
               {message}
             </div>
           )}
@@ -102,14 +121,16 @@ export default function Login() {
             <div className="relative group">
               <input
                 type="text"
-                id="identifier"
+                id="login-identifier"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 className="w-full bg-white/5 border border-white/20 rounded-xl px-4 pt-6 pb-2 text-white focus:outline-none focus:border-white focus:bg-white/10 transition-all peer"
                 placeholder=" "
+                autoComplete="username"
+                disabled={isLoading}
               />
-              <label 
-                htmlFor="identifier"
+              <label
+                htmlFor="login-identifier"
                 className="absolute left-4 top-4 text-text-secondary text-sm transition-all peer-focus:text-xs peer-focus:top-2 peer-focus:text-white/70 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:top-2"
               >
                 Email hoặc tên đăng nhập
@@ -118,26 +139,40 @@ export default function Login() {
 
             <div className="relative group">
               <input
-                type="password"
-                id="password"
+                type={showPassword ? 'text' : 'password'}
+                id="login-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-white/5 border border-white/20 rounded-xl px-4 pt-6 pb-2 text-white focus:outline-none focus:border-white focus:bg-white/10 transition-all peer"
+                className="w-full bg-white/5 border border-white/20 rounded-xl px-4 pt-6 pb-2 pr-12 text-white focus:outline-none focus:border-white focus:bg-white/10 transition-all peer"
                 placeholder=" "
+                autoComplete="current-password"
+                disabled={isLoading}
               />
-              <label 
-                htmlFor="password"
+              <label
+                htmlFor="login-password"
                 className="absolute left-4 top-4 text-text-secondary text-sm transition-all peer-focus:text-xs peer-focus:top-2 peer-focus:text-white/70 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:top-2"
               >
                 Mật khẩu
               </label>
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors p-1"
+                aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                tabIndex={-1}
+              >
+                {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+              </button>
             </div>
 
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-primary hover:bg-primary/90 text-white font-bold text-lg py-4 rounded-xl transition-all shadow-[0_0_20px_rgba(229,9,20,0.3)] hover:shadow-[0_0_30px_rgba(229,9,20,0.5)] disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+              className="w-full bg-primary hover:bg-primary/90 text-white font-bold text-lg py-4 rounded-xl transition-all shadow-[0_0_20px_rgba(229,9,20,0.3)] hover:shadow-[0_0_30px_rgba(229,9,20,0.5)] disabled:opacity-50 disabled:cursor-not-allowed mt-2 flex items-center justify-center gap-2"
             >
+              {isLoading && (
+                <span className="inline-block w-5 h-5 border-2 border-white/25 border-t-white rounded-full animate-spin" />
+              )}
               {isLoading ? 'Đang xử lý...' : 'Đăng nhập'}
             </button>
 
@@ -146,36 +181,55 @@ export default function Login() {
                 <input type="checkbox" className="w-4 h-4 rounded border-white/20 bg-white/5 checked:bg-primary checked:border-primary focus:ring-primary focus:ring-offset-0 transition-colors" />
                 <span className="group-hover:text-white transition-colors">Ghi nhớ tôi</span>
               </label>
-              <Link to="/forgot-password" className="hover:text-white transition-colors">Bạn quên mật khẩu?</Link>
+              <Link to="/register" className="hover:text-white transition-colors" style={{ visibility: 'hidden' }}>
+                &nbsp;
+              </Link>
             </div>
           </form>
 
           {verifyEmail && (
-            <div className="mt-8 pt-8 border-t border-white/10 animate-in fade-in slide-in-from-top-4">
-              <h3 className="text-white font-medium mb-4">Xác nhận Email</h3>
+            <div className="mt-8 pt-8 border-t border-white/10">
+              <h3 className="text-white font-medium mb-2">Xác nhận Email</h3>
+              <p className="text-white/55 text-sm mb-4">
+                Mã OTP đã được gửi đến <strong className="text-primary">{verifyEmail}</strong>
+              </p>
               <div className="relative group mb-4">
                 <input
                   type="text"
-                  id="otp"
+                  id="login-otp"
                   value={otp}
                   onChange={(e) => setOtp(e.target.value)}
-                  className="w-full bg-white/5 border border-white/20 rounded-xl px-4 pt-6 pb-2 text-white focus:outline-none focus:border-white focus:bg-white/10 transition-all peer"
+                  className="w-full bg-white/5 border border-white/20 rounded-xl px-4 pt-6 pb-2 text-white focus:outline-none focus:border-white focus:bg-white/10 transition-all peer text-center tracking-[0.5em] font-bold text-xl"
                   placeholder=" "
+                  maxLength={6}
+                  disabled={isLoading}
                 />
-                <label 
-                  htmlFor="otp"
+                <label
+                  htmlFor="login-otp"
                   className="absolute left-4 top-4 text-text-secondary text-sm transition-all peer-focus:text-xs peer-focus:top-2 peer-focus:text-white/70 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:top-2"
                 >
-                  Mã OTP
+                  Mã OTP (6 chữ số)
                 </label>
               </div>
-              <button
-                onClick={handleVerify}
-                disabled={isLoading}
-                className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-all border border-white/10 disabled:opacity-50"
-              >
-                {isLoading ? 'Đang xử lý...' : 'Xác nhận'}
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleVerify}
+                  disabled={isLoading}
+                  className="flex-1 bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-all border border-white/10 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isLoading && (
+                    <span className="inline-block w-4 h-4 border-2 border-white/25 border-t-white rounded-full animate-spin" />
+                  )}
+                  Xác nhận
+                </button>
+                <button
+                  onClick={handleResend}
+                  disabled={isLoading}
+                  className="flex-1 bg-transparent hover:bg-white/5 text-white/70 hover:text-white font-semibold py-3 rounded-xl transition-all border border-white/15 disabled:opacity-50"
+                >
+                  Gửi lại OTP
+                </button>
+              </div>
             </div>
           )}
 
@@ -184,7 +238,7 @@ export default function Login() {
           </div>
 
           <div className="mt-6 flex justify-center w-full overflow-hidden rounded-xl">
-             <GoogleLoginButton onSuccess={() => navigate(redirectTo, { replace: true })} onError={setError} />
+            <GoogleLoginButton onSuccess={() => navigate(redirectTo, { replace: true })} onError={setError} />
           </div>
 
           <p className="mt-10 text-text-secondary text-base">
@@ -194,7 +248,7 @@ export default function Login() {
             </Link>
           </p>
           <p className="mt-4 text-xs text-text-secondary leading-relaxed">
-            Trang này được Google reCAPTCHA bảo vệ để đảm bảo bạn không phải là robot.{' '}
+            Trang này được bảo vệ để đảm bảo bạn không phải là robot.{' '}
             <a href="#" className="text-[#0071eb] hover:underline">Tìm hiểu thêm.</a>
           </p>
         </div>
