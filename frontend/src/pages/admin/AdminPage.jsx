@@ -33,6 +33,8 @@ export default function Admin() {
   const [editMovie, setEditMovie] = useState(null);
   const [form, setForm] = useState({ title: '', description: '', poster_url: '', release_date: '', genre: '' });
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [tmdbLoadingId, setTmdbLoadingId] = useState(null);
   const [selectedMenu, setSelectedMenu] = useState('dashboard');
   const [genres, setGenres] = useState([]);
   const [countries, setCountries] = useState([]);
@@ -365,6 +367,34 @@ export default function Admin() {
     }
   };
 
+  const handleTmdbEnrich = async (movie) => {
+    setError('');
+    setNotice('');
+    setTmdbLoadingId(movie.id);
+    try {
+      const res = await axios.post(`${API}/api/movies/${movie.id}/tmdb-enrich`, {
+        overwrite: false,
+        cast_limit: 8,
+      });
+      const updates = res.data?.updates || {};
+      const parts = [
+        updates.poster?.updated ? 'poster' : null,
+        updates.backdrop?.updated ? 'backdrop' : null,
+        updates.cast?.added ? `${updates.cast.added} diễn viên` : null,
+      ].filter(Boolean);
+      const tmdbTitle = res.data?.tmdb?.title ? ` (${res.data.tmdb.title})` : '';
+      setNotice(parts.length
+        ? `Đã bổ sung từ TMDb${tmdbTitle}: ${parts.join(', ')}.`
+        : `TMDb đã khớp phim${tmdbTitle}, nhưng dữ liệu cần bổ sung đã có sẵn.`
+      );
+      await Promise.all([fetchMovies(), fetchBanners(), fetchRelations()]);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Không thể bổ sung dữ liệu TMDb.');
+    } finally {
+      setTmdbLoadingId(null);
+    }
+  };
+
   // Banner handlers
   const handleBannerOpen = (banner) => {
     setEditBanner(banner);
@@ -432,6 +462,31 @@ export default function Admin() {
   const selectOverrideSx = { '& option': { color: '#111', background: '#fff' } };
 
   const currentUserId = user?.id;
+  const userStats = {
+    total: users.length,
+    admins: users.filter((item) => item.is_admin).length,
+    active: users.filter((item) => item.is_active).length,
+    locked: users.filter((item) => !item.is_active).length,
+  };
+  const userFieldSx = {
+    minWidth: 0,
+    width: '100%',
+    '& .MuiInputBase-root': {
+      background: 'rgba(15, 17, 23, 0.75)',
+      borderRadius: '10px',
+      color: '#fff',
+    },
+    '& .MuiInputBase-input': { color: '#fff', fontWeight: 700 },
+    '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' },
+    '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.28)' },
+    '& option': { color: '#111', background: '#fff' },
+  };
+  const genderLabel = (value) => ({
+    male: 'Nam',
+    female: 'Nữ',
+    other: 'Khác',
+  }[value] || 'Chưa cập nhật');
+  const userInitial = (value) => String(value || '?').trim().charAt(0).toUpperCase() || '?';
 
   const menuItems = [
     { key: 'dashboard', icon: <BarChartIcon /> },
@@ -487,6 +542,8 @@ export default function Admin() {
         {selectedMenu === 'movies' && (
           <Box sx={{ width: '100%', maxWidth: '1400px', mx: 'auto', px: { xs: 1, md: 3 }, mt: 4 }}>
             <Typography variant="h4" gutterBottom sx={{ color: '#fff', fontWeight:700 }}>Quản lý phim</Typography>
+            {notice && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setNotice('')}>{notice}</Alert>}
+            {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
             <Button variant="contained" onClick={() => handleOpen(null)} sx={{ mb: 2 }}>Thêm phim</Button>
             <MovieTable
               movies={movies}
@@ -494,6 +551,8 @@ export default function Admin() {
               onDelete={handleDelete}
               onManageEpisodes={handleManageEpisodes}
               onToggleVisibility={handleToggleVisibility}
+              onTmdbEnrich={handleTmdbEnrich}
+              tmdbLoadingId={tmdbLoadingId}
             />
             <MovieForm
               open={open}
@@ -701,104 +760,158 @@ export default function Admin() {
           <SubtitleTranslator />
         )}
         {selectedMenu === 'users' && (
-          <Box sx={{ color: '#fff', mt: 4, maxWidth: '1400px', mx: 'auto' }}>
-            <Typography variant="h4" gutterBottom sx={{ fontWeight: 700, mb: 3 }}>Quản lý người dùng</Typography>
+          <Box sx={{ color: '#fff', mt: 4, maxWidth: '1480px', mx: 'auto' }}>
+            <div className="admin-section-header">
+              <div>
+                <h2 className="admin-section-title">Quản lý người dùng</h2>
+                <p className="admin-section-subtitle">Theo dõi tài khoản, quyền admin và trạng thái hoạt động.</p>
+              </div>
+              <Button
+                startIcon={<PeopleIcon />}
+                variant="outlined"
+                onClick={fetchUsers}
+                sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.16)' }}
+              >
+                Làm mới
+              </Button>
+            </div>
             {userError && <Alert severity="error" sx={{ mb: 2 }}>{userError}</Alert>}
-            <Box sx={{ bgcolor: '#23242a', borderRadius: 3, p: 3, boxShadow: 4 }}>
-              <Box sx={{ display: 'flex', fontWeight: 700, mb: 2, bgcolor: '#181a20', borderRadius: 2, p: 1.2, fontSize: 17 }}>
-                <Box sx={{ flex: 2 }}>Username</Box>
-                <Box sx={{ flex: 3 }}>Email</Box>
-                <Box sx={{ flex: 1 }}>Gender</Box>
-                <Box sx={{ flex: 1 }}>Role</Box>
-                <Box sx={{ flex: 1 }}>Verified</Box>
-                <Box sx={{ flex: 1 }}>Status</Box>
-                <Box sx={{ flex: 1 }}>Actions</Box>
-              </Box>
-              {users.map(user => (
-                <Box key={user.id} sx={{ display: 'flex', alignItems: 'center', mb: 1.5, p: 1.2, borderRadius: 2, transition: 'background 0.15s', '&:hover': { background: '#23243a' }, boxShadow: 1 }}>
-                  <Box sx={{ flex: 2 }}>
-                    {userEditId === user.id ? (
-                      <TextField size="small" value={userForm.username} name="username" onChange={handleUserFormChange} sx={{ bgcolor: '#23242a', input: { color: '#fff' }, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& fieldset': { borderColor: '#444' }, mr: 1, minWidth: 120 }} />
-                    ) : (
-                      <Typography sx={{ fontWeight: 500 }}>{user.username}</Typography>
-                    )}
-                  </Box>
-                  <Box sx={{ flex: 3 }}>
-                    {userEditId === user.id ? (
-                      <TextField size="small" value={userForm.email} name="email" onChange={handleUserFormChange} sx={{ bgcolor: '#23242a', input: { color: '#fff' }, '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#fff' }, '& fieldset': { borderColor: '#444' }, mr: 1, minWidth: 180 }} />
-                    ) : (
-                      <Typography sx={{ fontWeight: 500 }}>{user.email}</Typography>
-                    )}
-                  </Box>
-                  <Box sx={{ flex: 1 }}>
-                    {userEditId === user.id ? (
-                      <TextField size="small" select name="gender" value={userForm.gender} onChange={handleUserFormChange} SelectProps={{ native: true }} sx={{ color: '#fff', '& select': { color: '#fff', background: '#23242a' }, '& option': { color: '#111', background: '#fff' }, minWidth: 90 }}>
-                        <option value="">--</option>
-                        <option value="male">Nam</option>
-                        <option value="female">Nữ</option>
-                        <option value="other">Khác</option>
-                      </TextField>
-                    ) : (
-                      <Typography sx={{ fontWeight: 500 }}>{user.gender || ''}</Typography>
-                    )}
-                  </Box>
-                  <Box sx={{ flex: 1 }}>
-                    {userEditId === user.id ? (
-                      <TextField size="small" select name="is_admin" value={userForm.is_admin ? '1' : '0'} onChange={handleUserFormChange} SelectProps={{ native: true }} sx={{ color: '#fff', '& select': { color: '#fff', background: '#23242a' }, '& option': { color: '#111', background: '#fff' }, minWidth: 90 }}>
-                        <option value="0" disabled={user.id === userEditId && user.id === currentUserId && user.is_admin}>{'User'}</option>
-                        <option value="1">{'Admin'}</option>
-                      </TextField>
-                    ) : (
-                      <Typography sx={{ fontWeight: 500 }}>{user.is_admin ? 'Admin' : 'User'}</Typography>
-                    )}
-                  </Box>
-                  <Box sx={{ flex: 1 }}>
-                    <Typography sx={{ fontWeight: 500, color: user.email_verified ? '#66bb6a' : '#ffa726' }}>
-                      {user.email_verified ? 'Yes' : 'No'}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ flex: 1 }}>
-                    <Typography sx={{ fontWeight: 500, color: user.is_active ? '#66bb6a' : '#ef5350' }}>
-                      {user.is_active ? 'Hoạt động' : 'Đã khóa'}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ flex: 1, display: 'flex', gap: 1 }}>
-                    {userEditId === user.id ? (
-                      <>
-                        <Tooltip title="Lưu" arrow>
-                          <IconButton color="success" size="small" onClick={handleUserEditSubmit} sx={{ bgcolor: '#222', '&:hover': { bgcolor: '#388e3c', color: '#fff' } }}>
-                            <SaveIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Hủy" arrow>
-                          <IconButton color="warning" size="small" onClick={handleUserEditCancel} sx={{ bgcolor: '#222', '&:hover': { bgcolor: '#ffa726', color: '#fff' } }}>
-                            <CloseIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </>
-                    ) : (
-                      <>
-                        <Tooltip title="Sửa" arrow>
-                          <IconButton color="primary" size="small" onClick={() => handleUserEdit(user)} sx={{ bgcolor: '#222', '&:hover': { bgcolor: '#1976d2', color: '#fff' } }}>
-                            <EditIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Xóa" arrow>
-                          <IconButton color="error" size="small" onClick={() => handleDeleteUser(user.id)} sx={{ bgcolor: '#222', '&:hover': { bgcolor: '#d32f2f', color: '#fff' } }}>
-                            <DeleteIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title={user.is_active ? 'Khóa tài khoản' : 'Mở khóa tài khoản'} arrow>
-                          <Button size="small" variant="outlined" color={user.is_active ? 'warning' : 'success'} onClick={() => handleToggleUserStatus(user)} sx={{ minWidth: 58 }}>
-                            {user.is_active ? 'Khóa' : 'Mở'}
-                          </Button>
-                        </Tooltip>
-                      </>
-                    )}
-                  </Box>
-                </Box>
-              ))}
-            </Box>
+            <div className="admin-user-summary">
+              <div className="admin-user-summary-card">
+                <span>Tổng tài khoản</span>
+                <strong>{userStats.total}</strong>
+              </div>
+              <div className="admin-user-summary-card">
+                <span>Admin</span>
+                <strong>{userStats.admins}</strong>
+              </div>
+              <div className="admin-user-summary-card success">
+                <span>Hoạt động</span>
+                <strong>{userStats.active}</strong>
+              </div>
+              <div className="admin-user-summary-card warning">
+                <span>Đã khóa</span>
+                <strong>{userStats.locked}</strong>
+              </div>
+            </div>
+
+            <div className="admin-user-panel">
+              <div className="admin-user-table">
+                <div className="admin-user-head">
+                  <span>Người dùng</span>
+                  <span>Email</span>
+                  <span>Giới tính</span>
+                  <span>Vai trò</span>
+                  <span>Xác thực</span>
+                  <span>Trạng thái</span>
+                  <span>Thao tác</span>
+                </div>
+
+                {users.length === 0 ? (
+                  <div className="admin-empty">Chưa có người dùng nào.</div>
+                ) : users.map(account => (
+                  <div key={account.id} className={`admin-user-row ${userEditId === account.id ? 'editing' : ''}`}>
+                    <div className="admin-user-identity">
+                      <div className={`admin-user-avatar ${account.is_admin ? 'admin' : ''}`}>{userInitial(account.username)}</div>
+                      <div className="admin-user-main">
+                        {userEditId === account.id ? (
+                          <TextField size="small" value={userForm.username} name="username" onChange={handleUserFormChange} sx={userFieldSx} />
+                        ) : (
+                          <>
+                            <strong>{account.username}</strong>
+                            <small>ID #{account.id}</small>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="admin-user-cell">
+                      {userEditId === account.id ? (
+                        <TextField size="small" value={userForm.email} name="email" onChange={handleUserFormChange} sx={userFieldSx} />
+                      ) : (
+                        <span className="admin-user-email">{account.email}</span>
+                      )}
+                    </div>
+
+                    <div className="admin-user-cell">
+                      {userEditId === account.id ? (
+                        <TextField size="small" select name="gender" value={userForm.gender} onChange={handleUserFormChange} SelectProps={{ native: true }} sx={userFieldSx}>
+                          <option value="">--</option>
+                          <option value="male">Nam</option>
+                          <option value="female">Nữ</option>
+                          <option value="other">Khác</option>
+                        </TextField>
+                      ) : (
+                        <span>{genderLabel(account.gender)}</span>
+                      )}
+                    </div>
+
+                    <div className="admin-user-cell">
+                      {userEditId === account.id ? (
+                        <TextField size="small" select name="is_admin" value={userForm.is_admin ? '1' : '0'} onChange={handleUserFormChange} SelectProps={{ native: true }} sx={userFieldSx}>
+                          <option value="0" disabled={account.id === userEditId && account.id === currentUserId && account.is_admin}>User</option>
+                          <option value="1">Admin</option>
+                        </TextField>
+                      ) : (
+                        <span className={`admin-user-pill ${account.is_admin ? 'role-admin' : 'role-user'}`}>{account.is_admin ? 'Admin' : 'User'}</span>
+                      )}
+                    </div>
+
+                    <div className="admin-user-cell">
+                      <span className={`admin-user-pill ${account.email_verified ? 'verified' : 'pending'}`}>
+                        {account.email_verified ? 'Đã xác thực' : 'Chưa xác thực'}
+                      </span>
+                    </div>
+
+                    <div className="admin-user-cell">
+                      <span className={`admin-user-pill ${account.is_active ? 'active' : 'locked'}`}>
+                        {account.is_active ? 'Hoạt động' : 'Đã khóa'}
+                      </span>
+                    </div>
+
+                    <div className="admin-user-actions">
+                      {userEditId === account.id ? (
+                        <>
+                          <Tooltip title="Lưu" arrow>
+                            <IconButton className="admin-action-btn success" size="small" onClick={handleUserEditSubmit}>
+                              <SaveIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Hủy" arrow>
+                            <IconButton className="admin-action-btn warning" size="small" onClick={handleUserEditCancel}>
+                              <CloseIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </>
+                      ) : (
+                        <>
+                          <Tooltip title="Sửa" arrow>
+                            <IconButton className="admin-action-btn info" size="small" onClick={() => handleUserEdit(account)}>
+                              <EditIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Xóa" arrow>
+                            <IconButton className="admin-action-btn danger" size="small" onClick={() => handleDeleteUser(account.id)}>
+                              <DeleteIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title={account.is_active ? 'Khóa tài khoản' : 'Mở khóa tài khoản'} arrow>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => handleToggleUserStatus(account)}
+                              className={`admin-lock-btn ${account.is_active ? 'lock' : 'unlock'}`}
+                            >
+                              {account.is_active ? 'Khóa' : 'Mở'}
+                            </Button>
+                          </Tooltip>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </Box>
         )}
         {selectedMenu === 'feedback' && (

@@ -21,6 +21,91 @@ const reportReasons = [
   'Lỗi khác',
 ];
 
+const getTrailerUrl = (movie) => String(movie?.trailer_url || movie?.trailerUrl || movie?.trailer || '').trim();
+
+const getYoutubeVideoId = (url) => {
+  const value = String(url || '').trim();
+  if (!value) return '';
+
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.replace(/^www\./, '');
+    const parts = parsed.pathname.split('/').filter(Boolean);
+
+    if (host === 'youtu.be') return parts[0] || '';
+    if (host.endsWith('youtube.com')) {
+      if (parsed.searchParams.get('v')) return parsed.searchParams.get('v');
+      if (parts[0] === 'embed' || parts[0] === 'shorts') return parts[1] || '';
+    }
+  } catch {
+    const watchMatch = value.match(/[?&]v=([^?&/]+)/i);
+    const shortMatch = value.match(/youtu\.be\/([^?&/]+)/i);
+    const embedMatch = value.match(/youtube\.com\/(?:embed|shorts)\/([^?&/]+)/i);
+    return watchMatch?.[1] || shortMatch?.[1] || embedMatch?.[1] || '';
+  }
+
+  return '';
+};
+
+const isDirectVideoUrl = (url) => /\.(mp4|webm|ogg)(\?.*)?$/i.test(String(url || ''));
+
+const getTrailerEmbedUrl = (url) => {
+  const value = String(url || '').trim();
+  if (!value) return '';
+
+  const youtubeId = getYoutubeVideoId(value);
+  if (youtubeId) return `https://www.youtube.com/embed/${youtubeId}`;
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.replace(/^www\./, '');
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    if (host.endsWith('vimeo.com') && parts[0]) return `https://player.vimeo.com/video/${parts[0]}`;
+  } catch {
+    // Non-URL values fall through to direct video detection.
+  }
+  if (isDirectVideoUrl(value)) return value;
+  return '';
+};
+
+const getPersonName = (person) => {
+  if (typeof person === 'string') return person.trim();
+  return String(person?.name || '').trim();
+};
+
+const normalizePeople = (people) => {
+  if (!Array.isArray(people)) return [];
+  return people
+    .map((person) => (typeof person === 'string' ? { name: person } : person))
+    .filter((person) => getPersonName(person));
+};
+
+const getInitials = (name) => {
+  const words = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return '?';
+  return words.slice(0, 2).map((word) => word[0]?.toUpperCase()).join('');
+};
+
+const buildRecommendationReasons = (movie) => {
+  const matched = movie?.matched || {};
+  const reasons = [];
+
+  const pushMatched = (label, values) => {
+    const list = Array.isArray(values) ? values.filter(Boolean).slice(0, 2) : [];
+    if (list.length) reasons.push(`${label}: ${list.join(', ')}`);
+  };
+
+  pushMatched('Cùng thể loại', matched.genres);
+  pushMatched('Cùng quốc gia', matched.countries);
+  pushMatched('Cùng đạo diễn', matched.directors);
+  pushMatched('Chung diễn viên', matched.actors);
+
+  if (!reasons.length && Array.isArray(movie?.match_reasons)) {
+    reasons.push(...movie.match_reasons.filter(Boolean).slice(0, 2));
+  }
+
+  return reasons.slice(0, 3);
+};
+
 const DetailMovies = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -217,6 +302,12 @@ const DetailMovies = () => {
 
   const bgImage = data.bg_url || data.poster_url;
   const selectedEpisodeQuery = selectedEpisode > 1 ? `?ep=${selectedEpisode}` : '';
+  const trailerUrl = getTrailerUrl(data);
+  const trailerEmbedUrl = getTrailerEmbedUrl(trailerUrl);
+  const isDirectTrailer = isDirectVideoUrl(trailerEmbedUrl);
+  const directors = normalizePeople(data.directors);
+  const actors = normalizePeople(data.actors);
+  const directorNames = directors.map(getPersonName);
 
   return (
     <>
@@ -334,11 +425,65 @@ const DetailMovies = () => {
               {/* Facts */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-sm max-w-4xl bg-white/5 p-4 rounded-xl border border-white/5">
                 {data.countries?.length > 0 && <div><span className="text-white/50 mr-2">Quốc gia:</span> <span className="font-semibold text-white/90">{data.countries.join(', ')}</span></div>}
-                {data.directors?.length > 0 && <div><span className="text-white/50 mr-2">Đạo diễn:</span> <span className="font-semibold text-white/90">{data.directors.join(', ')}</span></div>}
+                {directorNames.length > 0 && <div><span className="text-white/50 mr-2">Đạo diễn:</span> <span className="font-semibold text-white/90">{directorNames.join(', ')}</span></div>}
+                {data.quality && <div><span className="text-white/50 mr-2">Chất lượng:</span> <span className="font-semibold text-white/90">{data.quality}</span></div>}
                 {data.producers?.length > 0 && <div className="col-span-1 md:col-span-2"><span className="text-white/50 mr-2">Sản xuất:</span> <span className="font-semibold text-white/90">{data.producers.join(', ')}</span></div>}
               </div>
             </div>
           </div>
+
+          {/* Trailer */}
+          <section className="mt-12 rounded-3xl overflow-hidden border border-white/10 bg-surface/45 backdrop-blur-xl shadow-[0_20px_70px_rgba(0,0,0,0.35)]">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-5 md:px-7 py-5 border-b border-white/10">
+              <div>
+                <p className="text-xs uppercase tracking-[0.28em] text-primary font-black">Preview</p>
+                <h3 className="text-2xl md:text-3xl font-black text-white mt-1">Trailer</h3>
+              </div>
+              {trailerUrl && (
+                <a
+                  href={trailerUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-white/20"
+                >
+                  <PlayArrowIcon fontSize="small" />
+                  Mở trailer
+                </a>
+              )}
+            </div>
+
+            {trailerEmbedUrl ? (
+              <div className="aspect-video bg-black">
+                {isDirectTrailer ? (
+                  <video
+                    src={trailerEmbedUrl}
+                    poster={data.bg_url || data.poster_url}
+                    controls
+                    className="h-full w-full object-contain"
+                  />
+                ) : (
+                  <iframe
+                    src={trailerEmbedUrl}
+                    title={`Trailer ${data.title}`}
+                    className="h-full w-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    referrerPolicy="strict-origin-when-cross-origin"
+                  />
+                )}
+              </div>
+            ) : (
+              <div className="flex min-h-[220px] flex-col items-center justify-center bg-black/35 px-6 py-12 text-center">
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/10 text-white">
+                  <PlayArrowIcon className="text-4xl" />
+                </div>
+                <h4 className="text-lg font-black text-white">{trailerUrl ? 'Trailer chưa hỗ trợ nhúng' : 'Chưa có trailer'}</h4>
+                <p className="mt-2 max-w-md text-sm text-text-secondary">
+                  {trailerUrl ? 'Bạn vẫn có thể mở trailer ở tab mới bằng nút phía trên.' : 'Phim này chưa có trailer chính thức trong hệ thống.'}
+                </p>
+              </div>
+            )}
+          </section>
 
           {/* Content Tabs */}
           <div className="mt-16 border-t border-white/10 pt-8">
@@ -348,7 +493,7 @@ const DetailMovies = () => {
                 {activeTab === 'episodes' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-md shadow-[0_0_10px_rgba(229,9,20,0.8)]" />}
               </button>
               <button onClick={() => setActiveTab('actors')} className={`pb-3 font-bold text-lg transition-colors relative whitespace-nowrap ${activeTab === 'actors' ? 'text-white' : 'text-text-secondary hover:text-white'}`}>
-                Diễn viên
+                Đạo diễn & Diễn viên
                 {activeTab === 'actors' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-md shadow-[0_0_10px_rgba(229,9,20,0.8)]" />}
               </button>
               <button onClick={() => setActiveTab('suggested')} className={`pb-3 font-bold text-lg transition-colors relative whitespace-nowrap ${activeTab === 'suggested' ? 'text-white' : 'text-text-secondary hover:text-white'}`}>
@@ -386,17 +531,55 @@ const DetailMovies = () => {
               {/* Actors Tab */}
               {activeTab === 'actors' && (
                 <div className="animate-in fade-in duration-500">
-                  <h3 className="text-2xl font-bold text-white mb-6">Dàn diễn viên</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {data.actors?.length > 0 ? data.actors.map((actor) => (
-                      <div key={actor.id || actor.name} className="flex items-center gap-4 p-4 rounded-2xl bg-surface/50 border border-white/5 hover:bg-surface hover:border-white/10 transition-colors">
-                        <img src={actor.profile_pic_url || '/avatar-actor.svg'} alt={actor.name} className="w-16 h-16 rounded-full object-cover border-2 border-white/10" onError={(e) => { e.currentTarget.src = '/avatar-actor.svg'; }} />
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-white font-bold truncate">{actor.name}</h4>
-                          {actor.bio && <p className="text-text-secondary text-xs line-clamp-2 mt-1">{actor.bio}</p>}
-                        </div>
+                  <h3 className="text-2xl font-bold text-white mb-6">Đạo diễn & Diễn viên</h3>
+                  {directors.length > 0 && (
+                    <div className="mb-10">
+                      <div className="flex items-center justify-between gap-3 mb-4">
+                        <h4 className="text-lg font-black text-white">Đạo diễn</h4>
+                        <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-white/70">{directors.length} người</span>
                       </div>
-                    )) : <div className="text-text-secondary font-medium">Chưa có thông tin diễn viên</div>}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {directors.map((director) => {
+                          const name = getPersonName(director);
+                          return (
+                            <div key={director.id || name} className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
+                              {director.profile_pic_url ? (
+                                <img src={director.profile_pic_url} alt={name} className="w-16 h-16 rounded-full object-cover border-2 border-primary/40" onError={(e) => { e.currentTarget.src = '/avatar-actor.svg'; }} />
+                              ) : (
+                                <div className="flex w-16 h-16 items-center justify-center rounded-full border border-primary/30 bg-primary/15 text-lg font-black text-white">
+                                  {getInitials(name)}
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs uppercase tracking-[0.18em] text-primary font-black">Đạo diễn</p>
+                                <h5 className="text-white font-bold truncate">{name}</h5>
+                                {director.bio && <p className="text-text-secondary text-xs line-clamp-2 mt-1">{director.bio}</p>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between gap-3 mb-4">
+                    <h4 className="text-lg font-black text-white">Diễn viên</h4>
+                    {actors.length > 0 && <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-white/70">{actors.length} người</span>}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {actors.length > 0 ? actors.map((actor) => {
+                      const name = getPersonName(actor);
+                      return (
+                        <div key={actor.id || name} className="flex items-center gap-4 p-4 rounded-2xl bg-surface/50 border border-white/5 hover:bg-surface hover:border-white/10 transition-colors">
+                          <img src={actor.profile_pic_url || '/avatar-actor.svg'} alt={name} className="w-16 h-16 rounded-full object-cover border-2 border-white/10" onError={(e) => { e.currentTarget.src = '/avatar-actor.svg'; }} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs uppercase tracking-[0.16em] text-white/35 font-black">Diễn viên</p>
+                            <h5 className="text-white font-bold truncate">{name}</h5>
+                            {actor.bio && <p className="text-text-secondary text-xs line-clamp-2 mt-1">{actor.bio}</p>}
+                          </div>
+                        </div>
+                      );
+                    }) : <div className="text-text-secondary font-medium">Chưa có thông tin diễn viên</div>}
                   </div>
                 </div>
               )}
@@ -417,19 +600,28 @@ const DetailMovies = () => {
                     </div>
                   ) : recommendedMovies.length > 0 ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
-                      {recommendedMovies.map((movie) => (
-                        <div key={movie.id} className="min-w-0">
-                          <MovieCard
-                            movie={movie}
-                            onClick={() => navigate(`/movies/${movie.id}`)}
-                            onPlay={() => navigate(`/watch/${movie.id}`)}
-                            showScore={Number(movie.score) > 0}
-                          />
-                          {Array.isArray(movie.match_reasons) && movie.match_reasons.length > 0 && (
-                            <p className="mt-1 text-xs text-text-secondary line-clamp-2">{movie.match_reasons.slice(0, 2).join(', ')}</p>
-                          )}
-                        </div>
-                      ))}
+                      {recommendedMovies.map((movie) => {
+                        const reasons = buildRecommendationReasons(movie);
+                        return (
+                          <div key={movie.id} className="min-w-0">
+                            <MovieCard
+                              movie={movie}
+                              onClick={() => navigate(`/movies/${movie.id}`)}
+                              onPlay={() => navigate(`/watch/${movie.id}`)}
+                              showScore={Number(movie.score) > 0}
+                            />
+                            {reasons.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {reasons.map((reason) => (
+                                  <span key={reason} className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] font-semibold leading-none text-white/70">
+                                    {reason}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-6 text-text-secondary">

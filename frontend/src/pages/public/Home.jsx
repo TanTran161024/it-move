@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import Banner from '../../components/layout/Banner';
 import MovieSlider from '../../components/movie/MovieSlider';
+import ContinueWatchingSection from '../../components/movie/ContinueWatchingSection';
 import { API_BASE_URL as API } from '../../config/api';
 
 function normalizeMovie(movie) {
@@ -52,11 +53,10 @@ export default function Home() {
 
   return (
     <div className="w-full bg-background min-h-screen pb-20">
-      {/* Banner is now truly edge-to-edge full width */}
       <Banner />
-      
-      {/* Movie Sliders Container */}
+
       <div className="w-full max-w-[2000px] mx-auto px-4 sm:px-8 md:px-12 lg:px-16 relative z-20 space-y-8 md:space-y-12">
+        <ContinueWatchingSection />
         <MovieSlider movies={newMovies} title="Phim mới cập nhật" />
         <MovieSlider movies={topViewedMovies} title="Phim xem nhiều nhất" />
 

@@ -7,7 +7,9 @@ const nodemailer = require('nodemailer');
 const { getSimilarMovies, getUserRecommendations, clampLimit } = require('./services/recommendationService');
 const { chatWithMovieAdvisor, getAiStatus } = require('./services/aiService');
 const { ensureChatSession, getAiChatStats, saveChatExchange } = require('./services/chatSessionService');
+const { generateMovieDescription } = require('./services/adminDescriptionService');
 const { translateSubtitle } = require('./services/subtitleTranslatorService');
+const { enrichMovieWithTmdb } = require('./services/tmdbService');
 const { smartSearchMovies } = require('./services/smartSearchService');
 const {
   deleteEpisodeSubtitle,
@@ -779,6 +781,15 @@ router.get('/admin/ai-health', requireAdminMiddleware, async (req, res) => {
   }
 });
 
+router.post('/admin/movies/description', requireAdminMiddleware, async (req, res) => {
+  try {
+    const result = await generateMovieDescription(req.body?.movie || req.body || {});
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
 router.post('/ai/chat', async (req, res) => {
   try {
     const db = getDb(req);
@@ -945,6 +956,22 @@ router.put('/movies/:id', requireAdminMiddleware, async (req, res) => {
     res.json({ message: 'Movie updated' });
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/movies/:id/tmdb-enrich', requireAdminMiddleware, async (req, res) => {
+  try {
+    const db = getDb(req);
+    const result = await enrichMovieWithTmdb(db, req.params.id, {
+      overwrite: req.body?.overwrite === true,
+      castLimit: req.body?.cast_limit || 8,
+    });
+    res.json({
+      message: 'Đã kiểm tra và bổ sung dữ liệu từ TMDb.',
+      ...result,
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
   }
 });
 
@@ -1328,9 +1355,8 @@ router.get('/movie/:id', async (req, res) => {
 
     // 6. Directors
     const [directorRows] = await db.execute(
-      `SELECT d.name FROM movie_directors md JOIN directors d ON md.director_id = d.id WHERE md.movie_id = ?`, [movieId]
+      `SELECT d.id, d.name, d.profile_pic_url, d.bio FROM movie_directors md JOIN directors d ON md.director_id = d.id WHERE md.movie_id = ?`, [movieId]
     );
-    const directors = directorRows.map(d => d.name);
 
     // 7. Episodes
     const [episodeRows] = await db.execute(
@@ -1351,6 +1377,7 @@ router.get('/movie/:id', async (req, res) => {
     res.json({
       id: movie.id,
       title: movie.title,
+      original_title: movie.original_title,
       poster_url: cleanImageUrl(movie.poster_url),
       bg_url,
       title_url,
@@ -1358,11 +1385,16 @@ router.get('/movie/:id', async (req, res) => {
       release_year: movie.release_year,
       duration: movie.duration,
       description: movie.description,
+      trailer_url: movie.trailer_url,
       imdb_rating: movie.imdb_rating,
+      quality: movie.quality,
+      status: movie.status,
+      is_series: movie.is_series,
+      views: movie.views,
       genres,
       countries,
       producers,
-      directors,
+      directors: directorRows,
       episodes,
       actors: actorRows,
       suggested: suggestedRows
@@ -1867,6 +1899,7 @@ router.get('/user/continue', async (req, res) => {
     if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
     const profileId = await resolveProfileId(db, userId, profileHeader(req));
+    const limit = req.query.limit ? clampLimit(req.query.limit, 12) : null;
     const [rows] = await db.execute(
       `SELECT h.id AS history_id, h.episode_id, h.episode_number, h.progress_seconds,
               h.duration_seconds, h.completed, h.last_watched_at,
@@ -1877,7 +1910,8 @@ router.get('/user/continue', async (req, res) => {
        LEFT JOIN episodes e ON h.episode_id = e.id
        WHERE h.user_id = ? AND h.profile_id = ?
          AND h.completed = 0
-       ORDER BY h.last_watched_at DESC`,
+       ORDER BY h.last_watched_at DESC
+       ${limit ? `LIMIT ${limit}` : ''}`,
       [userId, profileId]
     );
     res.json(rows);

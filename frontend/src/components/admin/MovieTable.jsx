@@ -1,6 +1,8 @@
-import { Box, Card, CardActions, CardContent, Grid, IconButton, Tooltip, Typography, Zoom } from '@mui/material';
+import { Box, Card, CardActions, CardContent, CircularProgress, Grid, IconButton, Tooltip, Typography, Zoom } from '@mui/material';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import MovieIcon from '@mui/icons-material/Movie';
 import PlaylistPlayIcon from '@mui/icons-material/PlaylistPlay';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
@@ -8,7 +10,21 @@ import SearchIcon from '@mui/icons-material/Search';
 import { useState, useMemo } from 'react';
 import '../../pages/admin/AdminStyles.css';
 
-export default function MovieTable({ movies, onEdit, onDelete, onManageEpisodes, onToggleVisibility }) {
+function formatRating(value) {
+  const rating = Number(value);
+  if (!Number.isFinite(rating) || rating <= 0) return '';
+  return Number.isInteger(rating) ? String(rating) : rating.toFixed(1);
+}
+
+export default function MovieTable({
+  movies,
+  onEdit,
+  onDelete,
+  onManageEpisodes,
+  onToggleVisibility,
+  onTmdbEnrich,
+  tmdbLoadingId,
+}) {
   const [hovered, setHovered] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -104,7 +120,7 @@ export default function MovieTable({ movies, onEdit, onDelete, onManageEpisodes,
                       {movie.imdb_rating > 0 && (
                         <Box sx={{ position: 'absolute', left: 10, bottom: 10, zIndex: 3 }}>
                           <span className="admin-badge warning" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
-                            <span style={{ color: '#f5c518' }}>★</span> {movie.imdb_rating}
+                            <span style={{ color: '#f5c518' }}>★</span> {formatRating(movie.imdb_rating)}
                           </span>
                         </Box>
                       )}
@@ -150,6 +166,25 @@ export default function MovieTable({ movies, onEdit, onDelete, onManageEpisodes,
                     </CardContent>
 
                     <CardActions sx={{ justifyContent: 'center', width: '100%', pb: 2, pt: 1, gap: 1 }}>
+                      {onTmdbEnrich && (
+                        <Tooltip title="Bổ sung poster/backdrop/diễn viên từ TMDb" arrow>
+                          <span>
+                            <IconButton
+                              size="small"
+                              disabled={tmdbLoadingId === movie.id}
+                              sx={{
+                                bgcolor: 'rgba(99,102,241,0.14)',
+                                color: '#a5b4fc',
+                                '&:hover': { bgcolor: 'var(--admin-accent)', color: '#fff' },
+                                '&.Mui-disabled': { color: 'rgba(255,255,255,0.35)' },
+                              }}
+                              onClick={() => onTmdbEnrich(movie)}
+                            >
+                              {tmdbLoadingId === movie.id ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeIcon fontSize="small" />}
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      )}
                       <Tooltip title="Sửa phim" arrow>
                         <IconButton size="small" sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'var(--admin-accent)', '&:hover': { bgcolor: 'var(--admin-accent)', color: '#fff' } }} onClick={() => onEdit(movie)}>
                           <EditIcon fontSize="small" />

@@ -151,7 +151,23 @@ function buildGeminiGenerationConfig(model) {
   return config;
 }
 
-async function callGemini(message, recommendations, intent, options = {}) {
+function buildGenericGenerationConfig(model, options = {}) {
+  const config = {
+    temperature: Number.isFinite(Number(options.temperature)) ? Number(options.temperature) : 0.3,
+    maxOutputTokens: Number(options.maxOutputTokens) || 1024,
+  };
+
+  if (options.responseMimeType) config.responseMimeType = options.responseMimeType;
+  if (options.responseSchema) config.responseSchema = options.responseSchema;
+
+  if (/gemini-2\.5/i.test(model)) {
+    config.thinkingConfig = { thinkingBudget: 0 };
+  }
+
+  return config;
+}
+
+async function requestGemini(prompt, generationConfig) {
   if (!hasGeminiKey()) return null;
 
   const model = getGeminiModel();
@@ -164,10 +180,10 @@ async function callGemini(message, recommendations, intent, options = {}) {
         contents: [
           {
             role: 'user',
-            parts: [{ text: buildGeminiPrompt(message, recommendations, intent, options.maxReturnedMovies || 6) }],
+            parts: [{ text: prompt }],
           },
         ],
-        generationConfig: buildGeminiGenerationConfig(model),
+        generationConfig,
       }),
     }
   );
@@ -192,12 +208,33 @@ async function callGemini(message, recommendations, intent, options = {}) {
     error_message: null,
   });
 
-  const text = data?.candidates?.[0]?.content?.parts?.map((part) => part.text).filter(Boolean).join('\n') || '';
+  return data?.candidates?.[0]?.content?.parts?.map((part) => part.text).filter(Boolean).join('\n') || '';
+}
+
+async function callGeminiJson(prompt, responseSchema, options = {}) {
+  const model = getGeminiModel();
+  const text = await requestGemini(prompt, buildGenericGenerationConfig(model, {
+    ...options,
+    responseMimeType: 'application/json',
+    responseSchema,
+  }));
+  return safeParseJson(text);
+}
+
+async function callGemini(message, recommendations, intent, options = {}) {
+  if (!hasGeminiKey()) return null;
+
+  const model = getGeminiModel();
+  const text = await requestGemini(
+    buildGeminiPrompt(message, recommendations, intent, options.maxReturnedMovies || 6),
+    buildGeminiGenerationConfig(model)
+  );
   return safeParseJson(text);
 }
 
 module.exports = {
   callGemini,
+  callGeminiJson,
   getAiStatus,
   getGeminiModel,
 };

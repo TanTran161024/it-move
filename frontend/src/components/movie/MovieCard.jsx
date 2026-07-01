@@ -17,6 +17,12 @@ function getRating(movie) {
   return Number.isFinite(rating) && rating > 0 ? rating : null;
 }
 
+function formatRating(value) {
+  const rating = Number(value);
+  if (!Number.isFinite(rating) || rating <= 0) return '';
+  return Number.isInteger(rating) ? String(rating) : rating.toFixed(1);
+}
+
 export function MovieRatingBadge({ rating, className = '' }) {
   const normalizedRating = Number(rating);
   if (!Number.isFinite(normalizedRating) || normalizedRating <= 0) return null;
@@ -24,7 +30,7 @@ export function MovieRatingBadge({ rating, className = '' }) {
   return (
     <div className={`absolute top-2 right-2 bg-black/70 backdrop-blur-md px-2 py-1 rounded border border-white/10 flex items-center gap-1 shadow-md ${className}`}>
       <span className="text-[#f5c518] text-xs font-bold">★</span>
-      <span className="text-white text-xs font-bold">{normalizedRating.toFixed(1)}</span>
+      <span className="text-white text-xs font-bold">{formatRating(normalizedRating)}</span>
     </div>
   );
 }
