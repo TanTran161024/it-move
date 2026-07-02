@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FaArrowLeft, FaBug, FaLightbulb, FaTimes } from "react-icons/fa";
-import { useParams, useLocation, useNavigate } from "react-router-dom";
+zimport React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FaArrowLeft, FaTimes } from "react-icons/fa";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import VideoPlayer from "../../components/player/VideoPlayer";
 import { API_BASE_URL, API_URL as API } from "../../config/api";
 import { getProfileHeaders } from "../../utils/profile";
@@ -14,6 +14,7 @@ const REPORT_REASONS = [
   "Link die",
   "Khác",
 ];
+
 const PLAYER_SETTINGS_KEY = "itmove_player_settings";
 const DEFAULT_PLAYER_SETTINGS = {
   autoplayNext: true,
@@ -39,22 +40,120 @@ function getStoredPlayerSettings() {
   }
 }
 
-function NextEpisodeActionIcon({ size = 24 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" aria-hidden="true">
-      <path d="M9 8.5L27 20L9 31.5V8.5Z" stroke="currentColor" strokeWidth="3.4" strokeLinejoin="round" />
-      <path d="M31.5 8V32" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" />
-    </svg>
-  );
+function formatEpisodeTitle(episode) {
+  if (!episode) return "Chưa có tập";
+  return `Tập ${episode.episode_number}${episode.title ? ` - ${episode.title}` : ""}`;
 }
 
-function EpisodeListActionIcon({ size = 25 }) {
+function normalizeSubtitleTracks(currentEpisode) {
+  const apiTracks = Array.isArray(currentEpisode?.subtitle_tracks) ? currentEpisode.subtitle_tracks : [];
+  if (apiTracks.length) {
+    return apiTracks
+      .map((track, index) => {
+        const src = String(track.src || track.url || "").trim();
+        if (!src) return null;
+        return {
+          id: track.id || `subtitle-${index + 1}`,
+          label: track.label || "Phụ đề",
+          srclang: track.srclang || "vi",
+          src: src.startsWith("http") ? src : `${API_BASE_URL}${src}`,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  if (!currentEpisode?.id || !currentEpisode?.subtitle_url) return [];
+  return [
+    {
+      id: `episode-${currentEpisode.id}-vi`,
+      label: "Tiếng Việt",
+      srclang: "vi",
+      src: `${API}/subtitles/episodes/${currentEpisode.id}.vtt`,
+    },
+  ];
+}
+
+function EpisodeShelf({ open, movie, episodes, selectedEpisode, onClose, onSelectEpisode }) {
+  if (!open) return null;
+
   return (
-    <svg width={size} height={size} viewBox="0 0 44 44" fill="none" aria-hidden="true">
-      <path d="M18 9H35C36.7 9 38 10.3 38 12V25" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M12 15H31C32.7 15 34 16.3 34 18V31" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
-      <rect x="6" y="21" width="24" height="15" rx="3" stroke="currentColor" strokeWidth="3.4" />
-    </svg>
+    <div className="absolute inset-0 z-[95] flex items-end bg-black/60 backdrop-blur-[2px]">
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default"
+        aria-label="Đóng danh sách tập"
+        onClick={onClose}
+      />
+      <section className="relative z-10 w-full border-t border-white/10 bg-[#050505]/96 px-4 pb-6 pt-5 shadow-[0_-30px_80px_rgba(0,0,0,0.65)] md:px-8 md:pb-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-5 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-[#e50914]">Episodes</p>
+              <h2 className="truncate text-2xl font-black text-white md:text-4xl">{movie?.title}</h2>
+              <p className="mt-1 text-sm font-semibold text-white/45">{episodes.length} tập đang có sẵn</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+              aria-label="Đóng"
+            >
+              <FaTimes />
+            </button>
+          </div>
+
+          {episodes.length === 0 ? (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-8 text-center text-white/55">
+              Chưa có tập phim.
+            </div>
+          ) : (
+            <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-3 md:mx-0 md:px-0">
+              {episodes.map((episode) => {
+                const active = Number(selectedEpisode) === Number(episode.episode_number);
+                return (
+                  <button
+                    key={episode.id}
+                    onClick={() => onSelectEpisode(episode)}
+                    className={`group/episode w-[210px] shrink-0 overflow-hidden rounded-xl border text-left transition-colors ${
+                      active
+                        ? "border-[#e50914] bg-[#e50914]/15"
+                        : "border-white/10 bg-white/[0.05] hover:border-white/25 hover:bg-white/[0.09]"
+                    }`}
+                    type="button"
+                  >
+                    <div className="relative aspect-video overflow-hidden bg-[#171717]">
+                      <img
+                        src={movie?.poster_url}
+                        alt=""
+                        className="h-full w-full object-cover opacity-55 transition-transform duration-300 group-hover/episode:scale-105"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
+                      <div className={`absolute left-3 top-3 rounded-md px-2 py-1 text-xs font-black ${active ? "bg-[#e50914] text-white" : "bg-black/70 text-white"}`}>
+                        Tập {episode.episode_number}
+                      </div>
+                      {active && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-black shadow-2xl">
+                            <PlayArrowIcon />
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-3">
+                      <h3 className="line-clamp-1 text-sm font-black text-white">{formatEpisodeTitle(episode)}</h3>
+                      <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-white/45">
+                        {active ? "Đang xem" : "Chọn để phát tập này"}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -75,54 +174,46 @@ const WatchMovie = () => {
   const [error, setError] = useState("");
   const [playerSettings, setPlayerSettings] = useState(initialPlayerSettings);
   const [cinemaMode, setCinemaMode] = useState(Boolean(initialPlayerSettings.cinemaDefault));
+  const [episodeShelfOpen, setEpisodeShelfOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState(REPORT_REASONS[0]);
   const [reportDescription, setReportDescription] = useState("");
   const [reportStatus, setReportStatus] = useState({ type: "", message: "" });
 
   const videoRef = useRef(null);
-  const episodesPanelRef = useRef(null);
-
   const movie = data?.movie || null;
-  const genres = useMemo(() => data?.genres || [], [data?.genres]);
   const episodes = useMemo(() => data?.episodes || [], [data?.episodes]);
   const currentEpisode = useMemo(
-    () => episodes.find((episode) => episode.episode_number === selectedEpisode) || episodes[0] || null,
+    () => episodes.find((episode) => Number(episode.episode_number) === Number(selectedEpisode)) || episodes[0] || null,
     [episodes, selectedEpisode]
   );
   const currentEpisodeIndex = useMemo(
-    () => episodes.findIndex((episode) => episode.episode_number === selectedEpisode),
+    () => episodes.findIndex((episode) => Number(episode.episode_number) === Number(selectedEpisode)),
     [episodes, selectedEpisode]
   );
   const hasNextEpisode = currentEpisodeIndex >= 0 && currentEpisodeIndex < episodes.length - 1;
-  const currentSubtitleTracks = useMemo(() => {
-    const apiTracks = Array.isArray(currentEpisode?.subtitle_tracks) ? currentEpisode.subtitle_tracks : [];
-    if (apiTracks.length) {
-      return apiTracks
-        .map((track, index) => {
-          const src = String(track.src || track.url || "").trim();
-          if (!src) return null;
-          return {
-            id: track.id || `subtitle-${index + 1}`,
-            label: track.label || "Phụ đề",
-            srclang: track.srclang || "vi",
-            src: src.startsWith("http") ? src : `${API_BASE_URL}${src}`,
-          };
-        })
-        .filter(Boolean);
-    }
+  const currentSubtitleTracks = useMemo(() => normalizeSubtitleTracks(currentEpisode), [currentEpisode]);
 
-    if (!currentEpisode?.id || !currentEpisode?.subtitle_url) return [];
-    return [
-      {
-        id: `episode-${currentEpisode.id}-vi`,
-        label: "Tiếng Việt",
-        srclang: "vi",
-        src: `${API}/subtitles/episodes/${currentEpisode.id}.vtt`,
-      },
-    ];
-  }, [currentEpisode?.id, currentEpisode?.subtitle_tracks, currentEpisode?.subtitle_url]);
-  const [episodesPanelHighlighted, setEpisodesPanelHighlighted] = useState(false);
+  useEffect(() => {
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, []);
+
+  useEffect(() => {
+    const closeOverlay = (event) => {
+      if (event.key !== "Escape") return;
+      setEpisodeShelfOpen(false);
+      setReportOpen(false);
+    };
+    window.addEventListener("keydown", closeOverlay);
+    return () => window.removeEventListener("keydown", closeOverlay);
+  }, []);
 
   const handlePlayerSettingChange = useCallback((key, value) => {
     setPlayerSettings((current) => {
@@ -131,9 +222,7 @@ const WatchMovie = () => {
       return next;
     });
 
-    if (key === "cinemaDefault") {
-      setCinemaMode(Boolean(value));
-    }
+    if (key === "cinemaDefault") setCinemaMode(Boolean(value));
   }, []);
 
   useEffect(() => {
@@ -150,7 +239,7 @@ const WatchMovie = () => {
         setData(payload);
         const availableEpisodes = payload.episodes || [];
         if (availableEpisodes.length > 0) {
-          const selected = epParam && availableEpisodes.some((episode) => episode.episode_number === epParam)
+          const selected = epParam && availableEpisodes.some((episode) => Number(episode.episode_number) === epParam)
             ? epParam
             : availableEpisodes[0].episode_number;
           setSelectedEpisode(selected);
@@ -228,9 +317,7 @@ const WatchMovie = () => {
 
     await fetch(`${API}/watch-history/progress`, {
       method: "POST",
-      headers: getProfileHeaders({
-        "Content-Type": "application/json",
-      }),
+      headers: getProfileHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         movie_id: movie.id,
         episode_id: currentEpisode.id,
@@ -268,6 +355,7 @@ const WatchMovie = () => {
   const handleSelectEpisode = useCallback((episode) => {
     setSelectedEpisode(episode.episode_number);
     setResumeAt(0);
+    setEpisodeShelfOpen(false);
     navigate(`/watch/${id}?ep=${episode.episode_number}`, { replace: true });
   }, [id, navigate]);
 
@@ -278,21 +366,13 @@ const WatchMovie = () => {
     handleSelectEpisode(nextEpisode);
   }, [currentEpisodeIndex, episodes, handleSelectEpisode, saveProgress]);
 
-  const handleOpenEpisodeList = useCallback(() => {
-    episodesPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    setEpisodesPanelHighlighted(true);
-    window.setTimeout(() => setEpisodesPanelHighlighted(false), 900);
-  }, []);
-
   const handleEnded = useCallback(async (snapshot) => {
     await saveProgress(snapshot, true);
     if (!playerSettings.autoplayNext) return;
 
-    const index = episodes.findIndex((episode) => episode.episode_number === selectedEpisode);
+    const index = episodes.findIndex((episode) => Number(episode.episode_number) === Number(selectedEpisode));
     const nextEpisode = index >= 0 ? episodes[index + 1] : null;
-    if (nextEpisode) {
-      handleSelectEpisode(nextEpisode);
-    }
+    if (nextEpisode) handleSelectEpisode(nextEpisode);
   }, [episodes, handleSelectEpisode, playerSettings.autoplayNext, saveProgress, selectedEpisode]);
 
   const handleReportSubmit = async (event) => {
@@ -325,17 +405,17 @@ const WatchMovie = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-xl font-bold text-white bg-background">
-        Đang tải...
+      <div className="fixed inset-0 flex items-center justify-center bg-black text-xl font-bold text-white">
+        <div className="h-11 w-11 animate-spin rounded-full border-2 border-white/20 border-t-[#e50914]" />
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-white bg-background px-4 text-center">
+      <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-black px-4 text-center text-white">
         <div className="text-2xl font-black">{error || "Không tìm thấy phim."}</div>
-        <button className="px-5 py-2 rounded-lg bg-white/10 hover:bg-white/20" onClick={handleBack} type="button">
+        <button className="rounded-lg bg-white/10 px-5 py-2 hover:bg-white/20" onClick={handleBack} type="button">
           Quay lại
         </button>
       </div>
@@ -343,239 +423,123 @@ const WatchMovie = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background text-white flex flex-col">
-      {cinemaMode && <div className="fixed inset-0 bg-black/85 z-30 pointer-events-none" />}
-
-      <div className="sticky top-0 z-50 flex items-center gap-4 px-6 py-4 bg-transparent pointer-events-none">
-        <button
-          onClick={handleBack}
-          className="pointer-events-auto flex items-center justify-center w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors backdrop-blur-md"
-          title="Quay lại"
-          type="button"
-        >
-          <FaArrowLeft />
-        </button>
-        <h1 className="text-xl md:text-2xl font-bold drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)] truncate pointer-events-auto">
-          {movie.title} {currentEpisode ? `- Tập ${currentEpisode.episode_number}` : ""}
-        </h1>
+    <div className="fixed inset-0 overflow-hidden bg-black text-white">
+      <div className="absolute inset-0 z-0">
+        {currentEpisode ? (
+          <VideoPlayer
+            ref={videoRef}
+            src={currentEpisode.video_url}
+            poster={movie.poster_url}
+            resumeAt={resumeAt}
+            onSnapshot={(snapshot) => saveProgress(snapshot)}
+            onEnded={handleEnded}
+            hasNextEpisode={hasNextEpisode}
+            onNextEpisode={handleNextEpisode}
+            onOpenEpisodeList={() => setEpisodeShelfOpen(true)}
+            playerSettings={playerSettings}
+            onPlayerSettingChange={handlePlayerSettingChange}
+            subtitles={currentSubtitleTracks}
+            autoPlay
+            onReport={() => {
+              setReportOpen(true);
+              setReportStatus({ type: "", message: "" });
+            }}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-black text-white/70">
+            Phim chưa có tập phát.
+          </div>
+        )}
       </div>
 
-      <div className="w-full bg-black flex-shrink-0 -mt-20 z-40 relative shadow-2xl">
-        <div className="max-w-[1600px] mx-auto aspect-video">
-          {currentEpisode ? (
-            <VideoPlayer
-              ref={videoRef}
-              src={currentEpisode.video_url}
-              poster={movie.poster_url}
-              resumeAt={resumeAt}
-              onSnapshot={(snapshot) => saveProgress(snapshot)}
-              onEnded={handleEnded}
-              hasNextEpisode={hasNextEpisode}
-              onNextEpisode={handleNextEpisode}
-              onOpenEpisodeList={handleOpenEpisodeList}
-              playerSettings={playerSettings}
-              onPlayerSettingChange={handlePlayerSettingChange}
-              subtitles={currentSubtitleTracks}
-              onReport={() => {
-                setReportOpen(true);
-                setReportStatus({ type: "", message: "" });
-              }}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-black text-white/70">
-              Phim chưa có tập phát.
-            </div>
-          )}
+      <div className={`pointer-events-none absolute inset-x-0 top-0 z-[70] bg-gradient-to-b from-black/80 via-black/35 to-transparent px-4 pb-24 pt-4 transition-opacity duration-300 md:px-8 md:pt-6 ${cinemaMode ? "opacity-0" : "opacity-100"}`}>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={handleBack}
+            className="pointer-events-auto flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition-colors hover:bg-white/18"
+            title="Quay lại"
+            type="button"
+          >
+            <FaArrowLeft />
+          </button>
+          <div className="min-w-0">
+            <p className="hidden text-xs font-black uppercase tracking-[0.28em] text-[#e50914] md:block">Now Playing</p>
+            <h1 className="truncate text-xl font-black drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)] md:text-4xl">
+              {movie.title}
+            </h1>
+            <p className="mt-1 truncate text-sm font-semibold text-white/60 md:text-base">
+              {formatEpisodeTitle(currentEpisode)}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate(`/movies/${id}`)}
+            className="pointer-events-auto ml-auto hidden rounded-full border border-white/12 bg-black/35 px-4 py-2 text-sm font-black text-white backdrop-blur-md transition-colors hover:bg-white/16 md:inline-flex"
+          >
+            Chi tiết
+          </button>
         </div>
       </div>
 
-      <div className="relative z-40 border-b border-white/10 bg-black/40">
-        <div className="max-w-7xl mx-auto px-4 md:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-2 md:gap-3">
-            <div className="text-sm text-text-secondary truncate">
-              {currentEpisode ? `Tập ${currentEpisode.episode_number}${currentEpisode.title ? ` - ${currentEpisode.title}` : ""}` : "Chưa có tập"}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => handleNextEpisode()}
-                disabled={!hasNextEpisode}
-                title={hasNextEpisode ? "Tập tiếp theo" : "Không còn tập tiếp theo"}
-                aria-label="Tập tiếp theo"
-                className={`flex h-9 w-9 items-center justify-center rounded-lg border transition-all duration-200 ${hasNextEpisode ? "border-white/10 bg-white/5 text-white hover:bg-white/10 hover:border-white/20" : "border-white/5 bg-white/[0.03] text-white/35 cursor-not-allowed"}`}
-              >
-                <NextEpisodeActionIcon />
-              </button>
-              <button
-                type="button"
-                onClick={handleOpenEpisodeList}
-                title="Danh sách tập"
-                aria-label="Danh sách tập"
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white transition-all duration-200 hover:bg-white/10 hover:border-white/20"
-              >
-                <EpisodeListActionIcon />
-              </button>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setCinemaMode((value) => !value)}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${cinemaMode ? "bg-primary/20 border-primary text-primary" : "bg-white/5 border-white/10 text-white hover:bg-white/10"}`}
-            >
-              <FaLightbulb /> {cinemaMode ? "Bật đèn" : "Tắt đèn"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setReportOpen(true);
-                setReportStatus({ type: "", message: "" });
-              }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors"
-            >
-              <FaBug /> Báo lỗi
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className={`flex-1 container mx-auto px-4 md:px-8 py-8 max-w-7xl transition-opacity ${cinemaMode ? "opacity-25" : "opacity-100"}`}>
-        <div className="flex flex-col lg:flex-row gap-8">
-          <div className="w-full lg:w-2/3 flex flex-col gap-6">
-            <div className="flex flex-col sm:flex-row gap-6">
-              <div className="w-full sm:w-1/3 max-w-[200px] flex-shrink-0 mx-auto sm:mx-0">
-                <img src={movie.poster_url} alt={movie.title} className="w-full aspect-[2/3] object-cover rounded-xl shadow-lg border border-white/10" />
-              </div>
-              <div className="flex-1 flex flex-col gap-3">
-                <h2 className="text-3xl font-black text-white">{movie.title}</h2>
-                {movie.original_title && <h3 className="text-lg text-primary font-bold">{movie.original_title}</h3>}
-
-                <div className="flex flex-wrap items-center gap-3 mt-2">
-                  {movie.imdb_rating && (
-                    <div className="flex items-center gap-1 bg-[#f5c518]/20 border border-[#f5c518] rounded px-2 py-0.5 text-[#f5c518] font-bold text-sm">
-                      <span>IMDb</span>
-                      <span className="text-white">{Number(movie.imdb_rating).toFixed(1)}</span>
-                    </div>
-                  )}
-                  {movie.age_limit && <span className="px-2 py-0.5 rounded border border-white/50 text-white bg-white/10 text-sm font-semibold">{movie.age_limit}</span>}
-                  {movie.release_year && <span className="px-2 py-0.5 rounded border border-white/20 text-white/90 text-sm">{movie.release_year}</span>}
-                  {movie.duration && <span className="px-2 py-0.5 rounded border border-white/20 text-white/90 text-sm">{movie.duration}</span>}
-                </div>
-
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {genres.map((genre) => (
-                    <span
-                      key={genre.id}
-                      className="px-3 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-xs font-medium cursor-pointer transition-colors text-white/80 hover:text-white"
-                      onClick={() => navigate(`/movies?genre=${encodeURIComponent(genre.name)}`)}
-                    >
-                      {genre.name}
-                    </span>
-                  ))}
-                </div>
-
-                <p className="text-text-secondary text-sm leading-relaxed mt-4 line-clamp-3">
-                  {movie.description}
-                </p>
-
-                <button
-                  onClick={() => navigate(`/movies/${id}`)}
-                  className="mt-auto self-start px-6 py-2 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg transition-colors border border-white/10 text-sm"
-                  type="button"
-                >
-                  Xem chi tiết phim
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="w-full lg:w-1/3">
-            <div
-              ref={episodesPanelRef}
-              className={`bg-surface/50 border border-white/10 rounded-2xl p-6 h-full flex flex-col transition-all duration-300 ${episodesPanelHighlighted ? "ring-2 ring-white/60 shadow-[0_0_28px_rgba(255,255,255,0.18)]" : ""}`}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold text-white">Danh sách tập</h3>
-                <span className="text-sm font-medium text-text-secondary">{episodes.length} tập</span>
-              </div>
-
-              <div className="flex-1 overflow-y-auto max-h-[400px] lg:max-h-none pr-2 space-y-2 custom-scrollbar">
-                {episodes.length === 0 ? (
-                  <div className="text-text-secondary text-sm py-6 text-center">Chưa có tập phim.</div>
-                ) : episodes.map((episode) => (
-                  <button
-                    key={episode.id}
-                    onClick={() => handleSelectEpisode(episode)}
-                    className={`w-full flex items-center justify-between p-3 rounded-xl transition-all duration-300 border ${selectedEpisode === episode.episode_number ? "bg-primary/20 border-primary text-white shadow-[0_0_10px_rgba(229,9,20,0.2)]" : "bg-black/40 border-white/5 text-text-secondary hover:bg-white/10 hover:text-white"}`}
-                    type="button"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      {selectedEpisode === episode.episode_number ? (
-                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-lg flex-shrink-0">
-                          <PlayArrowIcon fontSize="small" className="text-white" />
-                        </div>
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-xs font-bold border border-white/10 flex-shrink-0">
-                          {episode.episode_number}
-                        </div>
-                      )}
-                      <span className="font-bold truncate">Tập {episode.episode_number}{episode.title ? ` - ${episode.title}` : ""}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <EpisodeShelf
+        open={episodeShelfOpen}
+        movie={movie}
+        episodes={episodes}
+        selectedEpisode={selectedEpisode}
+        onClose={() => setEpisodeShelfOpen(false)}
+        onSelectEpisode={handleSelectEpisode}
+      />
 
       {reportOpen && (
-        <div className="fixed inset-0 z-[10000] bg-black/75 backdrop-blur-sm flex items-center justify-center px-4">
-          <form onSubmit={handleReportSubmit} className="w-full max-w-lg rounded-2xl bg-[#181a20] border border-white/10 shadow-2xl p-6">
-            <div className="flex items-center justify-between gap-4 mb-5">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/78 px-4 backdrop-blur-sm">
+          <form onSubmit={handleReportSubmit} className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#141414] p-6 shadow-2xl">
+            <div className="mb-5 flex items-center justify-between gap-4">
               <div>
-                <h3 className="text-xl font-black">Báo lỗi video</h3>
-                <p className="text-sm text-text-secondary mt-1">{movie.title}{currentEpisode ? ` - Tập ${currentEpisode.episode_number}` : ""}</p>
+                <p className="text-xs font-black uppercase tracking-[0.24em] text-[#e50914]">Report</p>
+                <h3 className="mt-1 text-xl font-black">Báo lỗi video</h3>
+                <p className="mt-1 text-sm text-white/45">
+                  {movie.title}{currentEpisode ? ` - Tập ${currentEpisode.episode_number}` : ""}
+                </p>
               </div>
-              <button type="button" onClick={() => setReportOpen(false)} className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center">
+              <button type="button" onClick={() => setReportOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 hover:bg-white/20">
                 <FaTimes />
               </button>
             </div>
 
-            <label className="block text-sm font-semibold mb-2" htmlFor="report-reason">Lý do</label>
+            <label className="mb-2 block text-sm font-semibold" htmlFor="report-reason">Lý do</label>
             <select
               id="report-reason"
               value={reportReason}
               onChange={(event) => setReportReason(event.target.value)}
-              className="w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-white outline-none focus:border-primary mb-4"
+              className="mb-4 w-full rounded-lg border border-white/10 bg-black/45 px-3 py-2 text-white outline-none focus:border-[#e50914]"
             >
               {REPORT_REASONS.map((reason) => (
                 <option key={reason} value={reason}>{reason}</option>
               ))}
             </select>
 
-            <label className="block text-sm font-semibold mb-2" htmlFor="report-description">Mô tả thêm</label>
+            <label className="mb-2 block text-sm font-semibold" htmlFor="report-description">Mô tả thêm</label>
             <textarea
               id="report-description"
               value={reportDescription}
               onChange={(event) => setReportDescription(event.target.value)}
               rows={4}
               maxLength={1000}
-              className="w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-white outline-none focus:border-primary resize-none"
+              className="w-full resize-none rounded-lg border border-white/10 bg-black/45 px-3 py-2 text-white outline-none focus:border-[#e50914]"
               placeholder="Ví dụ: video bị đứng ở phút 05:20"
             />
 
             {reportStatus.message && (
-              <div className={`mt-4 rounded-lg px-3 py-2 text-sm ${reportStatus.type === "success" ? "bg-emerald-500/15 text-emerald-200 border border-emerald-500/30" : "bg-red-500/15 text-red-200 border border-red-500/30"}`}>
+              <div className={`mt-4 rounded-lg border px-3 py-2 text-sm ${reportStatus.type === "success" ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-200" : "border-red-500/30 bg-red-500/15 text-red-200"}`}>
                 {reportStatus.message}
               </div>
             )}
 
-            <div className="flex justify-end gap-3 mt-5">
-              <button type="button" onClick={() => setReportOpen(false)} className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20">
+            <div className="mt-5 flex justify-end gap-3">
+              <button type="button" onClick={() => setReportOpen(false)} className="rounded-lg bg-white/10 px-4 py-2 hover:bg-white/20">
                 Hủy
               </button>
-              <button type="submit" className="px-5 py-2 rounded-lg bg-primary hover:bg-primary/90 font-bold">
+              <button type="submit" className="rounded-lg bg-[#e50914] px-5 py-2 font-bold hover:bg-[#f6121d]">
                 Gửi báo lỗi
               </button>
             </div>

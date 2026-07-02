@@ -7,7 +7,6 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
 import {
   FaBug,
   FaCompress,
@@ -27,7 +26,7 @@ import {
   MdSubtitles,
 } from "react-icons/md";
 
-const ACCENT = "#2dd48f";
+const ACCENT = "#e50914";
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const DEFAULT_PLAYER_SETTINGS = {
   autoplayNext: true,
@@ -36,10 +35,10 @@ const DEFAULT_PLAYER_SETTINGS = {
   subtitleTrack: "auto",
 };
 const SUBTITLE_STYLES = [
-  { id: "default", label: "Mặc định", detail: "Trắng rõ" },
-  { id: "large", label: "Chữ lớn", detail: "Dễ đọc hơn" },
-  { id: "yellow", label: "Vàng", detail: "Nổi trên nền sáng" },
-  { id: "boxed", label: "Nền đen", detail: "Tương phản cao" },
+  { id: "default", label: "Máº·c Ä‘á»‹nh", detail: "Tráº¯ng rÃµ" },
+  { id: "large", label: "Chá»¯ lá»›n", detail: "Dá»… Ä‘á»c hÆ¡n" },
+  { id: "yellow", label: "VÃ ng", detail: "Ná»•i trÃªn ná»n sÃ¡ng" },
+  { id: "boxed", label: "Ná»n Ä‘en", detail: "TÆ°Æ¡ng pháº£n cao" },
 ];
 
 function formatTime(time) {
@@ -100,6 +99,21 @@ function getPlayableSource(src) {
   return src;
 }
 
+function getAutoplayIframeSource(src, shouldAutoPlay) {
+  const value = String(src || "").trim();
+  if (!value || !shouldAutoPlay) return value;
+
+  try {
+    const parsed = new URL(value);
+    if (!parsed.searchParams.has("autoplay")) parsed.searchParams.set("autoplay", "1");
+    if (!parsed.searchParams.has("autoPlay")) parsed.searchParams.set("autoPlay", "1");
+    return parsed.toString();
+  } catch {
+    const separator = value.includes("?") ? "&" : "?";
+    return `${value}${separator}autoplay=1`;
+  }
+}
+
 function normalizeSubtitleTracks(subtitles) {
   if (!Array.isArray(subtitles)) return [];
 
@@ -111,7 +125,7 @@ function normalizeSubtitleTracks(subtitles) {
       return {
         id: String(subtitle?.id || subtitle?.srclang || subtitle?.language || `subtitle-${index + 1}`),
         src,
-        label: subtitle?.label || subtitle?.name || (subtitle?.srclang === "en" ? "English" : "Tiếng Việt"),
+        label: subtitle?.label || subtitle?.name || (subtitle?.srclang === "en" ? "English" : "Tiáº¿ng Viá»‡t"),
         srclang: subtitle?.srclang || subtitle?.language || "vi",
       };
     })
@@ -120,6 +134,23 @@ function normalizeSubtitleTracks(subtitles) {
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+function getFullscreenElement() {
+  if (typeof document === "undefined") return null;
+  return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement || null;
+}
+
+function requestFullscreen(element) {
+  if (!element) return null;
+  const request = element.requestFullscreen || element.webkitRequestFullscreen || element.msRequestFullscreen;
+  return request ? request.call(element) : null;
+}
+
+function exitFullscreen() {
+  if (typeof document === "undefined") return null;
+  const exit = document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen;
+  return exit ? exit.call(document) : null;
 }
 
 function NextEpisodeIcon({ size = 34 }) {
@@ -167,7 +198,7 @@ function ControlButton({
       disabled={disabled}
       data-player-action={action || undefined}
       onClick={disabled ? undefined : onClick}
-      className={`${widthClass} group/player-control relative flex h-14 shrink-0 items-center justify-center gap-2 overflow-visible px-1 text-white/90 drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)] outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-[#2dd48f]/70 ${active ? "text-[#2dd48f]" : "hover:text-white"} ${disabled ? "cursor-not-allowed opacity-40" : "cursor-pointer"}`}
+      className={`${widthClass} group/player-control relative flex h-14 shrink-0 items-center justify-center gap-2 overflow-visible px-1 text-white/90 drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)] outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-[#e50914]/70 ${active ? "text-[#e50914]" : "hover:text-white"} ${disabled ? "cursor-not-allowed opacity-40" : "cursor-pointer"}`}
     >
       <span className="relative flex h-11 w-11 shrink-0 items-center justify-center">
         <span className="flex items-center justify-center transition-transform duration-150 group-hover/player-control:scale-105 group-active/player-control:scale-95">
@@ -214,7 +245,7 @@ function ProgressBar({ currentTime, duration, onSeek, disabled }) {
       <div
         ref={trackRef}
         role="slider"
-        aria-label="Tiến trình phát"
+        aria-label="Tiáº¿n trÃ¬nh phÃ¡t"
         aria-valuemin={0}
         aria-valuemax={Math.floor(duration || 0)}
         aria-valuenow={Math.floor(currentTime || 0)}
@@ -227,12 +258,12 @@ function ProgressBar({ currentTime, duration, onSeek, disabled }) {
       >
         <div className="absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 origin-center rounded-full bg-white/35 transition-transform duration-150 group-hover/progress:scale-y-125">
           <div
-            className="absolute bottom-0 left-0 top-0 rounded-full bg-[#2dd48f]"
+            className="absolute bottom-0 left-0 top-0 rounded-full bg-[#e50914]"
             style={{ width: `${percent}%` }}
           />
         </div>
         <div
-          className="absolute top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#2dd48f] shadow-[0_0_18px_rgba(45,212,143,0.65)] transition-shadow duration-150 group-hover/progress:shadow-[0_0_24px_rgba(45,212,143,0.9)]"
+          className="absolute top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#e50914] shadow-[0_0_18px_rgba(229,9,20,0.65)] transition-shadow duration-150 group-hover/progress:shadow-[0_0_24px_rgba(229,9,20,0.9)]"
           style={{ left: `${percent}%` }}
         />
       </div>
@@ -263,7 +294,7 @@ function MenuOption({ label, detail, active, icon, disabled, onClick }) {
       type="button"
       disabled={disabled}
       onClick={disabled ? undefined : onClick}
-      className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left text-sm transition-colors duration-150 ${disabled ? "cursor-not-allowed text-white/40" : "hover:bg-white/10"} ${active ? "text-[#2dd48f]" : "text-white/85"}`}
+      className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left text-sm transition-colors duration-150 ${disabled ? "cursor-not-allowed text-white/40" : "hover:bg-white/10"} ${active ? "text-[#e50914]" : "text-white/85"}`}
     >
       <span className="min-w-0">
         <span className="block truncate font-bold">{label}</span>
@@ -287,7 +318,7 @@ function ToggleRow({ label, detail, checked, onChange }) {
         <span className="block truncate text-sm font-bold text-white/90">{label}</span>
         {detail && <span className="mt-0.5 block text-xs text-white/45">{detail}</span>}
       </span>
-      <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-150 ${checked ? "bg-[#2dd48f]" : "bg-white/20"}`}>
+      <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-150 ${checked ? "bg-[#e50914]" : "bg-white/20"}`}>
         <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-transform duration-150 ${checked ? "translate-x-6" : "translate-x-1"}`} />
       </span>
     </button>
@@ -296,7 +327,7 @@ function ToggleRow({ label, detail, checked, onChange }) {
 
 function SpeedMenu({ open, playbackRate, onSelect }) {
   return (
-    <PlayerMenu open={open} title="Tốc độ phát" menuId="speed">
+    <PlayerMenu open={open} title="Tá»‘c Ä‘á»™ phÃ¡t" menuId="speed">
       {SPEEDS.map((speed) => (
         <MenuOption
           key={speed}
@@ -355,10 +386,10 @@ function AudioSubtitleMenu({
       {hasSubtitleTracks && (
         <>
           <div className="px-3 pb-1 pt-2 text-xs font-black uppercase tracking-[0.18em] text-white/35">
-            Phụ đề
+            Phá»¥ Ä‘á»
           </div>
           <MenuOption
-            label="Tắt phụ đề"
+            label="Táº¯t phá»¥ Ä‘á»"
             active={selectedSubtitleId === "off"}
             onClick={() => onSelectSubtitleTrack("off")}
           />
@@ -376,7 +407,7 @@ function AudioSubtitleMenu({
       )}
 
       <div className="px-3 pb-1 pt-2 text-xs font-black uppercase tracking-[0.18em] text-white/35">
-        Kiểu hiển thị phụ đề
+        Kiá»ƒu hiá»ƒn thá»‹ phá»¥ Ä‘á»
       </div>
       {SUBTITLE_STYLES.map((style) => (
         <MenuOption
@@ -390,14 +421,14 @@ function AudioSubtitleMenu({
 
       <div className="my-2 border-t border-white/10" />
       <ToggleRow
-        label="Tự phát tập tiếp"
-        detail="Khi tập hiện tại kết thúc"
+        label="Tá»± phÃ¡t táº­p tiáº¿p"
+        detail="Khi táº­p hiá»‡n táº¡i káº¿t thÃºc"
         checked={Boolean(playerSettings.autoplayNext)}
         onChange={(value) => onPlayerSettingChange?.("autoplayNext", value)}
       />
       <ToggleRow
-        label="Mặc định tắt đèn"
-        detail="Tự bật cinema mode khi vào xem"
+        label="Máº·c Ä‘á»‹nh táº¯t Ä‘Ã¨n"
+        detail="Tá»± báº­t cinema mode khi vÃ o xem"
         checked={Boolean(playerSettings.cinemaDefault)}
         onChange={(value) => onPlayerSettingChange?.("cinemaDefault", value)}
       />
@@ -421,8 +452,8 @@ function VolumeControl({ volume, muted, onToggleMute, onVolumeChange }) {
     >
       <ControlButton
         icon={muted || volume === 0 ? <FaVolumeMute size={30} /> : <FaVolumeUp size={30} />}
-        ariaLabel={muted || volume === 0 ? "Bật âm" : "Tắt âm"}
-        title={muted || volume === 0 ? "Bật âm" : "Tắt âm"}
+        ariaLabel={muted || volume === 0 ? "Báº­t Ã¢m" : "Táº¯t Ã¢m"}
+        title={muted || volume === 0 ? "Báº­t Ã¢m" : "Táº¯t Ã¢m"}
         action="mute"
         onClick={onToggleMute}
       />
@@ -434,8 +465,8 @@ function VolumeControl({ volume, muted, onToggleMute, onVolumeChange }) {
           step="0.01"
           value={visibleVolume}
           onChange={(event) => onVolumeChange(Number(event.target.value))}
-          aria-label="Âm lượng"
-          className="h-2 w-full cursor-pointer accent-[#2dd48f]"
+          aria-label="Ã‚m lÆ°á»£ng"
+          className="h-2 w-full cursor-pointer accent-[#e50914]"
           style={{ accentColor: ACCENT }}
         />
       </div>
@@ -457,17 +488,20 @@ const VideoPlayer = forwardRef(({
   onPlayerSettingChange,
   onReport,
   subtitles = [],
+  autoPlay = true,
 }, ref) => {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
   const controlsTimeout = useRef(null);
   const hlsRef = useRef(null);
   const pendingPlaybackRestoreRef = useRef(null);
+  const autoPlayAttemptedRef = useRef(false);
 
   const iframeSource = isIframeSource(src);
   const missingSource = isMissingSource(src);
   const hlsSource = getHlsSource(src);
   const playableSource = getPlayableSource(src);
+  const iframePlayableSource = getAutoplayIframeSource(playableSource, autoPlay);
   const mergedSettings = { ...DEFAULT_PLAYER_SETTINGS, ...playerSettings };
   const subtitleTracks = useMemo(() => normalizeSubtitleTracks(subtitles), [subtitles]);
   const subtitleTrackKey = useMemo(
@@ -532,13 +566,34 @@ const VideoPlayer = forwardRef(({
       try {
         await video.play();
       } catch {
-        setError("Không thể phát video này.");
+        setError("KhÃ´ng thá»ƒ phÃ¡t video nÃ y.");
       }
     } else {
       video.pause();
       emitSnapshot();
     }
   }, [emitSnapshot, error, iframeSource, missingSource]);
+
+  const attemptAutoPlay = useCallback(async () => {
+    if (!autoPlay || iframeSource || missingSource || error) return false;
+    const video = videoRef.current;
+    if (!video || !video.paused || autoPlayAttemptedRef.current) return false;
+
+    autoPlayAttemptedRef.current = true;
+    try {
+      await video.play();
+      return true;
+    } catch {
+      try {
+        video.muted = true;
+        setMuted(true);
+        await video.play();
+        return true;
+      } catch {
+        return false;
+      }
+    }
+  }, [autoPlay, error, iframeSource, missingSource]);
 
   const handleSeek = useCallback((nextTime) => {
     if (iframeSource) return;
@@ -583,19 +638,6 @@ const VideoPlayer = forwardRef(({
     setMuted(video.muted);
   }, [iframeSource, setVideoVolume, volume]);
 
-  const capturePlaybackState = useCallback(() => {
-    const video = videoRef.current;
-    if (!video || iframeSource) return null;
-
-    return {
-      currentTime: Number.isFinite(video.currentTime) ? video.currentTime : currentTime,
-      playbackRate: Number.isFinite(video.playbackRate) ? video.playbackRate : playbackRate,
-      volume: Number.isFinite(video.volume) ? video.volume : volume,
-      muted: video.muted,
-      wasPlaying: !video.paused,
-    };
-  }, [currentTime, iframeSource, playbackRate, volume]);
-
   const restorePendingPlayback = useCallback(() => {
     const video = videoRef.current;
     const pending = pendingPlaybackRestoreRef.current;
@@ -621,17 +663,26 @@ const VideoPlayer = forwardRef(({
     return true;
   }, [iframeSource]);
 
-  const handleFullscreen = useCallback(() => {
-    const playbackState = capturePlaybackState();
-    if (playbackState) pendingPlaybackRestoreRef.current = playbackState;
-
-    if (document.fullscreenElement) {
-      document.exitFullscreen?.().catch(() => {});
-    }
-    setFullscreen((value) => !value);
+  const handleFullscreen = useCallback(async () => {
+    const container = containerRef.current;
     setShowControls(true);
     setMenu(null);
-  }, [capturePlaybackState]);
+
+    try {
+      if (getFullscreenElement()) {
+        const result = exitFullscreen();
+        if (result?.catch) await result;
+        setFullscreen(false);
+        return;
+      }
+
+      const result = requestFullscreen(container);
+      if (result?.catch) await result;
+      setFullscreen(Boolean(getFullscreenElement()) || !result);
+    } catch {
+      setFullscreen((value) => !value);
+    }
+  }, []);
 
   const handleNextEpisode = useCallback(() => {
     if (!hasNextEpisode) return;
@@ -693,6 +744,7 @@ const VideoPlayer = forwardRef(({
     setMenu(null);
     setShowControls(true);
     pendingPlaybackRestoreRef.current = null;
+    autoPlayAttemptedRef.current = false;
   }, [missingSource, src]);
 
   useEffect(() => {
@@ -770,7 +822,7 @@ const VideoPlayer = forwardRef(({
             }
 
             setBuffering(false);
-            setError("Không thể phát video này.");
+            setError("KhÃ´ng thá»ƒ phÃ¡t video nÃ y.");
           });
           return;
         }
@@ -784,13 +836,13 @@ const VideoPlayer = forwardRef(({
 
         if (!disposed) {
           setBuffering(false);
-          setError("Trình duyệt không hỗ trợ nguồn phát này.");
+          setError("TrÃ¬nh duyá»‡t khÃ´ng há»— trá»£ nguá»“n phÃ¡t nÃ y.");
         }
       })
       .catch(() => {
         if (!disposed) {
           setBuffering(false);
-          setError("Không thể tải trình phát HLS.");
+          setError("KhÃ´ng thá»ƒ táº£i trÃ¬nh phÃ¡t HLS.");
         }
       });
 
@@ -803,16 +855,22 @@ const VideoPlayer = forwardRef(({
         video.load();
       }
     };
-  }, [fullscreen, hlsSource, iframeSource, missingSource]);
+  }, [hlsSource, iframeSource, missingSource]);
 
   useEffect(() => {
     function handleFullscreenChange() {
-      if (!document.fullscreenElement) setFullscreen(false);
+      setFullscreen(Boolean(getFullscreenElement()));
       setShowControls(true);
     }
 
     document.addEventListener("fullscreenchange", handleFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    document.addEventListener("MSFullscreenChange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
+      document.removeEventListener("MSFullscreenChange", handleFullscreenChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -823,19 +881,6 @@ const VideoPlayer = forwardRef(({
     return () => {
       document.body.style.overflow = previousBodyOverflow;
     };
-  }, [fullscreen]);
-
-  useEffect(() => {
-    function handleEscape(event) {
-      if (event.key !== "Escape" || !fullscreen) return;
-      event.preventDefault();
-      setFullscreen(false);
-      setShowControls(true);
-      setMenu(null);
-    }
-
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
   }, [fullscreen]);
 
   useEffect(() => {
@@ -886,14 +931,13 @@ const VideoPlayer = forwardRef(({
       setCurrentTime(resumeAt);
     }
     syncSubtitleTracks();
+    attemptAutoPlay();
   };
 
   const subtitleClass = `player-subtitle-${mergedSettings.subtitleStyle || "default"}`;
   const controlsVisible = showControls || Boolean(menu);
   const controlsVisibleClass = controlsVisible ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none";
-  const mediaFrameClass = fullscreen
-    ? "absolute left-0 top-0 h-[calc(100%-160px)] w-full transition-[height] duration-200"
-    : "absolute left-0 top-0 h-full w-full transition-[height] duration-200";
+  const mediaFrameClass = "absolute left-0 top-0 h-full w-full";
   const htmlControlsDisabled = iframeSource || missingSource || Boolean(error);
 
   const playerContent = (
@@ -909,14 +953,14 @@ const VideoPlayer = forwardRef(({
     >
       {missingSource ? (
         <div data-player-media="true" className={`${mediaFrameClass} z-20 flex flex-col items-center justify-center bg-gradient-to-b from-black to-[#101010] px-6 text-center`}>
-          <div className="mb-3 text-2xl font-black text-[#2dd48f] md:text-3xl">Phim chưa có nguồn phát</div>
+          <div className="mb-3 text-2xl font-black text-[#e50914] md:text-3xl">Phim chưa có nguồn phát</div>
           <p className="max-w-xl text-sm text-white/65 md:text-base">Tập này chưa có link phim hợp lệ hoặc đang dùng link mẫu cũ.</p>
         </div>
       ) : iframeSource ? (
         <iframe
           data-player-media="true"
           className={`${mediaFrameClass} border-0 bg-black`}
-          src={playableSource}
+          src={iframePlayableSource}
           title="Movie player"
           allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
           allowFullScreen
@@ -930,6 +974,7 @@ const VideoPlayer = forwardRef(({
           className={`${mediaFrameClass} cursor-pointer object-contain ${subtitleClass}`}
           poster={poster}
           src={hlsSource ? undefined : playableSource}
+          autoPlay={autoPlay}
           playsInline
           onClick={handlePlayPause}
           onLoadedMetadata={handleLoadedMetadata}
@@ -937,6 +982,7 @@ const VideoPlayer = forwardRef(({
             setBuffering(false);
             restorePendingPlayback();
             syncSubtitleTracks();
+            attemptAutoPlay();
           }}
           onWaiting={() => setBuffering(true)}
           onPlaying={() => {
@@ -956,7 +1002,7 @@ const VideoPlayer = forwardRef(({
           }}
           onError={() => {
             setBuffering(false);
-            setError("Không thể phát video này.");
+            setError("KhÃ´ng thá»ƒ phÃ¡t video nÃ y.");
           }}
         >
           {subtitleTracks.map((subtitle) => (
@@ -1003,21 +1049,21 @@ const VideoPlayer = forwardRef(({
 
       {buffering && !missingSource && !error && (
         <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/25">
-          <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/25 border-t-[#2dd48f]" />
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/25 border-t-[#e50914]" />
         </div>
       )}
 
       {error && (
         <div data-player-error="true" className={`${mediaFrameClass} z-40 flex flex-col items-center justify-center bg-black/90 px-6 text-center`}>
-          <div className="mb-3 text-2xl font-black text-[#2dd48f]">{error}</div>
-          <p className="max-w-md text-sm text-white/65">Hãy thử chọn tập khác hoặc gửi báo lỗi để admin kiểm tra.</p>
+          <div className="mb-3 text-2xl font-black text-[#e50914]">{error}</div>
+          <p className="max-w-md text-sm text-white/65">HÃ£y thá»­ chá»n táº­p khÃ¡c hoáº·c gá»­i bÃ¡o lá»—i Ä‘á»ƒ admin kiá»ƒm tra.</p>
         </div>
       )}
 
       {!iframeSource && !missingSource && !error && !playing && (
         <button
           type="button"
-          aria-label="Phát"
+          aria-label="PhÃ¡t"
           data-player-action="center-play"
           onClick={handlePlayPause}
           className="absolute left-1/2 top-1/2 z-40 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white/20 text-white shadow-2xl backdrop-blur-md transition-colors duration-150 hover:bg-white/30"
@@ -1041,30 +1087,30 @@ const VideoPlayer = forwardRef(({
             <div className="flex h-16 items-center gap-2 overflow-hidden md:gap-3">
               <ControlButton
                 icon={<FaPlay size={31} />}
-                ariaLabel="Phát"
+                ariaLabel="PhÃ¡t"
                 action="play"
-                title="Nguồn nhúng tự quản lý nút phát"
+                title="Nguá»“n nhÃºng tá»± quáº£n lÃ½ nÃºt phÃ¡t"
                 disabled
               />
               <ControlButton
                 icon={<MdReplay10 size={36} />}
-                ariaLabel="Tua lùi 10 giây"
+                ariaLabel="Tua lÃ¹i 10 giÃ¢y"
                 action="rewind"
-                title="Nguồn nhúng không hỗ trợ tua từ bên ngoài"
+                title="Nguá»“n nhÃºng khÃ´ng há»— trá»£ tua tá»« bÃªn ngoÃ i"
                 disabled
               />
               <ControlButton
                 icon={<MdForward10 size={36} />}
-                ariaLabel="Tua tới 10 giây"
+                ariaLabel="Tua tá»›i 10 giÃ¢y"
                 action="forward"
-                title="Nguồn nhúng không hỗ trợ tua từ bên ngoài"
+                title="Nguá»“n nhÃºng khÃ´ng há»— trá»£ tua tá»« bÃªn ngoÃ i"
                 disabled
               />
               <ControlButton
                 icon={<FaVolumeUp size={30} />}
-                ariaLabel="Âm lượng"
+                ariaLabel="Ã‚m lÆ°á»£ng"
                 action="mute"
-                title="Nguồn nhúng tự quản lý âm lượng"
+                title="Nguá»“n nhÃºng tá»± quáº£n lÃ½ Ã¢m lÆ°á»£ng"
                 disabled
               />
 
@@ -1072,7 +1118,7 @@ const VideoPlayer = forwardRef(({
 
               <ControlButton
                 icon={<FaBug size={25} />}
-                label="Báo lỗi"
+                label="BÃ¡o lá»—i"
                 width="medium"
                 action="report"
                 disabled={!onReport}
@@ -1080,15 +1126,15 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={<MdSpeed size={30} />}
-                label="Tốc độ phát"
+                label="Tá»‘c Ä‘á»™ phÃ¡t"
                 width="medium"
                 action="speed"
-                title="Nguồn nhúng tự quản lý tốc độ"
+                title="Nguá»“n nhÃºng tá»± quáº£n lÃ½ tá»‘c Ä‘á»™"
                 disabled
               />
               <ControlButton
                 icon={<MdHighQuality size={31} />}
-                label="Chất lượng"
+                label="Cháº¥t lÆ°á»£ng"
                 width="medium"
                 action="quality"
                 active={menu === "quality"}
@@ -1096,7 +1142,7 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={<NextEpisodeIcon size={36} />}
-                label="Tập tiếp theo"
+                label="Táº­p tiáº¿p theo"
                 width="wide"
                 action="next"
                 disabled={!hasNextEpisode}
@@ -1104,7 +1150,7 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={<EpisodeStackIcon size={38} />}
-                label="Danh sách tập"
+                label="Danh sÃ¡ch táº­p"
                 width="wide"
                 action="episodes"
                 disabled={!onOpenEpisodeList}
@@ -1112,15 +1158,15 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={<MdSubtitles size={33} />}
-                label="Âm thanh & Phụ đề"
+                label="Ã‚m thanh & Phá»¥ Ä‘á»"
                 width="extraWide"
                 action="audio"
-                title="Nguồn nhúng tự quản lý âm thanh và phụ đề"
+                title="Nguá»“n nhÃºng tá»± quáº£n lÃ½ Ã¢m thanh vÃ  phá»¥ Ä‘á»"
                 disabled
               />
               <ControlButton
                 icon={fullscreen ? <FaCompress size={27} /> : <FaExpand size={27} />}
-                ariaLabel={fullscreen ? "Thoát toàn màn hình" : "Toàn màn hình"}
+                ariaLabel={fullscreen ? "ThoÃ¡t toÃ n mÃ n hÃ¬nh" : "ToÃ n mÃ n hÃ¬nh"}
                 action="fullscreen"
                 onClick={handleFullscreen}
               />
@@ -1138,19 +1184,19 @@ const VideoPlayer = forwardRef(({
             <div className="flex h-16 items-center gap-2 overflow-hidden md:gap-3">
               <ControlButton
                 icon={playing ? <FaPause size={31} /> : <FaPlay size={31} />}
-                ariaLabel={playing ? "Tạm dừng" : "Phát"}
+                ariaLabel={playing ? "Táº¡m dá»«ng" : "PhÃ¡t"}
                 action="play"
                 onClick={handlePlayPause}
               />
               <ControlButton
                 icon={<MdReplay10 size={36} />}
-                ariaLabel="Tua lùi 10 giây"
+                ariaLabel="Tua lÃ¹i 10 giÃ¢y"
                 action="rewind"
                 onClick={() => handleSkip(-10)}
               />
               <ControlButton
                 icon={<MdForward10 size={36} />}
-                ariaLabel="Tua tới 10 giây"
+                ariaLabel="Tua tá»›i 10 giÃ¢y"
                 action="forward"
                 onClick={() => handleSkip(10)}
               />
@@ -1165,7 +1211,7 @@ const VideoPlayer = forwardRef(({
 
               <ControlButton
                 icon={<FaBug size={25} />}
-                label="Báo lỗi"
+                label="BÃ¡o lá»—i"
                 width="medium"
                 action="report"
                 disabled={!onReport}
@@ -1173,7 +1219,7 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={<MdSpeed size={30} />}
-                label="Tốc độ phát"
+                label="Tá»‘c Ä‘á»™ phÃ¡t"
                 width="medium"
                 action="speed"
                 active={menu === "speed"}
@@ -1181,7 +1227,7 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={<MdHighQuality size={31} />}
-                label="Chất lượng"
+                label="Cháº¥t lÆ°á»£ng"
                 width="medium"
                 action="quality"
                 active={menu === "quality"}
@@ -1189,7 +1235,7 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={<NextEpisodeIcon size={36} />}
-                label="Tập tiếp theo"
+                label="Táº­p tiáº¿p theo"
                 width="wide"
                 action="next"
                 disabled={!hasNextEpisode}
@@ -1197,7 +1243,7 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={<EpisodeStackIcon size={38} />}
-                label="Danh sách tập"
+                label="Danh sÃ¡ch táº­p"
                 width="wide"
                 action="episodes"
                 disabled={!onOpenEpisodeList}
@@ -1205,7 +1251,7 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={<MdSubtitles size={33} />}
-                label="Âm thanh & Phụ đề"
+                label="Ã‚m thanh & Phá»¥ Ä‘á»"
                 width="extraWide"
                 action="audio"
                 active={menu === "audio" || selectedSubtitleId !== "off"}
@@ -1213,7 +1259,7 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={fullscreen ? <FaCompress size={27} /> : <FaExpand size={27} />}
-                ariaLabel={fullscreen ? "Thoát toàn màn hình" : "Toàn màn hình"}
+                ariaLabel={fullscreen ? "ThoÃ¡t toÃ n mÃ n hÃ¬nh" : "ToÃ n mÃ n hÃ¬nh"}
                 action="fullscreen"
                 onClick={handleFullscreen}
               />
@@ -1240,9 +1286,7 @@ const VideoPlayer = forwardRef(({
     </div>
   );
 
-  return fullscreen && typeof document !== "undefined"
-    ? createPortal(playerContent, document.body)
-    : playerContent;
+  return playerContent;
 });
 
 VideoPlayer.displayName = "VideoPlayer";

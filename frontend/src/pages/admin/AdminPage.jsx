@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Box, Container, Typography, Grid, Card, CardMedia, CardContent, CardActions, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Alert, Toolbar, Autocomplete, Tabs, Tab, Switch } from '@mui/material';
+import { Box, Container, Typography, Grid, Card, CardMedia, CardContent, CardActions, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Alert, Toolbar, Autocomplete, Tabs, Tab, Switch, CircularProgress } from '@mui/material';
 import axios from 'axios';
 import MovieTable from '../../components/admin/MovieTable';
 import MovieForm from '../../components/admin/MovieForm';
@@ -35,6 +35,7 @@ export default function Admin() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [tmdbLoadingId, setTmdbLoadingId] = useState(null);
+  const [tmdbBulkLoading, setTmdbBulkLoading] = useState(false);
   const [selectedMenu, setSelectedMenu] = useState('dashboard');
   const [genres, setGenres] = useState([]);
   const [countries, setCountries] = useState([]);
@@ -367,6 +368,19 @@ export default function Admin() {
     }
   };
 
+  const describeTmdbUpdates = (updates = {}) => ([
+    updates.tmdb?.updated ? 'liên kết TMDb' : null,
+    updates.poster?.updated ? 'poster' : null,
+    updates.backdrop?.updated ? 'backdrop' : null,
+    updates.trailer?.updated ? 'trailer' : null,
+    updates.cast?.added ? `${updates.cast.added} diễn viên` : null,
+    updates.directors?.added ? `${updates.directors.added} đạo diễn` : null,
+  ].filter(Boolean));
+
+  const refreshMovieAdminData = async () => {
+    await Promise.all([fetchMovies(), fetchAllMovies(), fetchBanners(), fetchRelations(), fetchCategories()]);
+  };
+
   const handleTmdbEnrich = async (movie) => {
     setError('');
     setNotice('');
@@ -374,24 +388,57 @@ export default function Admin() {
     try {
       const res = await axios.post(`${API}/api/movies/${movie.id}/tmdb-enrich`, {
         overwrite: false,
+        replace_imported_images: true,
         cast_limit: 8,
+        director_limit: 4,
       });
       const updates = res.data?.updates || {};
-      const parts = [
+      const legacyParts = [
         updates.poster?.updated ? 'poster' : null,
         updates.backdrop?.updated ? 'backdrop' : null,
         updates.cast?.added ? `${updates.cast.added} diễn viên` : null,
       ].filter(Boolean);
+      const describedParts = describeTmdbUpdates(updates);
+      const parts = describedParts.length ? describedParts : legacyParts;
       const tmdbTitle = res.data?.tmdb?.title ? ` (${res.data.tmdb.title})` : '';
       setNotice(parts.length
         ? `Đã bổ sung từ TMDb${tmdbTitle}: ${parts.join(', ')}.`
         : `TMDb đã khớp phim${tmdbTitle}, nhưng dữ liệu cần bổ sung đã có sẵn.`
       );
-      await Promise.all([fetchMovies(), fetchBanners(), fetchRelations()]);
+      await refreshMovieAdminData();
     } catch (err) {
       setError(err.response?.data?.message || 'Không thể bổ sung dữ liệu TMDb.');
     } finally {
       setTmdbLoadingId(null);
+    }
+  };
+
+  const handleTmdbBulkEnrich = async () => {
+    setError('');
+    setNotice('');
+    setTmdbBulkLoading(true);
+    try {
+      const res = await axios.post(`${API}/api/movies/tmdb-enrich-missing`, {
+        limit: 10,
+        overwrite: false,
+        replace_imported_images: true,
+        cast_limit: 8,
+        director_limit: 4,
+      });
+      const summary = res.data?.summary || {};
+      const sample = (res.data?.results || [])
+        .filter((item) => item.ok && item.changes?.length)
+        .slice(0, 3)
+        .map((item) => `${item.title}: ${item.changes.join(', ')}`)
+        .join(' | ');
+      setNotice(
+        `Đã quét ${summary.scanned || 0} phim, cập nhật ${summary.changed || 0}, bỏ qua/lỗi ${summary.failed || 0}.${sample ? ` ${sample}` : ''}`
+      );
+      await refreshMovieAdminData();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Không thể bổ sung TMDb hàng loạt.');
+    } finally {
+      setTmdbBulkLoading(false);
     }
   };
 
@@ -545,6 +592,17 @@ export default function Admin() {
             {notice && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setNotice('')}>{notice}</Alert>}
             {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
             <Button variant="contained" onClick={() => handleOpen(null)} sx={{ mb: 2 }}>Thêm phim</Button>
+            <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 2 }}>
+              <Button
+                variant="outlined"
+                onClick={handleTmdbBulkEnrich}
+                disabled={tmdbBulkLoading}
+                sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.2)' }}
+                startIcon={tmdbBulkLoading ? <CircularProgress size={16} color="inherit" /> : null}
+              >
+                {tmdbBulkLoading ? 'Đang bổ sung...' : 'Bổ sung hàng loạt'}
+              </Button>
+            </Box>
             <MovieTable
               movies={movies}
               onEdit={handleOpen}

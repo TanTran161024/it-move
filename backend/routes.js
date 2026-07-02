@@ -9,7 +9,7 @@ const { chatWithMovieAdvisor, getAiStatus } = require('./services/aiService');
 const { ensureChatSession, getAiChatStats, saveChatExchange } = require('./services/chatSessionService');
 const { generateMovieDescription } = require('./services/adminDescriptionService');
 const { translateSubtitle } = require('./services/subtitleTranslatorService');
-const { enrichMovieWithTmdb } = require('./services/tmdbService');
+const { enrichMissingMoviesWithTmdb, enrichMovieWithTmdb } = require('./services/tmdbService');
 const { smartSearchMovies } = require('./services/smartSearchService');
 const {
   deleteEpisodeSubtitle,
@@ -959,12 +959,34 @@ router.put('/movies/:id', requireAdminMiddleware, async (req, res) => {
   }
 });
 
+router.post('/movies/tmdb-enrich-missing', requireAdminMiddleware, async (req, res) => {
+  try {
+    const db = getDb(req);
+    const result = await enrichMissingMoviesWithTmdb(db, {
+      limit: req.body?.limit || 10,
+      overwrite: req.body?.overwrite === true,
+      replaceImportedImages: req.body?.replace_imported_images !== false,
+      castLimit: req.body?.cast_limit || 8,
+      directorLimit: req.body?.director_limit || 4,
+      delayMs: 0,
+    });
+    res.json({
+      message: 'Đã chạy bổ sung dữ liệu TMDb hàng loạt.',
+      ...result,
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
 router.post('/movies/:id/tmdb-enrich', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
     const result = await enrichMovieWithTmdb(db, req.params.id, {
       overwrite: req.body?.overwrite === true,
+      replaceImportedImages: req.body?.replace_imported_images !== false,
       castLimit: req.body?.cast_limit || 8,
+      directorLimit: req.body?.director_limit || 4,
     });
     res.json({
       message: 'Đã kiểm tra và bổ sung dữ liệu từ TMDb.',

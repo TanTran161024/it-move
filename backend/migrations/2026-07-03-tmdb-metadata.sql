@@ -1,0 +1,4 @@
+ALTER TABLE movies
+  ADD COLUMN IF NOT EXISTS tmdb_id INT NULL AFTER trailer_url,
+  ADD COLUMN IF NOT EXISTS tmdb_type VARCHAR(20) NULL AFTER tmdb_id,
+  ADD COLUMN IF NOT EXISTS tmdb_last_synced_at DATETIME NULL AFTER tmdb_type;

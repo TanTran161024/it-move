@@ -88,6 +88,10 @@ export default function MovieTable({
                       <img
                         src={movie.poster_url}
                         alt={movie.title}
+                        onError={(event) => {
+                          if (event.currentTarget.src.includes('/posters/placeholder.svg')) return;
+                          event.currentTarget.src = '/posters/placeholder.svg';
+                        }}
                         style={{
                           width: '100%',
                           height: '100%',
@@ -114,6 +118,7 @@ export default function MovieTable({
                       <Box sx={{ position: 'absolute', right: 10, top: 10, zIndex: 3, display: 'flex', gap: 0.5, flexDirection: 'column', alignItems: 'flex-end' }}>
                         {movie.quality && <span className="admin-badge info" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>{movie.quality}</span>}
                         {movie.release_year && <span className="admin-badge warning" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>{movie.release_year}</span>}
+                        {movie.tmdb_id && <span className="admin-badge success" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>TMDb</span>}
                       </Box>
                       
                       {/* IMDb Badge */}
@@ -167,7 +172,7 @@ export default function MovieTable({
 
                     <CardActions sx={{ justifyContent: 'center', width: '100%', pb: 2, pt: 1, gap: 1 }}>
                       {onTmdbEnrich && (
-                        <Tooltip title="Bổ sung poster/backdrop/diễn viên từ TMDb" arrow>
+                        <Tooltip title="Bổ sung poster/backdrop/trailer/diễn viên/đạo diễn từ TMDb" arrow>
                           <span>
                             <IconButton
                               size="small"
