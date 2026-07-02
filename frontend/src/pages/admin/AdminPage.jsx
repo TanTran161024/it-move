@@ -642,62 +642,50 @@ export default function Admin() {
           </Box>
         )}
         {selectedMenu === 'banners' && (
-          <Box sx={{ width: '100%', maxWidth: '1400px', mx: 'auto', px: { xs: 1, md: 3 }, mt: 4 }}>
-            <Typography variant="h4" gutterBottom sx={{ color: '#fff', fontWeight: 700, mb: 3 }}>Quản lý banner</Typography>
-            <Button variant="contained" onClick={() => handleBannerOpen(null)} sx={{ mb: 2, bgcolor: '#1976d2' }}>Thêm banner</Button>
-            <Box>
+          <Box className="admin-main-section" sx={{ width: '100%', maxWidth: '1400px', mx: 'auto', px: { xs: 1, md: 3 }, mt: 4 }}>
+            <div className="admin-section-header">
+              <div>
+                <h2 className="admin-section-title">Quản lý banner</h2>
+                <p className="admin-section-subtitle">Tùy chỉnh hình ảnh nổi bật trên trang chủ</p>
+              </div>
+              <Button variant="contained" onClick={() => handleBannerOpen(null)} sx={{ bgcolor: 'var(--admin-accent)', '&:hover': { bgcolor: 'var(--admin-accent-hover)' } }}>
+                Thêm banner
+              </Button>
+            </div>
+            
+            <div className="admin-data-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
               {banners.map(banner => (
-                <Box
-                  key={banner.id}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    bgcolor: '#23242a',
-                    color: '#fff',
-                    borderRadius: 3,
-                    mb: 3,
-                    p: 2.5,
-                    boxShadow: 3,
-                    transition: 'transform 0.18s, box-shadow 0.18s',
-                    '&:hover': {
-                      transform: 'translateY(-4px) scale(1.025)',
-                      boxShadow: 8,
-                      background: '#23243a',
-                    },
-                    flexWrap: { xs: 'wrap', sm: 'nowrap' },
-                  }}
-                >
-                  <img
-                    src={banner.bg_url}
-                    alt="bg"
-                    style={{
-                      width: 180,
-                      height: 90,
-                      objectFit: 'cover',
-                      borderRadius: 12,
-                      marginRight: 24,
-                      boxShadow: '0 2px 16px #0007',
-                      border: '2px solid #222',
-                      flexShrink: 0,
-                    }}
-                  />
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="subtitle1" sx={{ color: '#fff', fontWeight: 600, fontSize: 20, mb: 0.5, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{banner.movie_title}</Typography>
-                    <Typography variant="body2" sx={{ color: '#aaa', fontSize: 14, wordBreak: 'break-all', mb: 0.5 }}>{banner.bg_url}</Typography>
-                  </Box>
-                  <Tooltip title="Sửa" arrow>
-                    <IconButton color="primary" sx={{ mx: 0.5, bgcolor: '#222', '&:hover': { bgcolor: '#1976d2', color: '#fff' } }} onClick={() => handleBannerOpen(banner)}>
-                      <EditIcon />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Xóa" arrow>
-                    <IconButton color="error" sx={{ mx: 0.5, bgcolor: '#222', '&:hover': { bgcolor: '#d32f2f', color: '#fff' } }} onClick={() => handleBannerDelete(banner.id)}>
-                      <DeleteIcon />
-                    </IconButton>
-                  </Tooltip>
-                </Box>
+                <div key={banner.id} className="admin-movie-card">
+                  <div style={{ position: 'relative' }}>
+                    <img
+                      src={banner.bg_url}
+                      alt="bg"
+                      style={{ width: '100%', height: 180, objectFit: 'cover' }}
+                    />
+                    <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 8 }}>
+                      <Tooltip title="Sửa" arrow>
+                        <IconButton size="small" sx={{ bgcolor: 'rgba(0,0,0,0.6)', color: '#fff', '&:hover': { bgcolor: 'var(--admin-accent)' }, backdropFilter: 'blur(4px)' }} onClick={() => handleBannerOpen(banner)}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Xóa" arrow>
+                        <IconButton size="small" sx={{ bgcolor: 'rgba(0,0,0,0.6)', color: '#f87171', '&:hover': { bgcolor: 'var(--admin-danger)', color: '#fff' }, backdropFilter: 'blur(4px)' }} onClick={() => handleBannerDelete(banner.id)}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </div>
+                  </div>
+                  <div className="admin-movie-card-body">
+                    <Typography variant="subtitle1" sx={{ color: '#fff', fontWeight: 700, fontSize: '1.05rem', mb: 0.5, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      {banner.movie_title}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'var(--admin-text-muted)', fontSize: '0.85rem', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      {banner.bg_url}
+                    </Typography>
+                  </div>
+                </div>
               ))}
-            </Box>
+            </div>
             <Dialog open={bannerOpen} onClose={handleBannerClose} maxWidth="sm" fullWidth>
               <DialogTitle>{editBanner ? 'Sửa banner' : 'Thêm banner'}</DialogTitle>
               <DialogContent>
@@ -721,88 +709,100 @@ export default function Admin() {
           </Box>
         )}
         {selectedMenu === 'general' && (
-          <Box sx={{ width: '100%', maxWidth: '1400px', mx: 'auto', px: { xs: 1, md: 3 }, mt: 4 }}>
-            <Typography variant="h4" gutterBottom sx={{ color: '#fff', fontWeight: 700, mb: 3 }}>Quản lý chung</Typography>
+          <Box className="admin-main-section" sx={{ width: '100%', maxWidth: '1400px', mx: 'auto', px: { xs: 1, md: 3 }, mt: 4 }}>
+            <div className="admin-section-header">
+              <div>
+                <h2 className="admin-section-title">Quản lý chung</h2>
+                <p className="admin-section-subtitle">Chỉnh sửa danh mục, quốc gia, nhân sự phim</p>
+              </div>
+            </div>
             <Tabs
               value={selectedTab}
               onChange={handleCatTabChange}
-              sx={{ mb: 3, bgcolor: '#23242a', borderRadius: 2 }}
+              sx={{ mb: 4, bgcolor: 'var(--admin-surface)', borderRadius: 3, border: '1px solid var(--admin-border)', minHeight: '56px' }}
               textColor="inherit"
-              TabIndicatorProps={{ style: { background: '#2196f3' } }}
+              TabIndicatorProps={{ style: { background: 'var(--admin-accent)', height: '4px', borderRadius: '4px 4px 0 0' } }}
             >
-              <Tab label="THỂ LOẠI" sx={{ color: '#fff', fontWeight: 600 }} />
-              <Tab label="QUỐC GIA" sx={{ color: '#fff', fontWeight: 600 }} />
-              <Tab label="NHÀ SẢN XUẤT" sx={{ color: '#fff', fontWeight: 600 }} />
-              <Tab label="DIỄN VIÊN" sx={{ color: '#fff', fontWeight: 600 }} />
-              <Tab label="ĐẠO DIỄN" sx={{ color: '#fff', fontWeight: 600 }} />
+              <Tab label="THỂ LOẠI" sx={{ color: '#fff', fontWeight: 700, fontSize: '0.85rem' }} />
+              <Tab label="QUỐC GIA" sx={{ color: '#fff', fontWeight: 700, fontSize: '0.85rem' }} />
+              <Tab label="NHÀ SẢN XUẤT" sx={{ color: '#fff', fontWeight: 700, fontSize: '0.85rem' }} />
+              <Tab label="DIỄN VIÊN" sx={{ color: '#fff', fontWeight: 700, fontSize: '0.85rem' }} />
+              <Tab label="ĐẠO DIỄN" sx={{ color: '#fff', fontWeight: 700, fontSize: '0.85rem' }} />
             </Tabs>
             {/* Form thêm mới */}
-            <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap', alignItems: 'center', bgcolor: '#23242a', p: 2, borderRadius: 3, boxShadow: 2 }}>
-              <TextField {...whiteTextFieldProps} sx={{ ...whiteTextFieldSx, minWidth: 180 }} size="small" label={selectedTab === 0 ? 'Tên thể loại' : selectedTab === 1 ? 'Tên quốc gia' : selectedTab === 2 ? 'Tên nhà sản xuất' : selectedTab === 3 ? 'Tên diễn viên' : 'Tên đạo diễn'} name="name" value={catEditId ? '' : catForm.name} onChange={e => !catEditId && handleCatChange(e)} />
+            <div className="admin-panel" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <TextField {...whiteTextFieldProps} sx={{ ...whiteTextFieldSx, minWidth: 200, flex: 1 }} size="small" label={selectedTab === 0 ? 'Tên thể loại' : selectedTab === 1 ? 'Tên quốc gia' : selectedTab === 2 ? 'Tên nhà sản xuất' : selectedTab === 3 ? 'Tên diễn viên' : 'Tên đạo diễn'} name="name" value={catEditId ? '' : catForm.name} onChange={e => !catEditId && handleCatChange(e)} />
               {selectedTab === 2 && (
-                <TextField {...whiteTextFieldProps} sx={{ ...whiteTextFieldSx, ...selectOverrideSx, minWidth: 120 }} size="small" select name="country_id" value={catEditId ? '' : catForm.country_id} onChange={e => !catEditId && handleCatChange(e)} SelectProps={{ native: true }}>
+                <TextField {...whiteTextFieldProps} sx={{ ...whiteTextFieldSx, ...selectOverrideSx, minWidth: 160 }} size="small" select name="country_id" value={catEditId ? '' : catForm.country_id} onChange={e => !catEditId && handleCatChange(e)} SelectProps={{ native: true }}>
                   <option value="">--Chọn quốc gia--</option>
                   {countriesList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </TextField>
               )}
               {(selectedTab === 3 || selectedTab === 4) && (
                 <>
-                  <TextField {...whiteTextFieldProps} sx={{ ...whiteTextFieldSx, minWidth: 180 }} size="small" label="Ảnh đại diện (URL)" name="profile_pic_url" value={catEditId ? '' : catForm.profile_pic_url} onChange={e => !catEditId && handleCatChange(e)} />
-                  <TextField {...whiteTextFieldProps} sx={{ ...whiteTextFieldSx, minWidth: 180 }} size="small" label="Mô tả" name="bio" value={catEditId ? '' : catForm.bio} onChange={e => !catEditId && handleCatChange(e)} />
+                  <TextField {...whiteTextFieldProps} sx={{ ...whiteTextFieldSx, minWidth: 200, flex: 1 }} size="small" label="Ảnh đại diện (URL)" name="profile_pic_url" value={catEditId ? '' : catForm.profile_pic_url} onChange={e => !catEditId && handleCatChange(e)} />
+                  <TextField {...whiteTextFieldProps} sx={{ ...whiteTextFieldSx, minWidth: 200, flex: 1 }} size="small" label="Mô tả" name="bio" value={catEditId ? '' : catForm.bio} onChange={e => !catEditId && handleCatChange(e)} />
                 </>
               )}
-              <Button variant="contained" onClick={handleCatSubmit} disabled={!!catEditId} sx={{ fontWeight: 600, minWidth: 110 }}>{catEditId ? 'Đang sửa...' : 'Thêm mới'}</Button>
+              <Button variant="contained" onClick={handleCatSubmit} disabled={!!catEditId} sx={{ fontWeight: 700, minWidth: 120, height: '40px', bgcolor: 'var(--admin-accent)', '&:hover': { bgcolor: 'var(--admin-accent-hover)' } }}>{catEditId ? 'Đang sửa...' : 'Thêm mới'}</Button>
               {!catEditId && catError && <Alert severity="error" sx={{ ml: 2 }}>{catError}</Alert>}
-            </Box>
+            </div>
             {/* Danh sách */}
-            <Box>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 2 }}>
               {(selectedTab === 0 ? genresList : selectedTab === 1 ? countriesList : selectedTab === 2 ? producersList : selectedTab === 3 ? actorsList : directorsList).map(item => {
                 const isEditing = catEditId === item.id;
                 return (
                   <Box key={item.id} sx={{
-                    display: 'flex', alignItems: 'center', bgcolor: isEditing ? '#283593' : '#23242a', color: '#fff', borderRadius: 3, mb: 2, p: 2, boxShadow: isEditing ? 6 : 2,
-                    border: isEditing ? '2px solid #FFD600' : '2px solid transparent',
-                    transition: 'all 0.18s',
-                    '&:hover': { boxShadow: 8, background: isEditing ? '#283593' : '#23243a' },
-                    flexWrap: 'wrap',
-                    position: 'relative',
+                    display: 'flex', alignItems: 'center', bgcolor: isEditing ? 'rgba(99, 102, 241, 0.1)' : 'var(--admin-surface)', color: '#fff', borderRadius: '12px', p: 2, boxShadow: isEditing ? '0 0 0 2px var(--admin-accent)' : '0 1px 3px rgba(0,0,0,0.1)',
+                    border: '1px solid', borderColor: isEditing ? 'var(--admin-accent)' : 'var(--admin-border)',
+                    transition: 'all 0.2s ease',
+                    '&:hover': { borderColor: isEditing ? 'var(--admin-accent)' : 'rgba(255,255,255,0.2)', transform: isEditing ? 'none' : 'translateY(-2px)' },
+                    flexWrap: 'wrap', gap: 1.5
                   }}>
                     {/* Inline form sửa */}
                     {isEditing ? (
-                      <>
-                        <TextField {...whiteTextFieldProps} sx={{ ...whiteTextFieldSx, minWidth: 160 }} size="small" label={selectedTab === 0 ? 'Tên thể loại' : selectedTab === 1 ? 'Tên quốc gia' : selectedTab === 2 ? 'Tên nhà sản xuất' : selectedTab === 3 ? 'Tên diễn viên' : 'Tên đạo diễn'} name="name" value={catForm.name} onChange={handleCatChange} />
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, width: '100%' }}>
+                        <TextField {...whiteTextFieldProps} sx={{ ...whiteTextFieldSx, minWidth: 160, flex: 1 }} size="small" label={selectedTab === 0 ? 'Tên thể loại' : selectedTab === 1 ? 'Tên quốc gia' : selectedTab === 2 ? 'Tên nhà sản xuất' : selectedTab === 3 ? 'Tên diễn viên' : 'Tên đạo diễn'} name="name" value={catForm.name} onChange={handleCatChange} />
                         {selectedTab === 2 && (
-                          <TextField {...whiteTextFieldProps} sx={{ ...whiteTextFieldSx, ...selectOverrideSx, minWidth: 120 }} size="small" select name="country_id" value={catForm.country_id} onChange={handleCatChange} SelectProps={{ native: true }}>
+                          <TextField {...whiteTextFieldProps} sx={{ ...whiteTextFieldSx, ...selectOverrideSx, minWidth: 140 }} size="small" select name="country_id" value={catForm.country_id} onChange={handleCatChange} SelectProps={{ native: true }}>
                             <option value="">--Chọn quốc gia--</option>
                             {countriesList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                           </TextField>
                         )}
                         {(selectedTab === 3 || selectedTab === 4) && (
                           <>
-                            <TextField {...whiteTextFieldProps} sx={{ ...whiteTextFieldSx, minWidth: 180 }} size="small" label="Ảnh đại diện (URL)" name="profile_pic_url" value={catForm.profile_pic_url} onChange={handleCatChange} />
-                            <TextField {...whiteTextFieldProps} sx={{ ...whiteTextFieldSx, minWidth: 180 }} size="small" label="Mô tả" name="bio" value={catForm.bio} onChange={handleCatChange} />
+                            <TextField {...whiteTextFieldProps} sx={{ ...whiteTextFieldSx, minWidth: 180, flex: 1 }} size="small" label="Ảnh (URL)" name="profile_pic_url" value={catForm.profile_pic_url} onChange={handleCatChange} />
+                            <TextField {...whiteTextFieldProps} sx={{ ...whiteTextFieldSx, width: '100%' }} size="small" label="Mô tả" name="bio" value={catForm.bio} onChange={handleCatChange} />
                           </>
                         )}
-                        <Button variant="contained" color="success" size="small" onClick={handleCatSubmit} sx={{ mr: 1, minWidth: 40 }}><span role="img" aria-label="save">💾</span></Button>
-                        <Button size="small" color="warning" onClick={handleCatCancel} sx={{ minWidth: 40 }}><span role="img" aria-label="cancel">❌</span></Button>
-                        {catError && <Alert severity="error" sx={{ ml: 2 }}>{catError}</Alert>}
-                      </>
+                        <Box sx={{ display: 'flex', gap: 1, width: '100%', justifyContent: 'flex-end', mt: 1 }}>
+                          <Button variant="contained" size="small" onClick={handleCatSubmit} sx={{ minWidth: 80, bgcolor: 'var(--admin-success)', '&:hover': { bgcolor: '#059669' } }}>Lưu</Button>
+                          <Button variant="outlined" size="small" onClick={handleCatCancel} sx={{ minWidth: 80, color: 'var(--admin-text-muted)', borderColor: 'var(--admin-border)' }}>Hủy</Button>
+                        </Box>
+                        {catError && <Alert severity="error" sx={{ width: '100%' }}>{catError}</Alert>}
+                      </Box>
                     ) : (
                       <>
-                        <Typography sx={{ flex: 1, fontWeight: 500, fontSize: 17 }}>{item.name}</Typography>
-                        {selectedTab === 2 && <Typography sx={{ minWidth: 120, color: '#aaa' }}>{countriesList.find(c => c.id === item.country_id)?.name || ''}</Typography>}
-                        {selectedTab === 3 && <img src={item.profile_pic_url || '/avatar-actor.svg'} alt="pic" onError={(e) => { e.currentTarget.src = '/avatar-actor.svg'; }} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', marginRight: 12, border: '2px solid #FFD600', background: '#222' }} />}
-                        {selectedTab === 4 && <img src={item.profile_pic_url || '/avatar-actor.svg'} alt="pic" onError={(e) => { e.currentTarget.src = '/avatar-actor.svg'; }} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', marginRight: 12, border: '2px solid #FFD600', background: '#222' }} />}
-                        <Tooltip title="Sửa" arrow>
-                          <IconButton color="primary" sx={{ mx: 0.5, bgcolor: '#222', '&:hover': { bgcolor: '#1976d2', color: '#fff' } }} onClick={() => handleCatEdit(item)}>
-                            <EditIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Xóa" arrow>
-                          <IconButton color="error" sx={{ mx: 0.5, bgcolor: '#222', '&:hover': { bgcolor: '#d32f2f', color: '#fff' } }} onClick={() => handleCatDelete(item.id)}>
-                            <DeleteIcon />
-                          </IconButton>
-                        </Tooltip>
+                        {(selectedTab === 3 || selectedTab === 4) && (
+                          <img src={item.profile_pic_url || '/avatar-actor.svg'} alt="pic" onError={(e) => { e.currentTarget.src = '/avatar-actor.svg'; }} style={{ width: 48, height: 48, borderRadius: '12px', objectFit: 'cover', background: 'var(--admin-card)' }} />
+                        )}
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography sx={{ fontWeight: 700, fontSize: '1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</Typography>
+                          {selectedTab === 2 && <Typography sx={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)' }}>{countriesList.find(c => c.id === item.country_id)?.name || ''}</Typography>}
+                          {(selectedTab === 3 || selectedTab === 4) && item.bio && <Typography sx={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.bio}</Typography>}
+                        </Box>
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          <Tooltip title="Sửa" arrow>
+                            <IconButton size="small" sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'var(--admin-text-muted)', '&:hover': { bgcolor: 'var(--admin-accent)', color: '#fff' } }} onClick={() => handleCatEdit(item)}>
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Xóa" arrow>
+                            <IconButton size="small" sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'var(--admin-danger)', '&:hover': { bgcolor: 'var(--admin-danger)', color: '#fff' } }} onClick={() => handleCatDelete(item.id)}>
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
                       </>
                     )}
                   </Box>

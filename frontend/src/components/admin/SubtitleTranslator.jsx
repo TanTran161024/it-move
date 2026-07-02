@@ -150,7 +150,7 @@ export default function SubtitleTranslator() {
       {message && <Alert severity={meta?.fallback ? 'warning' : 'success'} sx={{ mb: 2 }}>{message}</Alert>}
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 3 }}>
-        <Box sx={{ bgcolor: '#23242a', borderRadius: 2, p: 3, border: '1px solid rgba(255,255,255,0.08)' }}>
+        <Box className="admin-panel" sx={{ bgcolor: 'var(--admin-surface)', borderRadius: 3, p: 3, border: '1px solid var(--admin-border)', m: 0 }}>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
             <Button variant="contained" component="label">
               Tải file phụ đề
@@ -213,7 +213,7 @@ export default function SubtitleTranslator() {
           </Box>
         </Box>
 
-        <Box sx={{ bgcolor: '#23242a', borderRadius: 2, p: 3, border: '1px solid rgba(255,255,255,0.08)' }}>
+        <Box className="admin-panel" sx={{ bgcolor: 'var(--admin-surface)', borderRadius: 3, p: 3, border: '1px solid var(--admin-border)', m: 0 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               {meta?.format && <Chip label={meta.format.toUpperCase()} size="small" />}

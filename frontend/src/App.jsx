@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import Home from './pages/public/Home';
@@ -5,7 +6,6 @@ import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import Admin from './pages/admin/AdminPage';
 import Header from './components/layout/Header';
-import ScrollToTop from './components/layout/ScrollToTop';
 import Footer from './components/layout/Footer';
 import Movies from './pages/movie/Movies';
 import DetailMovies from './pages/movie/DetailMovies';
@@ -33,6 +33,11 @@ function App() {
   const location = useLocation();
   const isAdminPage = location.pathname.startsWith('/admin');
   const isWatchPage = location.pathname.startsWith('/watch/');
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [location.pathname]);
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -65,7 +70,6 @@ function App() {
         {!isAdminPage && !isWatchPage && <Footer />}
         {!isAdminPage && !isWatchPage && <MovieChatbot />}
       </div>
-      <ScrollToTop />
     </ThemeProvider>
   );
 }

@@ -67,11 +67,13 @@ export default function MovieTable({
                   <Card
                     className="admin-movie-card"
                     sx={{
-                      width: 240,
+                      width: '100%',
+                      maxWidth: 260,
+                      height: '100%',
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
-                      border: hidden ? '1px solid var(--admin-danger)' : '1px solid var(--admin-border)',
+                      border: hidden ? '2px solid var(--admin-danger)' : '1px solid var(--admin-border)',
                       position: 'relative',
                     }}
                     onMouseEnter={() => setHovered(movie.id)}
@@ -80,7 +82,7 @@ export default function MovieTable({
                     <Box
                       sx={{
                         width: '100%',
-                        height: 320,
+                        aspectRatio: '2/3',
                         overflow: 'hidden',
                         position: 'relative',
                       }}
@@ -97,8 +99,8 @@ export default function MovieTable({
                           height: '100%',
                           objectFit: 'cover',
                           opacity: hidden ? 0.45 : 1,
-                          transition: 'transform 0.3s ease',
-                          transform: hovered === movie.id ? 'scale(1.05)' : 'scale(1)',
+                          transition: 'transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                          transform: hovered === movie.id ? 'scale(1.08)' : 'scale(1)',
                         }}
                       />
                       {hidden && (
@@ -116,48 +118,48 @@ export default function MovieTable({
                       
                       {/* Quality & Year Badges */}
                       <Box sx={{ position: 'absolute', right: 10, top: 10, zIndex: 3, display: 'flex', gap: 0.5, flexDirection: 'column', alignItems: 'flex-end' }}>
-                        {movie.quality && <span className="admin-badge info" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>{movie.quality}</span>}
-                        {movie.release_year && <span className="admin-badge warning" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>{movie.release_year}</span>}
-                        {movie.tmdb_id && <span className="admin-badge success" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>TMDb</span>}
+                        {movie.quality && <span className="admin-badge info" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>{movie.quality}</span>}
+                        {movie.release_year && <span className="admin-badge warning" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>{movie.release_year}</span>}
+                        {movie.tmdb_id && <span className="admin-badge success" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>TMDb</span>}
                       </Box>
                       
                       {/* IMDb Badge */}
                       {movie.imdb_rating > 0 && (
                         <Box sx={{ position: 'absolute', left: 10, bottom: 10, zIndex: 3 }}>
-                          <span className="admin-badge warning" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
+                          <span className="admin-badge warning" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
                             <span style={{ color: '#f5c518' }}>★</span> {formatRating(movie.imdb_rating)}
                           </span>
                         </Box>
                       )}
 
-                      {hovered === movie.id && (
-                        <Box
-                          sx={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            width: '100%',
-                            height: '100%',
-                            bgcolor: 'rgba(0,0,0,0.4)',
-                            zIndex: 2,
-                            transition: 'background 0.3s',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          bgcolor: 'rgba(0,0,0,0.5)',
+                          zIndex: 2,
+                          transition: 'opacity 0.3s ease',
+                          opacity: hovered === movie.id ? 1 : 0,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          pointerEvents: hovered === movie.id ? 'auto' : 'none',
+                        }}
+                      >
+                        <IconButton
+                          color="secondary"
+                          sx={{ bgcolor: 'var(--admin-accent)', color: '#fff', '&:hover': { bgcolor: 'var(--admin-accent-hover)', transform: 'scale(1.1)' }, transform: 'scale(1.2)', transition: 'all 0.2s' }}
+                          onClick={() => onManageEpisodes(movie)}
                         >
-                          <IconButton
-                            color="secondary"
-                            sx={{ bgcolor: 'var(--admin-accent)', color: '#fff', '&:hover': { bgcolor: 'var(--admin-accent-hover)' }, transform: 'scale(1.2)' }}
-                            onClick={() => onManageEpisodes(movie)}
-                          >
-                            <PlaylistPlayIcon />
-                          </IconButton>
-                        </Box>
-                      )}
+                          <PlaylistPlayIcon sx={{ fontSize: 32 }} />
+                        </IconButton>
+                      </Box>
                     </Box>
 
-                    <CardContent sx={{ pb: 1, pt: 2, width: '100%', minHeight: 70, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <CardContent sx={{ pb: 1, pt: 2, width: '100%', flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                       <Tooltip title={movie.title.length > 20 ? movie.title : ''} arrow>
                         <Typography variant="h6" fontWeight={700} noWrap sx={{ fontSize: '1rem', textAlign: 'center', width: '100%', color: '#fff' }}>
                           {movie.title}

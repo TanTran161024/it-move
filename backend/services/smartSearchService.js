@@ -22,6 +22,17 @@ const STOP_WORDS = new Set([
   'va',
   'the',
   'loai',
+  'xin',
+  'chao',
+  'hello',
+  'hi',
+  'alo',
+  'ok',
+  'okay',
+  'cam',
+  'on',
+  'thanks',
+  'thank',
 ]);
 
 const COUNTRY_ALIASES = [
@@ -30,6 +41,9 @@ const COUNTRY_ALIASES = [
   { canonical: 'Trung Quốc', aliases: ['trung quoc', 'china', 'chinese'] },
   { canonical: 'Âu Mỹ', aliases: ['my', 'au my', 'us', 'usa', 'america', 'american'] },
   { canonical: 'Thái Lan', aliases: ['thai', 'thai lan', 'thailand'] },
+  { canonical: 'Việt Nam', aliases: ['viet nam', 'vietnam', 'vietnamese'] },
+  { canonical: 'Ấn Độ', aliases: ['an do', 'india', 'indian'] },
+  { canonical: 'Anh', aliases: ['anh', 'uk', 'britain', 'british'] },
 ];
 
 const GENRE_ALIASES = [
@@ -41,6 +55,15 @@ const GENRE_ALIASES = [
   { canonical: 'Cổ Trang', aliases: ['co trang'] },
   { canonical: 'Phiêu Lưu', aliases: ['phieu luu', 'adventure'] },
   { canonical: 'Tâm Lý', aliases: ['tam ly', 'psychological'] },
+  { canonical: 'Hoạt Hình', aliases: ['hoat hinh', 'anime', 'animation', 'cartoon'] },
+  { canonical: 'Học đường', aliases: ['hoc duong', 'school', 'student', 'students'] },
+  { canonical: 'Gia đình', aliases: ['gia dinh', 'family'] },
+  { canonical: 'Bí ẩn', aliases: ['bi an', 'mystery', 'detective', 'tham tu'] },
+  { canonical: 'Gay cấn', aliases: ['gay can', 'thriller', 'hoi hop', 'cang thang'] },
+  { canonical: 'Võ thuật', aliases: ['vo thuat', 'martial arts', 'kungfu', 'kung fu'] },
+  { canonical: 'Chính Kịch', aliases: ['chinh kich', 'drama'] },
+  { canonical: 'Thể thao', aliases: ['the thao', 'sport', 'sports', 'bong da'] },
+  { canonical: 'Tài Liệu', aliases: ['tai lieu', 'documentary'] },
 ];
 
 const KEYWORD_ALIASES = [
@@ -48,6 +71,11 @@ const KEYWORD_ALIASES = [
   { keyword: 'gia đình', aliases: ['gia dinh', 'family'] },
   { keyword: 'zombie', aliases: ['zombie', 'zombiee', 'xac song'] },
   { keyword: 'nhẹ nhàng', aliases: ['nhe nhang', 'healing', 'feel good', 'feel-good'] },
+  { keyword: 'anime', aliases: ['anime', 'hoat hinh'] },
+  { keyword: 'thám tử', aliases: ['tham tu', 'detective', 'trinh tham'] },
+  { keyword: 'siêu anh hùng', aliases: ['sieu anh hung', 'superhero'] },
+  { keyword: 'xuyên không', aliases: ['xuyen khong', 'isekai', 'chuyen sinh'] },
+  { keyword: 'phép thuật', aliases: ['phep thuat', 'magic', 'magical'] },
 ];
 
 const MOOD_ALIASES = [
@@ -293,11 +321,13 @@ async function getSearchableMovies(db) {
   }));
 }
 
-function textContainsOrFuzzy(text, keyword) {
+function textContainsOrFuzzy(text, keyword, options = {}) {
   const normalizedText = normalizeText(text);
   const normalizedKeyword = normalizeText(keyword);
+  const allowFuzzy = options.fuzzy !== false;
   if (!normalizedText || !normalizedKeyword) return false;
   if (normalizedText.includes(normalizedKeyword)) return true;
+  if (!allowFuzzy || normalizedKeyword.length < 4) return false;
   return normalizedText.split(' ').some((token) => token.length > 2 && fuzzyEquals(token, normalizedKeyword));
 }
 
@@ -352,10 +382,10 @@ function scoreMovie(movie, filters, query) {
     if (textContainsOrFuzzy(movie.title, keyword) || textContainsOrFuzzy(movie.original_title, keyword)) {
       score += 20;
       reasons.push('keyword_title');
-    } else if (textContainsOrFuzzy(movie.description, keyword)) {
+    } else if (textContainsOrFuzzy(movie.description, keyword, { fuzzy: false })) {
       score += 12;
       reasons.push('keyword_description');
-    } else if ([...movie.genres, ...movie.countries, ...movie.actors, ...movie.directors].some((value) => textContainsOrFuzzy(value, keyword))) {
+    } else if ([...movie.genres, ...movie.countries, ...movie.actors, ...movie.directors].some((value) => textContainsOrFuzzy(value, keyword, { fuzzy: false }))) {
       score += 10;
       reasons.push('keyword_metadata');
     }
@@ -369,10 +399,12 @@ function scoreMovie(movie, filters, query) {
     });
   }
 
-  const imdb = Number(movie.imdb_rating) || 0;
-  if (imdb > 0) score += Math.min(10, imdb);
-  const views = Number(movie.views) || 0;
-  if (views > 0) score += Math.min(8, Math.log10(views + 1) * 2);
+  if (score > 0) {
+    const imdb = Number(movie.imdb_rating) || 0;
+    if (imdb > 0) score += Math.min(10, imdb);
+    const views = Number(movie.views) || 0;
+    if (views > 0) score += Math.min(8, Math.log10(views + 1) * 2);
+  }
 
   return { score: Math.round(score), reasons: unique(reasons) };
 }
@@ -419,9 +451,27 @@ async function smartSearchMovies(db, rawQuery, options = {}) {
   const limit = Math.max(1, Math.min(Number(options.limit) || DEFAULT_LIMIT, 80));
   const lookups = await getLookups(db);
   const filters = parseIntent(query, lookups);
+  const hasIntent = Boolean(
+    filters.countries.length
+    || filters.genres.length
+    || filters.year
+    || filters.keywords.length
+    || filters.mood
+    || filters.people.length
+  );
+
+  if (!hasIntent) {
+    return {
+      query,
+      filters,
+      relaxed: false,
+      movies: [],
+    };
+  }
+
   const movies = await getSearchableMovies(db);
 
-  let scored = movies
+  const allScored = movies
     .map((movie) => {
       const result = scoreMovie(movie, filters, query);
       return { movie, ...result };
@@ -429,8 +479,17 @@ async function smartSearchMovies(db, rawQuery, options = {}) {
     .filter((item) => item.score > 0);
 
   const hasHardFilters = Boolean(filters.countries.length || filters.genres.length || filters.year || filters.people.length);
+  let scored = allScored;
+  let relaxed = false;
+
   if (hasHardFilters) {
-    scored = scored.filter((item) => !hasStrictMismatch(item.movie, filters));
+    const strictScored = allScored.filter((item) => !hasStrictMismatch(item.movie, filters));
+    if (strictScored.length > 0) {
+      scored = strictScored;
+    } else {
+      relaxed = allScored.length > 0;
+      scored = allScored;
+    }
   }
 
   scored.sort((a, b) => b.score - a.score || (Number(b.movie.views) || 0) - (Number(a.movie.views) || 0));
@@ -438,6 +497,7 @@ async function smartSearchMovies(db, rawQuery, options = {}) {
   return {
     query,
     filters,
+    relaxed,
     movies: scored.slice(0, limit).map(({ movie, score }) => ({
       id: movie.id,
       title: movie.title,

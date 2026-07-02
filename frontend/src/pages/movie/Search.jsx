@@ -11,6 +11,11 @@ const SEARCH_EXAMPLES = [
   'phim tình cảm học đường Nhật',
   'phim hài gia đình nhẹ nhàng',
 ];
+const SEARCH_EMPTY_SUGGESTIONS = [
+  'anime Nhật học đường',
+  'phim trinh thám bí ẩn',
+  'hài nhẹ nhàng',
+];
 const ALL_OPTION = 'Tất cả';
 
 function useQuery() {
@@ -255,6 +260,11 @@ export default function Search() {
                   ))}
                 </div>
               )}
+              {smartMeta?.relaxed && (
+                <div className="mt-4 rounded-xl border border-yellow-400/25 bg-yellow-400/10 px-4 py-3 text-sm text-yellow-100">
+                  Không có kết quả khớp tuyệt đối, đang hiển thị các phim gần với tiêu chí của bạn.
+                </div>
+              )}
               {error && (
                 <div className="mt-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-100">
                   {error}
@@ -318,7 +328,22 @@ export default function Search() {
         ) : (
           <div className="text-center py-20 bg-surface/50 rounded-2xl border border-white/5">
             <SearchIcon className="text-6xl text-white/10 mb-4" />
-            <p className="text-text-secondary text-lg">Thử tìm theo thể loại, quốc gia hoặc tên phim khác.</p>
+            <h2 className="text-2xl font-black text-white">Chưa có phim khớp tiêu chí</h2>
+            <p className="mx-auto mt-3 max-w-xl text-text-secondary text-base">
+              Thử bỏ bớt quốc gia, đổi thể loại hoặc mô tả ngắn hơn để hệ thống tìm gần hơn.
+            </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-2">
+              {SEARCH_EMPTY_SUGGESTIONS.map((term) => (
+                <button
+                  key={term}
+                  type="button"
+                  onClick={() => goExample(term)}
+                  className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-text-secondary hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  {term}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

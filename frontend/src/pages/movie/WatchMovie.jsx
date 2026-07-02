@@ -1,4 +1,4 @@
-zimport React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FaArrowLeft, FaTimes } from "react-icons/fa";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import { useLocation, useNavigate, useParams } from "react-router-dom";

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Alert,
   Autocomplete,
+  Box,
   Button,
   Dialog,
   DialogActions,
@@ -180,136 +181,154 @@ export default function MovieForm({
       setAiError('Không thể copy tự động. Bạn có thể chọn và copy mô tả thủ công.');
     }
   };
-
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth className="admin-dialog">
-      <DialogTitle>{editMovie ? 'Sửa phim' : 'Thêm phim'}</DialogTitle>
-      <DialogContent>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth className="admin-dialog">
+      <DialogTitle sx={{ fontWeight: 700, borderBottom: '1px solid rgba(255,255,255,0.1)', pb: 2, mb: 2 }}>{editMovie ? 'Sửa thông tin phim' : 'Thêm phim mới'}</DialogTitle>
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {/* Hiển thị */}
-        <div className="admin-form-section">Hiển thị</div>
-        <FormControlLabel
-          sx={{ mt: 1, mb: 1 }}
-          control={
-            <Switch
-              checked={visible}
-              onChange={(event) => onChange({ target: { name: 'is_visible', value: event.target.checked ? 1 : 0 } })}
-              sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: 'var(--admin-accent)' }, '& .MuiSwitch-switchBase.Mui-checked+.MuiSwitch-track': { backgroundColor: 'var(--admin-accent)' } }}
-            />
-          }
-          label={
-            <span style={{ color: visible ? '#4ade80' : '#f87171', fontWeight: 600, fontSize: '0.88rem' }}>
-              {visible ? 'Đang hiển thị trên web' : 'Đang ẩn khỏi người dùng'}
-            </span>
-          }
-        />
+        <Box sx={{ bgcolor: 'rgba(0,0,0,0.2)', p: 3, borderRadius: 3, border: '1px solid var(--admin-border)' }}>
+          <div className="admin-form-section" style={{ marginTop: 0 }}>Trạng thái hiển thị</div>
+          <FormControlLabel
+            sx={{ mt: 1, mb: 0 }}
+            control={
+              <Switch
+                checked={visible}
+                onChange={(event) => onChange({ target: { name: 'is_visible', value: event.target.checked ? 1 : 0 } })}
+                sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: 'var(--admin-accent)' }, '& .MuiSwitch-switchBase.Mui-checked+.MuiSwitch-track': { backgroundColor: 'var(--admin-accent)' } }}
+              />
+            }
+            label={
+              <span style={{ color: visible ? '#4ade80' : '#f87171', fontWeight: 600, fontSize: '0.88rem' }}>
+                {visible ? 'Đang hiển thị trên web' : 'Đang ẩn khỏi người dùng'}
+              </span>
+            }
+          />
+        </Box>
 
         {/* Thông tin cơ bản */}
-        <div className="admin-form-section">Thông tin cơ bản</div>
-        <TextField label="Tên phim" name="title" fullWidth margin="normal" value={form.title || ''} onChange={onChange} sx={darkFieldSx} />
-        <TextField label="Tên tiếng Anh" name="original_title" fullWidth margin="normal" value={form.original_title || ''} onChange={onChange} sx={darkFieldSx} />
-        <TextField label="Mô tả" name="description" fullWidth margin="normal" multiline rows={3} value={form.description || ''} onChange={onChange} sx={darkFieldSx} />
-        <div className="admin-ai-description-box">
-          <div className="admin-ai-description-head">
-            <div>
-              <strong>AI viết mô tả tiếng Việt</strong>
-              <span>Dựa trên tên phim, thể loại, quốc gia, diễn viên và dữ liệu bạn đã nhập.</span>
+        <Box sx={{ bgcolor: 'rgba(0,0,0,0.2)', p: 3, borderRadius: 3, border: '1px solid var(--admin-border)' }}>
+          <div className="admin-form-section" style={{ marginTop: 0 }}>Thông tin cơ bản</div>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mb: 2 }}>
+            <TextField label="Tên phim" name="title" fullWidth value={form.title || ''} onChange={onChange} sx={darkFieldSx} />
+            <TextField label="Tên tiếng Anh" name="original_title" fullWidth value={form.original_title || ''} onChange={onChange} sx={darkFieldSx} />
+          </Box>
+          <TextField label="Mô tả" name="description" fullWidth multiline rows={4} value={form.description || ''} onChange={onChange} sx={{ ...darkFieldSx, mb: 2 }} />
+          
+          <div className="admin-ai-description-box" style={{ marginTop: 0 }}>
+            <div className="admin-ai-description-head">
+              <div>
+                <strong>AI viết mô tả tiếng Việt</strong>
+                <span>Dựa trên tên phim, thể loại, quốc gia, diễn viên và dữ liệu bạn đã nhập.</span>
+              </div>
+              <Button
+                startIcon={<AutoAwesomeIcon />}
+                onClick={handleGenerateDescription}
+                disabled={aiLoading}
+                variant="contained"
+                sx={{ bgcolor: 'var(--admin-accent)', '&:hover': { bgcolor: 'var(--admin-accent-hover)' }, flexShrink: 0 }}
+              >
+                {aiLoading ? 'Đang viết...' : 'AI viết mô tả'}
+              </Button>
             </div>
-            <Button
-              startIcon={<AutoAwesomeIcon />}
-              onClick={handleGenerateDescription}
-              disabled={aiLoading}
-              variant="contained"
-              sx={{ bgcolor: 'var(--admin-accent)', '&:hover': { bgcolor: 'var(--admin-accent-hover)' }, flexShrink: 0 }}
-            >
-              {aiLoading ? 'Đang viết...' : 'AI viết mô tả'}
-            </Button>
+
+            {aiError && <Alert severity="error" sx={{ mt: 2 }}>{aiError}</Alert>}
+
+            {aiDescription && (
+              <div className="admin-ai-description-result">
+                <div className="admin-ai-description-meta">
+                  <span>{aiMeta?.fallback ? 'Bản gợi ý dự phòng' : 'Bản gợi ý AI'}</span>
+                  <span>{aiDescription.length}/1200</span>
+                </div>
+                {aiMeta?.note && <div className="admin-ai-description-note">{aiMeta.note}</div>}
+                <p>{aiDescription}</p>
+                <div className="admin-ai-description-actions">
+                  <Button
+                    startIcon={copied ? <CheckIcon /> : <ContentCopyIcon />}
+                    onClick={handleCopyDescription}
+                    variant="outlined"
+                    size="small"
+                    sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.18)' }}
+                  >
+                    {copied ? 'Đã copy' : 'Copy'}
+                  </Button>
+                  <Button
+                    startIcon={<CheckIcon />}
+                    onClick={handleApplyDescription}
+                    variant="contained"
+                    size="small"
+                    sx={{ bgcolor: 'var(--admin-success)', '&:hover': { bgcolor: '#16a34a' } }}
+                  >
+                    Áp dụng vào mô tả
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
-
-          {aiError && <Alert severity="error" sx={{ mt: 2 }}>{aiError}</Alert>}
-
-          {aiDescription && (
-            <div className="admin-ai-description-result">
-              <div className="admin-ai-description-meta">
-                <span>{aiMeta?.fallback ? 'Bản gợi ý dự phòng' : 'Bản gợi ý AI'}</span>
-                <span>{aiDescription.length}/1200</span>
-              </div>
-              {aiMeta?.note && <div className="admin-ai-description-note">{aiMeta.note}</div>}
-              <p>{aiDescription}</p>
-              <div className="admin-ai-description-actions">
-                <Button
-                  startIcon={copied ? <CheckIcon /> : <ContentCopyIcon />}
-                  onClick={handleCopyDescription}
-                  variant="outlined"
-                  size="small"
-                  sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.18)' }}
-                >
-                  {copied ? 'Đã copy' : 'Copy'}
-                </Button>
-                <Button
-                  startIcon={<CheckIcon />}
-                  onClick={handleApplyDescription}
-                  variant="contained"
-                  size="small"
-                  sx={{ bgcolor: 'var(--admin-success)', '&:hover': { bgcolor: '#16a34a' } }}
-                >
-                  Áp dụng vào mô tả
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
+        </Box>
 
         {/* Phân loại */}
-        <div className="admin-form-section">Phân loại</div>
-        <Autocomplete
-          multiple
-          options={genres}
-          getOptionLabel={(option) => option.name}
-          value={selectedGenres}
-          onChange={(_, value) => onSelectChange('genres', value)}
-          renderInput={(params) => <TextField {...params} label="Thể loại" margin="normal" fullWidth sx={darkFieldSx} />}
-        />
-        <Autocomplete
-          multiple
-          options={countries}
-          getOptionLabel={(option) => option.name}
-          value={selectedCountries}
-          onChange={(_, value) => onSelectChange('countries', value)}
-          renderInput={(params) => <TextField {...params} label="Quốc gia" margin="normal" fullWidth sx={darkFieldSx} />}
-        />
-        <Autocomplete
-          multiple
-          options={actors}
-          getOptionLabel={(option) => option.name}
-          value={selectedActors}
-          onChange={(_, value) => onSelectChange('actors', value)}
-          renderInput={(params) => <TextField {...params} label="Diễn viên" margin="normal" fullWidth sx={darkFieldSx} />}
-        />
-        <Autocomplete
-          multiple
-          options={directors}
-          getOptionLabel={(option) => option.name}
-          value={selectedDirectors}
-          onChange={(_, value) => onSelectChange('directors', value)}
-          renderInput={(params) => <TextField {...params} label="Đạo diễn" margin="normal" fullWidth sx={darkFieldSx} />}
-        />
+        <Box sx={{ bgcolor: 'rgba(0,0,0,0.2)', p: 3, borderRadius: 3, border: '1px solid var(--admin-border)' }}>
+          <div className="admin-form-section" style={{ marginTop: 0 }}>Phân loại</div>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+            <Autocomplete
+              multiple
+              options={genres}
+              getOptionLabel={(option) => option.name}
+              value={selectedGenres}
+              onChange={(_, value) => onSelectChange('genres', value)}
+              renderInput={(params) => <TextField {...params} label="Thể loại" fullWidth sx={darkFieldSx} />}
+            />
+            <Autocomplete
+              multiple
+              options={countries}
+              getOptionLabel={(option) => option.name}
+              value={selectedCountries}
+              onChange={(_, value) => onSelectChange('countries', value)}
+              renderInput={(params) => <TextField {...params} label="Quốc gia" fullWidth sx={darkFieldSx} />}
+            />
+            <Autocomplete
+              multiple
+              options={actors}
+              getOptionLabel={(option) => option.name}
+              value={selectedActors}
+              onChange={(_, value) => onSelectChange('actors', value)}
+              renderInput={(params) => <TextField {...params} label="Diễn viên" fullWidth sx={darkFieldSx} />}
+            />
+            <Autocomplete
+              multiple
+              options={directors}
+              getOptionLabel={(option) => option.name}
+              value={selectedDirectors}
+              onChange={(_, value) => onSelectChange('directors', value)}
+              renderInput={(params) => <TextField {...params} label="Đạo diễn" fullWidth sx={darkFieldSx} />}
+            />
+          </Box>
+        </Box>
 
         {/* Chi tiết */}
-        <div className="admin-form-section">Chi tiết</div>
-        <TextField label="Năm phát hành" name="release_year" type="number" fullWidth margin="normal" value={form.release_year || ''} onChange={onChange} sx={darkFieldSx} />
-        <TextField label="Chất lượng (VD: 4K, HD)" name="quality" fullWidth margin="normal" value={form.quality || ''} onChange={onChange} sx={darkFieldSx} />
-        <TextField label="IMDb Rating" name="imdb_rating" type="number" fullWidth margin="normal" value={form.imdb_rating || ''} onChange={onChange} inputProps={{ step: 0.1, min: 0, max: 10 }} sx={darkFieldSx} />
-        <TextField label="Phim bộ? (1 = Có, 0 = Không)" name="is_series" type="number" fullWidth margin="normal" value={form.is_series || 0} onChange={onChange} inputProps={{ min: 0, max: 1 }} sx={darkFieldSx} />
-        <TextField label="Thời lượng (VD: 2h10m)" name="duration" fullWidth margin="normal" value={form.duration || ''} onChange={onChange} sx={darkFieldSx} />
-        <TextField label="Giới hạn tuổi" name="age_limit" fullWidth margin="normal" value={form.age_limit || ''} onChange={onChange} sx={darkFieldSx} />
-        <TextField label="Ngày chiếu" name="release_date" type="date" fullWidth margin="normal" value={form.release_date || ''} onChange={onChange} InputLabelProps={{ shrink: true }} sx={darkFieldSx} />
+        <Box sx={{ bgcolor: 'rgba(0,0,0,0.2)', p: 3, borderRadius: 3, border: '1px solid var(--admin-border)' }}>
+          <div className="admin-form-section" style={{ marginTop: 0 }}>Thông số chi tiết</div>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+            <TextField label="Năm phát hành" name="release_year" type="number" fullWidth value={form.release_year || ''} onChange={onChange} sx={darkFieldSx} />
+            <TextField label="Chất lượng (4K, HD)" name="quality" fullWidth value={form.quality || ''} onChange={onChange} sx={darkFieldSx} />
+            <TextField label="IMDb Rating" name="imdb_rating" type="number" fullWidth value={form.imdb_rating || ''} onChange={onChange} inputProps={{ step: 0.1, min: 0, max: 10 }} sx={darkFieldSx} />
+            <TextField label="Phim bộ? (1=Có, 0=Không)" name="is_series" type="number" fullWidth value={form.is_series || 0} onChange={onChange} inputProps={{ min: 0, max: 1 }} sx={darkFieldSx} />
+            <TextField label="Thời lượng" name="duration" fullWidth value={form.duration || ''} onChange={onChange} sx={darkFieldSx} />
+            <TextField label="Giới hạn tuổi" name="age_limit" fullWidth value={form.age_limit || ''} onChange={onChange} sx={darkFieldSx} />
+            <TextField label="Ngày chiếu" name="release_date" type="date" fullWidth value={form.release_date || ''} onChange={onChange} InputLabelProps={{ shrink: true }} sx={{ gridColumn: 'span 2', ...darkFieldSx }} />
+          </Box>
+        </Box>
 
         {/* Media */}
-        <div className="admin-form-section">Media</div>
-        <TextField label="Poster URL" name="poster_url" fullWidth margin="normal" value={form.poster_url || ''} onChange={onChange} sx={darkFieldSx} />
-        <TextField label="Trailer URL" name="trailer_url" fullWidth margin="normal" value={form.trailer_url || ''} onChange={onChange} sx={darkFieldSx} />
+        <Box sx={{ bgcolor: 'rgba(0,0,0,0.2)', p: 3, borderRadius: 3, border: '1px solid var(--admin-border)' }}>
+          <div className="admin-form-section" style={{ marginTop: 0 }}>Media</div>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField label="Poster URL" name="poster_url" fullWidth value={form.poster_url || ''} onChange={onChange} sx={darkFieldSx} />
+            <TextField label="Trailer URL" name="trailer_url" fullWidth value={form.trailer_url || ''} onChange={onChange} sx={darkFieldSx} />
+          </Box>
+        </Box>
 
-        {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+        {error && <Alert severity="error">{error}</Alert>}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} sx={{ color: 'var(--admin-text-muted)' }}>Hủy</Button>

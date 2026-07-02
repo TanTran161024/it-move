@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Avatar,
   Box,
@@ -49,12 +50,29 @@ const SEARCH_EXAMPLES = [
   'phim hành động Hàn Quốc',
 ];
 
+const SEARCH_EMPTY_SUGGESTIONS = [
+  'anime Nhật học đường',
+  'phim trinh thám bí ẩn',
+  'hài nhẹ nhàng',
+];
+
 const RECENT_SEARCHES_KEY = 'movie_recent_searches';
 
 function buildMoviesUrl(query) {
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => params.set(key, value));
   return `/movies?${params.toString()}`;
+}
+
+function getSmartFilterLabels(filters) {
+  if (!filters) return [];
+  return [
+    ...(filters.countries || []),
+    ...(filters.genres || []),
+    filters.year,
+    filters.mood,
+    ...(filters.keywords || []),
+  ].filter(Boolean).slice(0, 8);
 }
 
 const MotionDiv = motion.div;
@@ -66,8 +84,10 @@ export default function Header() {
   const [searchValue, setSearchValue] = useState(() => localStorage.getItem('searchInputValue') || '');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchSuggestions, setSearchSuggestions] = useState([]);
+  const [searchMeta, setSearchMeta] = useState(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState('');
+  const [activeSearchIndex, setActiveSearchIndex] = useState(-1);
   const [recentSearches, setRecentSearches] = useState([]);
   const [isScrolled, setIsScrolled] = useState(false);
   
@@ -85,7 +105,9 @@ export default function Header() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const [activeProfile, setActiveProfileState] = useState(() => getActiveProfile());
   const searchInputRef = useRef(null);
+  const searchOverlayRef = useRef(null);
   const searchCacheRef = useRef({});
+  const searchFilterLabels = useMemo(() => getSmartFilterLabels(searchMeta?.filters), [searchMeta]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -115,6 +137,8 @@ export default function Header() {
     if (location.pathname.startsWith('/search')) {
       setSearchValue('');
       setSearchSuggestions([]);
+      setSearchMeta(null);
+      setActiveSearchIndex(-1);
       localStorage.removeItem('searchInputValue');
     }
   }, [location.pathname]);
@@ -125,14 +149,40 @@ export default function Header() {
     const savedRecent = JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) || '[]');
     setRecentSearches(Array.isArray(savedRecent) ? savedRecent.slice(0, 6) : []);
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const focusTimer = window.setTimeout(() => searchInputRef.current?.focus(), 80);
+    const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    const body = document.body;
+    const html = document.documentElement;
+    const previousBodyStyle = {
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+      paddingRight: body.style.paddingRight,
+    };
+    const previousHtmlStyle = {
+      overflow: html.style.overflow,
+      scrollBehavior: html.style.scrollBehavior,
+    };
+    const scrollbarWidth = Math.max(0, window.innerWidth - html.clientWidth);
+
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.width = '100%';
+    if (scrollbarWidth > 0) body.style.paddingRight = `${scrollbarWidth}px`;
+
+    const focusTimer = window.setTimeout(() => {
+      searchOverlayRef.current?.scrollTo({ top: 0, left: 0 });
+      searchInputRef.current?.focus();
+    }, 80);
 
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
         setIsSearchOpen(false);
         setSearchSuggestions([]);
+        setSearchMeta(null);
+        setActiveSearchIndex(-1);
       }
     };
 
@@ -140,14 +190,25 @@ export default function Header() {
     return () => {
       window.clearTimeout(focusTimer);
       window.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = previousOverflow;
+      body.style.overflow = previousBodyStyle.overflow;
+      body.style.position = previousBodyStyle.position;
+      body.style.top = previousBodyStyle.top;
+      body.style.width = previousBodyStyle.width;
+      body.style.paddingRight = previousBodyStyle.paddingRight;
+      html.style.overflow = previousHtmlStyle.overflow;
+      html.style.scrollBehavior = 'auto';
+      window.scrollTo(0, scrollY);
+      html.style.scrollBehavior = previousHtmlStyle.scrollBehavior;
     };
   }, [isSearchOpen]);
 
   useEffect(() => {
     const query = searchValue.trim();
-    if (!isSearchOpen || query.length < 2) {
+    setActiveSearchIndex(-1);
+
+    if (!isSearchOpen || query.length < 1) {
       setSearchSuggestions([]);
+      setSearchMeta(null);
       setSearchLoading(false);
       setSearchError('');
       return undefined;
@@ -156,7 +217,9 @@ export default function Header() {
     const controller = new AbortController();
     const timer = setTimeout(() => {
       if (searchCacheRef.current[query]) {
-        setSearchSuggestions(searchCacheRef.current[query]);
+        const cachedPayload = searchCacheRef.current[query];
+        setSearchSuggestions(cachedPayload.movies);
+        setSearchMeta(cachedPayload.meta);
         setSearchLoading(false);
         setSearchError('');
         return;
@@ -170,19 +233,26 @@ export default function Header() {
         .then((res) => (res.ok ? res.json() : Promise.reject(new Error('search failed'))))
         .then((payload) => {
           const movies = Array.isArray(payload.movies) ? payload.movies : [];
-          searchCacheRef.current[query] = movies;
+          const nextMeta = {
+            filters: payload.filters || null,
+            relaxed: Boolean(payload.relaxed),
+            query: payload.query || query,
+          };
+          searchCacheRef.current[query] = { movies, meta: nextMeta };
           setSearchSuggestions(movies);
+          setSearchMeta(nextMeta);
         })
         .catch((error) => {
           if (error.name !== 'AbortError') {
             setSearchSuggestions([]);
+            setSearchMeta(null);
             setSearchError('Không thể tìm kiếm lúc này. Thử lại sau ít phút.');
           }
         })
         .finally(() => {
           if (!controller.signal.aborted) setSearchLoading(false);
         });
-    }, 250);
+    }, 180);
 
     return () => {
       clearTimeout(timer);
@@ -217,12 +287,15 @@ export default function Header() {
   const closeSearch = () => {
     setIsSearchOpen(false);
     setSearchSuggestions([]);
+    setSearchMeta(null);
+    setActiveSearchIndex(-1);
     setSearchLoading(false);
     setSearchError('');
   };
 
   const openSearch = () => {
     closeMenus();
+    searchCacheRef.current = {};
     setIsSearchOpen(true);
   };
 
@@ -247,6 +320,13 @@ export default function Header() {
     closeSearch();
     setSearchValue('');
     goTo(`/movies/${movieId}`);
+  };
+
+  const openActiveSearchResult = () => {
+    const movie = searchSuggestions[activeSearchIndex];
+    if (!movie) return false;
+    goToMovie(movie.id);
+    return true;
   };
 
   const applySearchTerm = (term) => {
@@ -277,6 +357,25 @@ export default function Header() {
   };
 
   const handleSearchKeyDown = (event) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveSearchIndex((current) => (
+        searchSuggestions.length ? Math.min(current + 1, searchSuggestions.length - 1) : -1
+      ));
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveSearchIndex((current) => Math.max(current - 1, -1));
+      return;
+    }
+
+    if (event.key === 'Enter' && activeSearchIndex >= 0 && openActiveSearchResult()) {
+      event.preventDefault();
+      return;
+    }
+
     if (event.key === 'Enter' && searchValue.trim()) {
       goToSearchResults();
     }
@@ -356,6 +455,7 @@ export default function Header() {
           <IconButton
             onClick={openSearch}
             className="!text-white hover:!bg-white/10"
+            data-search-open-button="true"
             aria-label="Mở tìm kiếm"
           >
             <SearchIcon />
@@ -402,10 +502,13 @@ export default function Header() {
         </div>
       </div>
 
-      <AnimatePresence>
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
         {isSearchOpen && (
           <MotionDiv
-            className="fixed inset-0 z-[9998] bg-[#050505]/95 backdrop-blur-2xl text-white overflow-y-auto"
+            ref={searchOverlayRef}
+            data-search-overlay="true"
+            className="fixed inset-0 z-[9998] h-[100dvh] overscroll-contain bg-[#050505]/95 backdrop-blur-2xl text-white overflow-y-auto"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -443,6 +546,7 @@ export default function Header() {
                 <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-white/45 md:!text-4xl" />
                 <input
                   ref={searchInputRef}
+                  data-search-input="true"
                   type="text"
                   value={searchValue}
                   onChange={(event) => setSearchValue(event.target.value)}
@@ -464,6 +568,22 @@ export default function Header() {
                   </button>
                 ))}
               </div>
+
+              {searchValue.trim() && searchFilterLabels.length > 0 && (
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-[0.18em] text-white/35">Đang tìm</span>
+                  {searchFilterLabels.map((label) => (
+                    <span key={label} className="rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+                      {label}
+                    </span>
+                  ))}
+                  {searchMeta?.relaxed && (
+                    <span className="rounded-full border border-yellow-400/25 bg-yellow-400/10 px-3 py-1 text-xs font-bold text-yellow-100">
+                      Kết quả gần đúng
+                    </span>
+                  )}
+                </div>
+              )}
 
               {searchValue.trim().length < 2 ? (
                 <div className="mt-12 grid gap-8 md:grid-cols-[minmax(0,1fr)_360px]">
@@ -543,18 +663,20 @@ export default function Header() {
                   ) : searchSuggestions.length > 0 ? (
                     <>
                       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-                        {searchSuggestions.map((movie) => (
+                        {searchSuggestions.map((movie, index) => (
                           <button
                             key={movie.id}
                             type="button"
                             onClick={() => goToMovie(movie.id)}
-                            className="group min-w-0 text-left"
+                            onMouseEnter={() => setActiveSearchIndex(index)}
+                            className={`group min-w-0 rounded-xl p-1 text-left transition-colors ${activeSearchIndex === index ? 'bg-white/10' : 'hover:bg-white/5'}`}
                           >
-                            <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-[#171717] shadow-xl">
+                            <div className={`relative aspect-[2/3] overflow-hidden rounded-lg bg-[#171717] shadow-xl ring-2 ring-transparent transition-transform duration-200 ${activeSearchIndex === index ? 'scale-[1.02] ring-primary' : 'group-hover:scale-[1.01]'}`}>
                               <img
                                 src={movie.poster_url || SEARCH_FALLBACK_POSTER}
                                 alt={movie.title}
                                 className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                referrerPolicy="no-referrer"
                                 onError={(event) => { event.currentTarget.src = SEARCH_FALLBACK_POSTER; }}
                               />
                               <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
@@ -583,7 +705,29 @@ export default function Header() {
                   ) : (
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-10 text-center">
                       <SearchIcon className="!text-5xl text-white/15" />
-                      <p className="mt-4 text-white/65">Thử tìm theo thể loại, quốc gia hoặc tên phim khác.</p>
+                      <h4 className="mt-4 text-xl font-black text-white">Chưa có kết quả thật sự khớp</h4>
+                      <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-white/55">
+                        Thử bỏ bớt quốc gia, đổi thể loại hoặc mô tả mood ngắn hơn.
+                      </p>
+                      <div className="mt-6 flex flex-wrap justify-center gap-2">
+                        {SEARCH_EMPTY_SUGGESTIONS.map((term) => (
+                          <button
+                            key={term}
+                            type="button"
+                            onClick={() => applySearchTerm(term)}
+                            className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/70 transition-colors hover:border-primary/35 hover:bg-primary/10 hover:text-white"
+                          >
+                            {term}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={goToSearchResults}
+                        className="mt-6 rounded-full bg-white px-5 py-2 text-sm font-black text-black transition-colors hover:bg-primary hover:text-white"
+                      >
+                        Mở trang tìm kiếm
+                      </button>
                     </div>
                   )}
                 </div>
@@ -591,7 +735,9 @@ export default function Header() {
             </div>
           </MotionDiv>
         )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* Menus using MUI (Keeping business logic intact) */}
       <Menu

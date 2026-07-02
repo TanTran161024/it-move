@@ -266,9 +266,11 @@ export default function MovieChatbot() {
         <section className="movie-chatbot-panel" aria-label="Tư vấn phim">
           <header className="movie-chatbot-header">
             <div className="movie-chatbot-title">
-              <span className="movie-chatbot-avatar"><FaPlay /></span>
+              <span className="movie-chatbot-avatar" style={{ padding: 0, overflow: 'hidden', background: 'transparent' }}>
+                <img src="/chatbot-logo.png" alt="NetDL Assistant" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </span>
               <div>
-                <strong>Chọn phim tối nay</strong>
+                <strong>NetDL Assistant</strong>
                 <small>Nhớ gu trong phiên chat</small>
               </div>
             </div>
@@ -346,8 +348,9 @@ export default function MovieChatbot() {
           setTimeout(() => inputRef.current?.focus(), 0);
         }}
         aria-label="Mở tư vấn phim"
+        style={{ padding: open ? undefined : 0, overflow: open ? undefined : 'hidden' }}
       >
-        {open ? <FaTimes /> : <FaStar />}
+        {open ? <FaTimes /> : <img src="/chatbot-logo.png" alt="NetDL Assistant" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
       </button>
     </div>
   );
