@@ -5,7 +5,22 @@ function makeSessionId() {
 }
 
 function isMissingChatTableError(error) {
-  return error?.code === 'ER_NO_SUCH_TABLE' || /ai_chat_sessions|ai_chat_messages/i.test(error?.message || '');
+  return error?.code === 'ER_NO_SUCH_TABLE';
+}
+
+function safeJson(value, fallback) {
+  if (value === null || value === undefined || value === '') return fallback;
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function clampHistoryLimit(value) {
+  const number = Number(value) || 24;
+  return Math.max(1, Math.min(number, 60));
 }
 
 async function ensureChatSession(db, { sessionId, userId = null, profileId = null } = {}) {
@@ -35,6 +50,110 @@ async function ensureChatSession(db, { sessionId, userId = null, profileId = nul
       );
       return { id, persisted: true };
     }
+    throw error;
+  }
+}
+
+async function getMovieCardsByIds(db, ids) {
+  const uniqueIds = [...new Set((ids || []).map(Number).filter((id) => Number.isInteger(id) && id > 0))];
+  if (!uniqueIds.length) return new Map();
+
+  const placeholders = uniqueIds.map(() => '?').join(',');
+  const [rows] = await db.execute(
+    `SELECT
+       m.id,
+       m.title,
+       m.original_title,
+       m.poster_url,
+       m.release_year,
+       m.imdb_rating,
+       m.quality,
+       m.duration,
+       m.description,
+       COALESCE(GROUP_CONCAT(DISTINCT g.name SEPARATOR '|||'), '') AS genres,
+       COALESCE(GROUP_CONCAT(DISTINCT c.name SEPARATOR '|||'), '') AS countries
+     FROM movies m
+     LEFT JOIN movie_genres mg ON mg.movie_id = m.id
+     LEFT JOIN genres g ON g.id = mg.genre_id
+     LEFT JOIN movie_countries mc ON mc.movie_id = m.id
+     LEFT JOIN countries c ON c.id = mc.country_id
+     WHERE m.id IN (${placeholders}) AND m.is_visible = 1
+     GROUP BY m.id`,
+    uniqueIds
+  );
+
+  return new Map(rows.map((movie) => [
+    Number(movie.id),
+    {
+      ...movie,
+      genres: movie.genres ? String(movie.genres).split('|||') : [],
+      countries: movie.countries ? String(movie.countries).split('|||') : [],
+    },
+  ]));
+}
+
+async function getLatestChatHistory(db, { userId = null, profileId = null, limit = 24 } = {}) {
+  const numericUserId = Number(userId) || null;
+  const numericProfileId = Number(profileId) || null;
+  if (!numericUserId) {
+    return { persisted: false, session_id: null, messages: [] };
+  }
+
+  try {
+    const profileClause = numericProfileId ? 'profile_id = ?' : 'profile_id IS NULL';
+    const sessionParams = numericProfileId ? [numericUserId, numericProfileId] : [numericUserId];
+    const [sessions] = await db.execute(
+      `SELECT id
+       FROM ai_chat_sessions
+       WHERE user_id = ? AND ${profileClause}
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+      sessionParams
+    );
+
+    const session = sessions[0];
+    if (!session?.id) return { persisted: true, session_id: null, messages: [] };
+
+    const safeLimit = clampHistoryLimit(limit);
+    const [rows] = await db.execute(
+      `SELECT role, content, source, provider, recommendation_ids, metadata, created_at
+       FROM (
+         SELECT *
+         FROM ai_chat_messages
+         WHERE session_id = ?
+         ORDER BY id DESC
+         LIMIT ${safeLimit}
+       ) recent
+       ORDER BY id ASC`,
+      [session.id]
+    );
+
+    const allRecommendationIds = rows.flatMap((row) => safeJson(row.recommendation_ids, []) || []);
+    const movieMap = await getMovieCardsByIds(db, allRecommendationIds);
+    const messages = rows
+      .map((row) => {
+        const recommendationIds = safeJson(row.recommendation_ids, []) || [];
+        const metadata = safeJson(row.metadata, {}) || {};
+        return {
+          role: row.role === 'assistant' ? 'assistant' : 'user',
+          content: row.content,
+          recommendations: recommendationIds
+            .map((id) => movieMap.get(Number(id)))
+            .filter(Boolean)
+            .slice(0, 6),
+          source: row.source || 'history',
+          provider: row.provider || null,
+          grounding: metadata.grounding || null,
+          aiError: metadata.ai_error || null,
+          suggestedReplies: [],
+          created_at: row.created_at,
+        };
+      })
+      .filter((item) => item.content);
+
+    return { persisted: true, session_id: session.id, messages };
+  } catch (error) {
+    if (isMissingChatTableError(error)) return { persisted: false, session_id: null, messages: [] };
     throw error;
   }
 }
@@ -119,6 +238,23 @@ async function getAiChatStats(db) {
        ORDER BY id DESC
        LIMIT 10`
     );
+    const [recentQuestionRows] = await db.execute(
+      `SELECT session_id, content, created_at
+       FROM ai_chat_messages
+       WHERE role = 'user'
+       ORDER BY id DESC
+       LIMIT 10`
+    );
+    const [topQuestionRows] = await db.execute(
+      `SELECT
+         MIN(SUBSTRING(TRIM(content), 1, 180)) AS question,
+         COUNT(*) AS total
+       FROM ai_chat_messages
+       WHERE role = 'user' AND TRIM(content) <> ''
+       GROUP BY LOWER(TRIM(content))
+       ORDER BY total DESC, MAX(created_at) DESC
+       LIMIT 8`
+    );
 
     return {
       persisted: true,
@@ -135,6 +271,17 @@ async function getAiChatStats(db) {
         fallback: Number(messageStats.fallback_messages) || 0,
       },
       recent: recentRows,
+      questions: {
+        recent: recentQuestionRows.map((row) => ({
+          session_id: row.session_id,
+          content: row.content,
+          created_at: row.created_at,
+        })),
+        top: topQuestionRows.map((row) => ({
+          question: row.question,
+          total: Number(row.total) || 0,
+        })),
+      },
     };
   } catch (error) {
     if (isMissingChatTableError(error)) {
@@ -143,6 +290,7 @@ async function getAiChatStats(db) {
         sessions: { total: 0, last_7_days: 0 },
         messages: { total: 0, user: 0, assistant: 0, gemini: 0, rule_based: 0, fallback: 0 },
         recent: [],
+        questions: { recent: [], top: [] },
       };
     }
     throw error;
@@ -152,5 +300,6 @@ async function getAiChatStats(db) {
 module.exports = {
   ensureChatSession,
   getAiChatStats,
+  getLatestChatHistory,
   saveChatExchange,
 };

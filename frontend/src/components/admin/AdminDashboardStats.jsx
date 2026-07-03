@@ -20,9 +20,20 @@ import '../../pages/admin/AdminStyles.css';
 
 const COLORS = ['#FFD600', '#42a5f5', '#66bb6a', '#ff7043', '#ab47bc', '#ec407a'];
 const STATUS_COLORS = {
-  open: '#ff9800',
+  new: '#ef4444',
+  processing: '#ff9800',
   resolved: '#4caf50',
   rejected: '#f44336'
+};
+
+const REPORT_TYPE_LABELS = {
+  playback: 'Video không phát',
+  wrong_episode: 'Sai tập',
+  audio: 'Âm thanh',
+  subtitle: 'Phụ đề',
+  dead_link: 'Link die',
+  metadata: 'Thông tin phim',
+  other: 'Khác',
 };
 
 export default function AdminDashboardStats() {
@@ -74,12 +85,28 @@ export default function AdminDashboardStats() {
   const { overview, charts, recent_reports } = stats || {};
 
   const renderStatusBadge = (status) => {
-    let color = 'default';
-    let label = status;
-    if (status === 'open') { color = 'warning'; label = 'Đang mở'; }
-    if (status === 'resolved') { color = 'success'; label = 'Đã xử lý'; }
-    if (status === 'rejected') { color = 'error'; label = 'Từ chối'; }
-    return <Chip label={label} color={color} size="small" variant="outlined" />;
+    const meta = {
+      new: { color: 'error', label: 'Mới' },
+      processing: { color: 'warning', label: 'Đang xử lý' },
+      open: { color: 'warning', label: 'Đang mở' },
+      resolved: { color: 'success', label: 'Đã xử lý' },
+      rejected: { color: 'error', label: 'Từ chối' },
+    }[status] || { color: 'default', label: status };
+    return <Chip label={meta.label} color={meta.color} size="small" variant="outlined" />;
+  };
+
+  const formatDateTime = (value) => {
+    if (!value) return '';
+    try {
+      return new Date(value).toLocaleString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return '';
+    }
   };
 
   if (error) {
@@ -92,7 +119,7 @@ export default function AdminDashboardStats() {
   }
 
   return (
-    <Box sx={{ width: '100%', maxWidth: '1300px', mx: 'auto', px: { xs: 1, md: 3 }, mt: 2, pb: 6 }}>
+    <Box sx={{ width: '100%', mx: 'auto', px: { xs: 1, md: 3 }, mt: 2, pb: 6 }}>
       {/* Header */}
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} mb={4} gap={2}>
         <div className="admin-section-header" style={{ marginBottom: 0 }}>
@@ -150,7 +177,7 @@ export default function AdminDashboardStats() {
             </div>
           </div>
 
-          <div className="admin-stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: 28 }}>
+          <div className="admin-stats-grid" style={{ marginBottom: 28 }}>
             <div className="admin-stat-card accent-blue">
               <div className="admin-stat-icon blue"><TrendingUpIcon /></div>
               <div className="admin-stat-label">Phim đang chiếu</div>
@@ -158,7 +185,7 @@ export default function AdminDashboardStats() {
             </div>
             <div className="admin-stat-card accent-orange">
               <div className="admin-stat-icon orange"><ReportProblemIcon /></div>
-              <div className="admin-stat-label">Báo lỗi đang mở</div>
+              <div className="admin-stat-label">Báo lỗi cần xử lý</div>
               <div className="admin-stat-value">{overview.open_reports}</div>
             </div>
             <div className="admin-stat-card accent-green">
@@ -169,7 +196,7 @@ export default function AdminDashboardStats() {
           </div>
 
           {aiHealth && (
-            <div className="admin-stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: 28 }}>
+            <div className="admin-stats-grid" style={{ marginBottom: 28 }}>
               <div className="admin-stat-card accent-purple">
                 <div className="admin-stat-label">AI Chatbot</div>
                 <div className="admin-stat-value">{aiHealth.status?.configured ? 'Gemini' : 'Rules'}</div>
@@ -191,6 +218,50 @@ export default function AdminDashboardStats() {
                 <div className="admin-stat-subtitle">{aiHealth.chat?.persisted ? 'Đang lưu session' : 'Chưa chạy migration'}</div>
               </div>
             </div>
+          )}
+
+          {aiHealth && (
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1.35fr 1fr' }, gap: 3, mb: 4 }}>
+              <div className="admin-panel">
+                <div className="admin-panel-title"><CommentIcon sx={{ color: 'var(--admin-accent)' }} /> Câu hỏi chatbot gần đây</div>
+                {aiHealth.chat?.questions?.recent?.length > 0 ? (
+                  <div className="admin-table-wrap">
+                    {aiHealth.chat.questions.recent.slice(0, 6).map((question, index) => (
+                      <div key={`${question.session_id}-${index}`} className="admin-table-row" style={{ gap: 12 }}>
+                        <Box sx={{ flex: 1.6, minWidth: 0 }}>
+                          <Typography variant="body2" sx={{ color: '#fff', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {question.content}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ flex: 0.45, color: '#aaa', fontSize: 13, textAlign: 'right' }}>
+                          {formatDateTime(question.created_at)}
+                        </Box>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Typography sx={{ color: '#888', textAlign: 'center', py: 4 }}>Chưa có câu hỏi chatbot.</Typography>
+                )}
+              </div>
+
+              <div className="admin-panel">
+                <div className="admin-panel-title"><TrendingUpIcon sx={{ color: 'var(--admin-accent)' }} /> Câu hỏi lặp nhiều</div>
+                {aiHealth.chat?.questions?.top?.length > 0 ? (
+                  <Stack spacing={1.2}>
+                    {aiHealth.chat.questions.top.slice(0, 6).map((question, index) => (
+                      <Box key={`${question.question}-${index}`} sx={{ display: 'flex', alignItems: 'center', gap: 1.2, p: 1.25, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <Chip label={question.total} size="small" sx={{ bgcolor: 'rgba(99,102,241,0.16)', color: '#c7d2fe', fontWeight: 900 }} />
+                        <Typography variant="body2" sx={{ color: '#fff', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {question.question}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Stack>
+                ) : (
+                  <Typography sx={{ color: '#888', textAlign: 'center', py: 4 }}>Chưa có dữ liệu lặp.</Typography>
+                )}
+              </div>
+            </Box>
           )}
 
           {/* Charts Row 1 */}
@@ -290,7 +361,8 @@ export default function AdminDashboardStats() {
                     <YAxis type="category" dataKey="name" hide />
                     <RechartsTooltip contentStyle={{ backgroundColor: '#222', borderColor: '#444', color: '#fff' }} />
                     <Legend />
-                    <Bar dataKey="open" name="Đang mở" stackId="a" fill={STATUS_COLORS.open} barSize={40} />
+                    <Bar dataKey="new" name="Mới" stackId="a" fill={STATUS_COLORS.new} barSize={40} />
+                    <Bar dataKey="processing" name="Đang xử lý" stackId="a" fill={STATUS_COLORS.processing} />
                     <Bar dataKey="resolved" name="Đã xử lý" stackId="a" fill={STATUS_COLORS.resolved} />
                     <Bar dataKey="rejected" name="Từ chối" stackId="a" fill={STATUS_COLORS.rejected} />
                   </BarChart>
@@ -344,6 +416,11 @@ export default function AdminDashboardStats() {
                     </Box>
                     <Box sx={{ flex: 2 }}>
                       <Typography variant="body2">{report.reason}</Typography>
+                      {report.report_type && (
+                        <Typography variant="caption" sx={{ color: '#fbbf24', display: 'block' }}>
+                          {REPORT_TYPE_LABELS[report.report_type] || report.report_type}
+                        </Typography>
+                      )}
                       {report.description && <Typography variant="caption" sx={{ color: '#aaa', display: 'block' }}>{report.description}</Typography>}
                     </Box>
                     <Box sx={{ flex: 1, color: '#aaa', fontSize: 14 }}>{report.reporter_name || 'Khách'}</Box>
@@ -361,3 +438,5 @@ export default function AdminDashboardStats() {
     </Box>
   );
 }
+
+

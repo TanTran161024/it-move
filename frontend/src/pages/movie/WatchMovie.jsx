@@ -4,7 +4,13 @@ import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import VideoPlayer from "../../components/player/VideoPlayer";
 import { API_BASE_URL, API_URL as API } from "../../config/api";
-import { getProfileHeaders } from "../../utils/profile";
+import {
+  getActiveProfile,
+  getProfileHeaders,
+  getProfilePlayerSettings,
+  mergeProfilePlayerSettings,
+  setActiveProfile,
+} from "../../utils/profile";
 
 const REPORT_REASONS = [
   "Video không phát",
@@ -16,12 +22,6 @@ const REPORT_REASONS = [
 ];
 
 const PLAYER_SETTINGS_KEY = "itmove_player_settings";
-const DEFAULT_PLAYER_SETTINGS = {
-  autoplayNext: true,
-  cinemaDefault: false,
-  subtitleStyle: "default",
-  subtitleTrack: "auto",
-};
 
 function getStoredUser() {
   try {
@@ -31,12 +31,16 @@ function getStoredUser() {
   }
 }
 
-function getStoredPlayerSettings() {
+function getPlayerSettingsStorageKey(profile = getActiveProfile()) {
+  return profile?.id ? `${PLAYER_SETTINGS_KEY}:${profile.id}` : PLAYER_SETTINGS_KEY;
+}
+
+function getStoredPlayerSettings(profile = getActiveProfile()) {
   try {
-    const parsed = JSON.parse(localStorage.getItem(PLAYER_SETTINGS_KEY) || "{}");
-    return { ...DEFAULT_PLAYER_SETTINGS, ...parsed };
+    const parsed = JSON.parse(localStorage.getItem(getPlayerSettingsStorageKey(profile)) || "{}");
+    return { ...getProfilePlayerSettings(profile), ...parsed };
   } catch {
-    return DEFAULT_PLAYER_SETTINGS;
+    return getProfilePlayerSettings(profile);
   }
 }
 
@@ -165,7 +169,7 @@ const WatchMovie = () => {
   const epParam = Number.parseInt(query.get("ep"), 10);
   const urlResumeAt = Number(query.get("t") || 0);
   const user = useMemo(getStoredUser, []);
-  const initialPlayerSettings = useMemo(getStoredPlayerSettings, []);
+  const initialPlayerSettings = useMemo(() => getStoredPlayerSettings(), []);
 
   const [data, setData] = useState(null);
   const [selectedEpisode, setSelectedEpisode] = useState(null);
@@ -218,7 +222,25 @@ const WatchMovie = () => {
   const handlePlayerSettingChange = useCallback((key, value) => {
     setPlayerSettings((current) => {
       const next = { ...current, [key]: value };
-      localStorage.setItem(PLAYER_SETTINGS_KEY, JSON.stringify(next));
+      const activeProfile = getActiveProfile();
+      localStorage.setItem(getPlayerSettingsStorageKey(activeProfile), JSON.stringify(next));
+
+      if (activeProfile?.id) {
+        const optimisticProfile = mergeProfilePlayerSettings(activeProfile, next);
+        setActiveProfile(optimisticProfile);
+
+        fetch(`${API}/profiles/${activeProfile.id}/settings`, {
+          method: "PUT",
+          headers: getProfileHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify(next),
+        })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((payload) => {
+            if (payload?.profile) setActiveProfile(payload.profile);
+          })
+          .catch(() => {});
+      }
+
       return next;
     });
 

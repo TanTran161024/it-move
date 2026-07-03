@@ -1,9 +1,113 @@
-import { useEffect, useState } from 'react';
-import axios from 'axios';
+import React, { useEffect, useRef, useState, lazy, Suspense } from 'react';
 import Banner from '../../components/layout/Banner';
-import MovieSlider from '../../components/movie/MovieSlider';
-import ContinueWatchingSection from '../../components/movie/ContinueWatchingSection';
 import { API_BASE_URL as API } from '../../config/api';
+
+const MovieSlider = lazy(() => import('../../components/movie/MovieSlider'));
+const ContinueWatchingSection = lazy(() => import('../../components/movie/ContinueWatchingSection'));
+const Top10Slider = lazy(() => import('../../components/movie/Top10Slider'));
+
+async function getJson(url) {
+  const response = await fetch(url);
+  if (!response.ok) return [];
+  const data = await response.json().catch(() => []);
+  return Array.isArray(data) ? data : [];
+}
+
+function SectionSkeleton({ className = 'h-[300px]' }) {
+  return (
+    <div className={`${className} w-full relative bg-[#1A1A1A] overflow-hidden rounded-xl`}>
+      <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite_linear] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+    </div>
+  );
+}
+
+function useNearViewport(rootMargin = '700px 0px') {
+  const ref = useRef(null);
+  const [isNear, setIsNear] = useState(false);
+
+  useEffect(() => {
+    if (isNear) return undefined;
+    const node = ref.current;
+    if (!node) return undefined;
+
+    if (!('IntersectionObserver' in window)) {
+      setIsNear(true);
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsNear(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [isNear, rootMargin]);
+
+  return [ref, isNear];
+}
+
+function DeferredTop10Section({ movies }) {
+  const [sectionRef, shouldRender] = useNearViewport('900px 0px');
+
+  return (
+    <div ref={sectionRef} className="min-h-[360px] md:min-h-[430px]">
+      {shouldRender ? (
+        <Suspense fallback={<SectionSkeleton />}>
+          <Top10Slider movies={movies} title="Top 10 Phim Thịnh Hành" />
+        </Suspense>
+      ) : (
+        <SectionSkeleton />
+      )}
+    </div>
+  );
+}
+
+function CategoryMovieSection({ category }) {
+  const [sectionRef, shouldLoad] = useNearViewport('800px 0px');
+  const [movies, setMovies] = useState([]);
+
+  useEffect(() => {
+    if (!shouldLoad || !category?.id) return undefined;
+
+    let cancelled = false;
+    getJson(`${API}/api/categories/${category.id}/movies?limit=8`)
+      .then((data) => {
+        if (!cancelled) {
+          setMovies(data.map(normalizeMovie));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setMovies([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [category?.id, shouldLoad]);
+
+  return (
+    <div ref={sectionRef} className="min-h-[390px] md:min-h-[430px]">
+      {shouldLoad ? (
+        <Suspense fallback={<SectionSkeleton />}>
+          <MovieSlider
+            movies={movies}
+            title={category.name}
+            categoryId={category.id}
+            categoryName={category.name}
+          />
+        </Suspense>
+      ) : (
+        <SectionSkeleton />
+      )}
+    </div>
+  );
+}
 
 function normalizeMovie(movie) {
   return {
@@ -17,57 +121,40 @@ export default function Home() {
   const [newMovies, setNewMovies] = useState([]);
   const [topViewedMovies, setTopViewedMovies] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [moviesByCategory, setMoviesByCategory] = useState({});
+  const [hasStoredUser] = useState(() => Boolean(localStorage.getItem('user')));
 
   useEffect(() => {
-    axios.get(`${API}/api/movies`).then((res) => {
-      const movies = Array.isArray(res.data) ? res.data : [];
-      setNewMovies(movies.slice(0, 16).map(normalizeMovie));
-      setTopViewedMovies(
-        [...movies]
-          .sort((a, b) => Number(b.views || 0) - Number(a.views || 0))
-          .slice(0, 16)
-          .map(normalizeMovie)
-      );
-    });
-
-    axios.get(`${API}/api/categories`).then((res) => {
-      const categoryList = Array.isArray(res.data) ? res.data : [];
+    Promise.all([
+      getJson(`${API}/api/movies?limit=12&sort=recent`).catch(() => []),
+      getJson(`${API}/api/movies?limit=10&sort=views`).catch(() => []),
+      getJson(`${API}/api/categories`).catch(() => [])
+    ]).then(([movies, topMovies, categoryList]) => {
+      setNewMovies(movies.map(normalizeMovie));
+      setTopViewedMovies(topMovies.map(normalizeMovie));
       setCategories(categoryList);
-
-      categoryList.forEach((category) => {
-        axios.get(`${API}/api/categories/${category.id}/movies`).then((moviesRes) => {
-          const movies = Array.isArray(moviesRes.data) ? moviesRes.data.map(normalizeMovie) : [];
-          setMoviesByCategory((current) => ({
-            ...current,
-            [category.id]: movies,
-          }));
-        }).catch((err) => {
-          console.error(`Lỗi khi lấy phim cho danh mục ${category.name}:`, err);
-        });
-      });
-    }).catch((err) => {
-      console.error('Lỗi khi lấy danh mục:', err);
     });
   }, []);
 
   return (
-    <div className="w-full bg-background min-h-screen pb-20">
+    <div className="w-full bg-background min-h-screen pb-20 overflow-x-hidden">
+      <h1 className="sr-only">Nền tảng phim trực tuyến cao cấp IT Move</h1>
       <Banner />
 
-      <div className="w-full max-w-[2000px] mx-auto px-4 sm:px-8 md:px-12 lg:px-16 relative z-20 space-y-8 md:space-y-12">
-        <ContinueWatchingSection />
-        <MovieSlider movies={newMovies} title="Phim mới cập nhật" />
-        <MovieSlider movies={topViewedMovies} title="Phim xem nhiều nhất" />
+      <div className="w-full px-[16px] md:px-[32px] lg:px-[48px] xl:px-[72px] relative z-20 -mt-20 md:-mt-32 space-y-10 md:space-y-16">
+        {hasStoredUser && (
+          <Suspense fallback={<SectionSkeleton className="h-[200px]" />}>
+            <ContinueWatchingSection />
+          </Suspense>
+        )}
+        
+        <Suspense fallback={<SectionSkeleton />}>
+          <MovieSlider movies={newMovies} title="Phim mới cập nhật" />
+        </Suspense>
+
+        <DeferredTop10Section movies={topViewedMovies} />
 
         {categories.map((category) => (
-          <MovieSlider
-            key={category.id}
-            movies={moviesByCategory[category.id] || []}
-            title={category.name}
-            categoryId={category.id}
-            categoryName={category.name}
-          />
+          <CategoryMovieSection key={category.id} category={category} />
         ))}
       </div>
     </div>

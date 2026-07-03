@@ -546,10 +546,10 @@ export default function Admin() {
   ];
 
   return (
-    <Box sx={{ display: 'flex', bgcolor: '#181920', minHeight: '100vh' }}>
+    <Box sx={{ display: 'flex', bgcolor: '#181920', height: '100vh', overflow: 'hidden' }}>
       {/* Mini sidebar khi đóng */}
       {!sidebarOpen && (
-        <Box sx={{ position: 'fixed', top: 0, left: 0, width: 64, height: '100vh', bgcolor: '#20222b', zIndex: 1200, display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 2, boxShadow: '2px 0 8px #0002' }}>
+        <Box sx={{ flexShrink: 0, width: 64, height: '100vh', bgcolor: '#20222b', zIndex: 1200, display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 2, borderRight: '1px solid var(--admin-border)' }}>
           {/* Nút mở sidebar */}
           <Tooltip title="Mở menu" placement="right">
             <IconButton onClick={() => setSidebarOpen(true)} sx={{ color: '#fff', mb: 2, bgcolor: 'transparent', '&:hover': { bgcolor: '#23243a' } }}>
@@ -579,7 +579,7 @@ export default function Admin() {
         </Box>
       )}
       <Sidebar onSelect={setSelectedMenu} selected={selectedMenu} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <Box component="main" sx={{ flexGrow: 1, p: 3, ml: sidebarOpen ? '320px' : 0, transition: 'margin-left 0.2s' }}>
+      <Box component="main" sx={{ flex: 1, minWidth: 0, p: 3, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
         <Toolbar />
         {selectedMenu !== 'dashboard' && (
           <Typography variant="h4" sx={{ color: '#fff', fontWeight: 700, textAlign: 'center', mb: 4, letterSpacing: 2, textShadow: '0 2px 8px #0006' }}>
@@ -587,7 +587,7 @@ export default function Admin() {
           </Typography>
         )}
         {selectedMenu === 'movies' && (
-          <Box sx={{ width: '100%', maxWidth: '1400px', mx: 'auto', px: { xs: 1, md: 3 }, mt: 4 }}>
+          <Box sx={{ width: '100%', px: { xs: 1, md: 3 }, mt: 4 }}>
             <Typography variant="h4" gutterBottom sx={{ color: '#fff', fontWeight:700 }}>Quản lý phim</Typography>
             {notice && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setNotice('')}>{notice}</Alert>}
             {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
@@ -642,7 +642,7 @@ export default function Admin() {
           </Box>
         )}
         {selectedMenu === 'banners' && (
-          <Box className="admin-main-section" sx={{ width: '100%', maxWidth: '1400px', mx: 'auto', px: { xs: 1, md: 3 }, mt: 4 }}>
+          <Box className="admin-main-section" sx={{ width: '100%', px: { xs: 1, md: 3 }, mt: 4 }}>
             <div className="admin-section-header">
               <div>
                 <h2 className="admin-section-title">Quản lý banner</h2>
@@ -709,7 +709,7 @@ export default function Admin() {
           </Box>
         )}
         {selectedMenu === 'general' && (
-          <Box className="admin-main-section" sx={{ width: '100%', maxWidth: '1400px', mx: 'auto', px: { xs: 1, md: 3 }, mt: 4 }}>
+          <Box className="admin-main-section" sx={{ width: '100%', px: { xs: 1, md: 3 }, mt: 4 }}>
             <div className="admin-section-header">
               <div>
                 <h2 className="admin-section-title">Quản lý chung</h2>
@@ -818,7 +818,7 @@ export default function Admin() {
           <SubtitleTranslator />
         )}
         {selectedMenu === 'users' && (
-          <Box sx={{ color: '#fff', mt: 4, maxWidth: '1480px', mx: 'auto' }}>
+          <Box sx={{ color: '#fff', mt: 4, width: '100%' }}>
             <div className="admin-section-header">
               <div>
                 <h2 className="admin-section-title">Quản lý người dùng</h2>

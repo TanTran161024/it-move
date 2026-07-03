@@ -7,6 +7,20 @@ const {
 const { hasAnyPhrase, hasRefinement, parseDurationMinutes } = require('./chatIntentService');
 
 const DEFAULT_CONTEXT_LIMIT = 12;
+const USER_TASTE_TERMS = [
+  'vua xem',
+  'dang xem',
+  'lich su',
+  'history',
+  'da xem',
+  'gu cua toi',
+  'gu toi',
+  'theo gu',
+  'yeu thich',
+  'watchlist',
+  'danh sach',
+  'giong phim vua xem',
+];
 
 function movieSearchText(movie) {
   return normalizeText([
@@ -76,6 +90,13 @@ async function fillCandidatePool(db, candidates, excludeIds, targetLimit) {
 }
 
 async function getCandidateMovies(db, { message, userId, profileId, limit, signals }) {
+  const normalizedMessage = normalizeText(message);
+  const wantsUserTaste = USER_TASTE_TERMS.some((term) => normalizedMessage.includes(term));
+  if (wantsUserTaste && userId) {
+    const userRecommendations = await getUserRecommendations(db, userId, limit, profileId).catch(() => []);
+    if (userRecommendations.length) return userRecommendations;
+  }
+
   const hasSearchIntent = signals.wanted.length > 0 || Boolean(signals.year) || signals.terms.some((term) => (
     term.length >= 3 && !['phim', 'xem', 'muon', 'goi', 'hay', 'cho', 'toi', 'can'].includes(term)
   ));

@@ -5,8 +5,24 @@ const mysql = require('mysql2/promise');
 const routes = require('./routes');
 
 const app = express();
+const configuredOrigins = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+function isLocalDevelopmentOrigin(origin) {
+  return /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+}
+
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin(origin, callback) {
+    if (!origin || configuredOrigins.includes(origin) || isLocalDevelopmentOrigin(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
 }));
 app.use(express.json({ limit: '1mb' }));

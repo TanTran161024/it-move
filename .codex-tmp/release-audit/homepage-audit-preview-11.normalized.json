@@ -1,0 +1,359 @@
+﻿{
+  "url": "http://127.0.0.1:4175/",
+  "generatedAt": "2026-07-03T10:58:08.991Z",
+  "consoleMessages": [],
+  "pageErrors": [],
+  "failedRequests": [
+    {
+      "url": "https://static.nutscdn.com/vimg/300-0/9fdba340ff590a5c4038148213e25486.jpg",
+      "failure": "net::ERR_BLOCKED_BY_ORB"
+    },
+    {
+      "url": "https://static.nutscdn.com/vimg/300-0/677ba8c0eb6e8aee4db72e569e9c8d95.jpg",
+      "failure": "net::ERR_BLOCKED_BY_ORB"
+    },
+    {
+      "url": "https://static.nutscdn.com/vimg/300-0/9fdba340ff590a5c4038148213e25486.jpg",
+      "failure": "net::ERR_BLOCKED_BY_ORB"
+    },
+    {
+      "url": "https://static.nutscdn.com/vimg/300-0/677ba8c0eb6e8aee4db72e569e9c8d95.jpg",
+      "failure": "net::ERR_BLOCKED_BY_ORB"
+    },
+    {
+      "url": "https://static.nutscdn.com/vimg/300-0/677ba8c0eb6e8aee4db72e569e9c8d95.jpg",
+      "failure": "net::ERR_BLOCKED_BY_ORB"
+    },
+    {
+      "url": "https://static.nutscdn.com/vimg/300-0/9fdba340ff590a5c4038148213e25486.jpg",
+      "failure": "net::ERR_BLOCKED_BY_ORB"
+    },
+    {
+      "url": "https://static.nutscdn.com/vimg/1920-0/9cc9d2008cb739de22bfa2ecb02f623c.webp",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://image.tmdb.org/t/p/w500/2NogAa2FQmZJkwHJTwiuCHfxIFD.jpg",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://image.tmdb.org/t/p/w342/ulzhLuWrPK07P1YkdWQLZnQh1JL.jpg",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://image.tmdb.org/t/p/w500/5tkrlTCmx2G3lUUdiXFNxSxmelo.jpg",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://static.nutscdn.com/vimg/300-0/9fdba340ff590a5c4038148213e25486.jpg",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://static.nutscdn.com/vimg/300-0/677ba8c0eb6e8aee4db72e569e9c8d95.jpg",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://image.tmdb.org/t/p/w500/15SMnscZqd7HZ0bzruatOcKUlOV.jpg",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://image.tmdb.org/t/p/w1280/iA6yYtTPPyyxH883WTYYrB3z0fv.jpg",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://phimimg.com/upload/vod/20260417-1/9981e5c5464815b1ddeb28c004e9b792.jpg",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://image.tmdb.org/t/p/w500/4l4LfiTnQkyWW5Lzh59cOsTBnXl.jpg",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://static.nutscdn.com/vimg/300-0/9fdba340ff590a5c4038148213e25486.jpg",
+      "failure": "net::ERR_BLOCKED_BY_ORB"
+    },
+    {
+      "url": "https://static.nutscdn.com/vimg/300-0/677ba8c0eb6e8aee4db72e569e9c8d95.jpg",
+      "failure": "net::ERR_BLOCKED_BY_ORB"
+    },
+    {
+      "url": "https://static.nutscdn.com/vimg/1920-0/9cc9d2008cb739de22bfa2ecb02f623c.webp",
+      "failure": "net::ERR_BLOCKED_BY_ORB"
+    },
+    {
+      "url": "http://localhost:5000/api/banners",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "http://localhost:5000/api/movies?limit=12&sort=recent",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "http://localhost:5000/api/categories",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "http://localhost:5000/api/movies",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "http://localhost:5000/api/movies?limit=10&sort=views",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://phimimg.com/upload/vod/20260430-1/018d5ba8e2860aa4a02b54037f829cd8.jpg",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://phimimg.com/upload/vod/20260511-1/3e284a552dddd758be8c10f0c649d84c.jpg",
+      "failure": "net::ERR_ABORTED"
+    },
+    {
+      "url": "https://phimimg.com/upload/vod/20260410-1/765cbdf2bf70b87a46ec04c87f8a7d7e.jpg",
+      "failure": "net::ERR_ABORTED"
+    }
+  ],
+  "badResponses": [],
+  "viewportResults": [
+    {
+      "viewport": {
+        "width": 320,
+        "height": 740
+      },
+      "title": "IT Move",
+      "bodyTextStart": "Nền tảng phim trực tuyến cao cấp IT Move\nChuyển Sinh Thành Máy Bán Hàng Và Vượt Ải Hầm Ngục (Phần 3)\nIMDb\n6.8\nFHD\n2026\n24 phút/tập\nHành động\nPhiêu lưu\nViễn tưởng\nKhoa học\nHài Hước\n\nMột người cuồng máy bán hàng tự động đã bị chết một cách hết sức \"ba láp ba xàm\" khi bị chính thứ mình yêu thích giết chế. Không biết nên vui hay buồn nhưng anh lại được đầu thai thành một chiếc máy bán hàng tự động ở thế giới mới. Sau khi xuất hiện trong một khu rừng có nhiều ếch và quái vật, máy bán hàng tự động lại cần phải có tiền xu để duy trì hàng hóa và nâng cấp kỹ năng mới. May mắn thay, chiếc máy bán hàng t",
+      "mojibakeDetected": false,
+      "mojibakeSamples": [],
+      "horizontalOverflow": false,
+      "scrollWidth": 320,
+      "clientWidth": 320,
+      "bodyScrollWidth": 320,
+      "headerExists": true,
+      "footerExists": true,
+      "searchButtonExists": true,
+      "heroHeight": 2339,
+      "imageCount": 20,
+      "brokenImages": [],
+      "focusableCount": 45,
+      "buttonsWithoutName": 0
+    },
+    {
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "title": "IT Move",
+      "bodyTextStart": "Nền tảng phim trực tuyến cao cấp IT Move\nChuyển Sinh Thành Máy Bán Hàng Và Vượt Ải Hầm Ngục (Phần 3)\nIMDb\n6.8\nFHD\n2026\n24 phút/tập\nHành động\nPhiêu lưu\nViễn tưởng\nKhoa học\nHài Hước\n\nMột người cuồng máy bán hàng tự động đã bị chết một cách hết sức \"ba láp ba xàm\" khi bị chính thứ mình yêu thích giết chế. Không biết nên vui hay buồn nhưng anh lại được đầu thai thành một chiếc máy bán hàng tự động ở thế giới mới. Sau khi xuất hiện trong một khu rừng có nhiều ếch và quái vật, máy bán hàng tự động lại cần phải có tiền xu để duy trì hàng hóa và nâng cấp kỹ năng mới. May mắn thay, chiếc máy bán hàng t",
+      "mojibakeDetected": false,
+      "mojibakeSamples": [],
+      "horizontalOverflow": false,
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "bodyScrollWidth": 375,
+      "headerExists": true,
+      "footerExists": true,
+      "searchButtonExists": true,
+      "heroHeight": 2380.1875,
+      "imageCount": 20,
+      "brokenImages": [],
+      "focusableCount": 45,
+      "buttonsWithoutName": 0
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "title": "IT Move",
+      "bodyTextStart": "Nền tảng phim trực tuyến cao cấp IT Move\nChuyển Sinh Thành Máy Bán Hàng Và Vượt Ải Hầm Ngục (Phần 3)\nIMDb\n6.8\nFHD\n2026\n24 phút/tập\nHành động\nPhiêu lưu\nViễn tưởng\nKhoa học\nHài Hước\n\nMột người cuồng máy bán hàng tự động đã bị chết một cách hết sức \"ba láp ba xàm\" khi bị chính thứ mình yêu thích giết chế. Không biết nên vui hay buồn nhưng anh lại được đầu thai thành một chiếc máy bán hàng tự động ở thế giới mới. Sau khi xuất hiện trong một khu rừng có nhiều ếch và quái vật, máy bán hàng tự động lại cần phải có tiền xu để duy trì hàng hóa và nâng cấp kỹ năng mới. May mắn thay, chiếc máy bán hàng t",
+      "mojibakeDetected": false,
+      "mojibakeSamples": [],
+      "horizontalOverflow": false,
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "bodyScrollWidth": 390,
+      "headerExists": true,
+      "footerExists": true,
+      "searchButtonExists": true,
+      "heroHeight": 2407.390625,
+      "imageCount": 20,
+      "brokenImages": [],
+      "focusableCount": 45,
+      "buttonsWithoutName": 0
+    },
+    {
+      "viewport": {
+        "width": 414,
+        "height": 896
+      },
+      "title": "IT Move",
+      "bodyTextStart": "Nền tảng phim trực tuyến cao cấp IT Move\nChuyển Sinh Thành Máy Bán Hàng Và Vượt Ải Hầm Ngục (Phần 3)\nIMDb\n6.8\nFHD\n2026\n24 phút/tập\nHành động\nPhiêu lưu\nViễn tưởng\nKhoa học\nHài Hước\n\nMột người cuồng máy bán hàng tự động đã bị chết một cách hết sức \"ba láp ba xàm\" khi bị chính thứ mình yêu thích giết chế. Không biết nên vui hay buồn nhưng anh lại được đầu thai thành một chiếc máy bán hàng tự động ở thế giới mới. Sau khi xuất hiện trong một khu rừng có nhiều ếch và quái vật, máy bán hàng tự động lại cần phải có tiền xu để duy trì hàng hóa và nâng cấp kỹ năng mới. May mắn thay, chiếc máy bán hàng t",
+      "mojibakeDetected": false,
+      "mojibakeSamples": [],
+      "horizontalOverflow": false,
+      "scrollWidth": 414,
+      "clientWidth": 414,
+      "bodyScrollWidth": 414,
+      "headerExists": true,
+      "footerExists": true,
+      "searchButtonExists": true,
+      "heroHeight": 2451.59375,
+      "imageCount": 20,
+      "brokenImages": [],
+      "focusableCount": 45,
+      "buttonsWithoutName": 0
+    },
+    {
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "title": "IT Move",
+      "bodyTextStart": "IT Move\nDành cho bạn\nThể loại\nPhim lẻ\nPhim bộ\nQuốc gia\nDiễn viên\nĐăng nhập\nNền tảng phim trực tuyến cao cấp IT Move\nChuyển Sinh Thành Máy Bán Hàng Và Vượt Ải Hầm Ngục (Phần 3)\nIMDb\n6.8\nFHD\n2026\n24 phút/tập\nHành động\nPhiêu lưu\nViễn tưởng\nKhoa học\nHài Hước\n\nMột người cuồng máy bán hàng tự động đã bị chết một cách hết sức \"ba láp ba xàm\" khi bị chính thứ mình yêu thích giết chế. Không biết nên vui hay buồn nhưng anh lại được đầu thai thành một chiếc máy bán hàng tự động ở thế giới mới. Sau khi xuất hiện trong một khu rừng có nhiều ếch và quái vật, máy bán hàng tự động lại cần phải có tiền xu để d",
+      "mojibakeDetected": false,
+      "mojibakeSamples": [],
+      "horizontalOverflow": false,
+      "scrollWidth": 768,
+      "clientWidth": 768,
+      "bodyScrollWidth": 768,
+      "headerExists": true,
+      "footerExists": true,
+      "searchButtonExists": true,
+      "heroHeight": 2852.796875,
+      "imageCount": 15,
+      "brokenImages": [],
+      "focusableCount": 49,
+      "buttonsWithoutName": 0
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 1366
+      },
+      "title": "IT Move",
+      "bodyTextStart": "IT Move\nDành cho bạn\nThể loại\nPhim lẻ\nPhim bộ\nQuốc gia\nDiễn viên\nĐăng nhập\nNền tảng phim trực tuyến cao cấp IT Move\nChuyển Sinh Thành Máy Bán Hàng Và Vượt Ải Hầm Ngục (Phần 3)\nIMDb\n6.8\nFHD\n2026\n24 phút/tập\nHành động\nPhiêu lưu\nViễn tưởng\nKhoa học\nHài Hước\n\nMột người cuồng máy bán hàng tự động đã bị chết một cách hết sức \"ba láp ba xàm\" khi bị chính thứ mình yêu thích giết chế. Không biết nên vui hay buồn nhưng anh lại được đầu thai thành một chiếc máy bán hàng tự động ở thế giới mới. Sau khi xuất hiện trong một khu rừng có nhiều ếch và quái vật, máy bán hàng tự động lại cần phải có tiền xu để d",
+      "mojibakeDetected": false,
+      "mojibakeSamples": [],
+      "horizontalOverflow": false,
+      "scrollWidth": 1024,
+      "clientWidth": 1024,
+      "bodyScrollWidth": 1024,
+      "headerExists": true,
+      "footerExists": true,
+      "searchButtonExists": true,
+      "heroHeight": 3246,
+      "imageCount": 15,
+      "brokenImages": [],
+      "focusableCount": 49,
+      "buttonsWithoutName": 0
+    },
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "title": "IT Move",
+      "bodyTextStart": "IT Move\nDành cho bạn\nThể loại\nPhim lẻ\nPhim bộ\nQuốc gia\nDiễn viên\nĐăng nhập\nNền tảng phim trực tuyến cao cấp IT Move\nChuyển Sinh Thành Máy Bán Hàng Và Vượt Ải Hầm Ngục (Phần 3)\nIMDb\n6.8\nFHD\n2026\n24 phút/tập\nHành động\nPhiêu lưu\nViễn tưởng\nKhoa học\nHài Hước\n\nMột người cuồng máy bán hàng tự động đã bị chết một cách hết sức \"ba láp ba xàm\" khi bị chính thứ mình yêu thích giết chế. Không biết nên vui hay buồn nhưng anh lại được đầu thai thành một chiếc máy bán hàng tự động ở thế giới mới. Sau khi xuất hiện trong một khu rừng có nhiều ếch và quái vật, máy bán hàng tự động lại cần phải có tiền xu để d",
+      "mojibakeDetected": false,
+      "mojibakeSamples": [],
+      "horizontalOverflow": false,
+      "scrollWidth": 1280,
+      "clientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "headerExists": true,
+      "footerExists": true,
+      "searchButtonExists": true,
+      "heroHeight": 2780,
+      "imageCount": 15,
+      "brokenImages": [],
+      "focusableCount": 49,
+      "buttonsWithoutName": 0
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "title": "IT Move",
+      "bodyTextStart": "IT Move\nDành cho bạn\nThể loại\nPhim lẻ\nPhim bộ\nQuốc gia\nDiễn viên\nĐăng nhập\nNền tảng phim trực tuyến cao cấp IT Move\nChuyển Sinh Thành Máy Bán Hàng Và Vượt Ải Hầm Ngục (Phần 3)\nIMDb\n6.8\nFHD\n2026\n24 phút/tập\nHành động\nPhiêu lưu\nViễn tưởng\nKhoa học\nHài Hước\n\nMột người cuồng máy bán hàng tự động đã bị chết một cách hết sức \"ba láp ba xàm\" khi bị chính thứ mình yêu thích giết chế. Không biết nên vui hay buồn nhưng anh lại được đầu thai thành một chiếc máy bán hàng tự động ở thế giới mới. Sau khi xuất hiện trong một khu rừng có nhiều ếch và quái vật, máy bán hàng tự động lại cần phải có tiền xu để d",
+      "mojibakeDetected": false,
+      "mojibakeSamples": [],
+      "horizontalOverflow": false,
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "bodyScrollWidth": 1440,
+      "headerExists": true,
+      "footerExists": true,
+      "searchButtonExists": true,
+      "heroHeight": 2840,
+      "imageCount": 15,
+      "brokenImages": [],
+      "focusableCount": 49,
+      "buttonsWithoutName": 0
+    },
+    {
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "title": "IT Move",
+      "bodyTextStart": "IT Move\nDành cho bạn\nThể loại\nPhim lẻ\nPhim bộ\nQuốc gia\nDiễn viên\nĐăng nhập\nNền tảng phim trực tuyến cao cấp IT Move\nChuyển Sinh Thành Máy Bán Hàng Và Vượt Ải Hầm Ngục (Phần 3)\nIMDb\n6.8\nFHD\n2026\n24 phút/tập\nHành động\nPhiêu lưu\nViễn tưởng\nKhoa học\nHài Hước\n\nMột người cuồng máy bán hàng tự động đã bị chết một cách hết sức \"ba láp ba xàm\" khi bị chính thứ mình yêu thích giết chế. Không biết nên vui hay buồn nhưng anh lại được đầu thai thành một chiếc máy bán hàng tự động ở thế giới mới. Sau khi xuất hiện trong một khu rừng có nhiều ếch và quái vật, máy bán hàng tự động lại cần phải có tiền xu để d",
+      "mojibakeDetected": false,
+      "mojibakeSamples": [],
+      "horizontalOverflow": false,
+      "scrollWidth": 1920,
+      "clientWidth": 1920,
+      "bodyScrollWidth": 1920,
+      "headerExists": true,
+      "footerExists": true,
+      "searchButtonExists": true,
+      "heroHeight": 2960,
+      "imageCount": 15,
+      "brokenImages": [],
+      "focusableCount": 49,
+      "buttonsWithoutName": 0
+    },
+    {
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "title": "IT Move",
+      "bodyTextStart": "IT Move\nDành cho bạn\nThể loại\nPhim lẻ\nPhim bộ\nQuốc gia\nDiễn viên\nĐăng nhập\nNền tảng phim trực tuyến cao cấp IT Move\nChuyển Sinh Thành Máy Bán Hàng Và Vượt Ải Hầm Ngục (Phần 3)\nIMDb\n6.8\nFHD\n2026\n24 phút/tập\nHành động\nPhiêu lưu\nViễn tưởng\nKhoa học\nHài Hước\n\nMột người cuồng máy bán hàng tự động đã bị chết một cách hết sức \"ba láp ba xàm\" khi bị chính thứ mình yêu thích giết chế. Không biết nên vui hay buồn nhưng anh lại được đầu thai thành một chiếc máy bán hàng tự động ở thế giới mới. Sau khi xuất hiện trong một khu rừng có nhiều ếch và quái vật, máy bán hàng tự động lại cần phải có tiền xu để d",
+      "mojibakeDetected": false,
+      "mojibakeSamples": [],
+      "horizontalOverflow": false,
+      "scrollWidth": 2560,
+      "clientWidth": 2560,
+      "bodyScrollWidth": 2560,
+      "headerExists": true,
+      "footerExists": true,
+      "searchButtonExists": true,
+      "heroHeight": 3320,
+      "imageCount": 15,
+      "brokenImages": [],
+      "focusableCount": 47,
+      "buttonsWithoutName": 0
+    }
+  ],
+  "journey": {
+    "scroll": true,
+    "fastScroll": true,
+    "hoverHero": true,
+    "hoverCard": false,
+    "searchOpen": true,
+    "searchTyping": true,
+    "searchEscapeClose": true,
+    "menuClick": true,
+    "backForward": true,
+    "refresh": true,
+    "tabFocusCount": 12,
+    "searchOverlayScrollUnlocked": {
+      "windowScrollY": 0,
+      "htmlOverflow": "hidden",
+      "bodyOverflow": "hidden",
+      "bodyPosition": "fixed",
+      "overlayScrollable": true
+    }
+  }
+}

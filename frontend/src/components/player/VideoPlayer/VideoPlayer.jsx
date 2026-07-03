@@ -35,10 +35,10 @@ const DEFAULT_PLAYER_SETTINGS = {
   subtitleTrack: "auto",
 };
 const SUBTITLE_STYLES = [
-  { id: "default", label: "Máº·c Ä‘á»‹nh", detail: "Tráº¯ng rÃµ" },
-  { id: "large", label: "Chá»¯ lá»›n", detail: "Dá»… Ä‘á»c hÆ¡n" },
-  { id: "yellow", label: "VÃ ng", detail: "Ná»•i trÃªn ná»n sÃ¡ng" },
-  { id: "boxed", label: "Ná»n Ä‘en", detail: "TÆ°Æ¡ng pháº£n cao" },
+  { id: "default", label: "Mặc định", detail: "Trắng rõ" },
+  { id: "large", label: "Chữ lớn", detail: "Dễ đọc hơn" },
+  { id: "yellow", label: "Vàng", detail: "Nổi trên nền sáng" },
+  { id: "boxed", label: "Nền đen", detail: "Tương phản cao" },
 ];
 
 function formatTime(time) {
@@ -125,7 +125,7 @@ function normalizeSubtitleTracks(subtitles) {
       return {
         id: String(subtitle?.id || subtitle?.srclang || subtitle?.language || `subtitle-${index + 1}`),
         src,
-        label: subtitle?.label || subtitle?.name || (subtitle?.srclang === "en" ? "English" : "Tiáº¿ng Viá»‡t"),
+        label: subtitle?.label || subtitle?.name || (subtitle?.srclang === "en" ? "English" : "Tiếng Việt"),
         srclang: subtitle?.srclang || subtitle?.language || "vi",
       };
     })
@@ -245,7 +245,7 @@ function ProgressBar({ currentTime, duration, onSeek, disabled }) {
       <div
         ref={trackRef}
         role="slider"
-        aria-label="Tiáº¿n trÃ¬nh phÃ¡t"
+        aria-label="Tiến trình phát"
         aria-valuemin={0}
         aria-valuemax={Math.floor(duration || 0)}
         aria-valuenow={Math.floor(currentTime || 0)}
@@ -327,7 +327,7 @@ function ToggleRow({ label, detail, checked, onChange }) {
 
 function SpeedMenu({ open, playbackRate, onSelect }) {
   return (
-    <PlayerMenu open={open} title="Tá»‘c Ä‘á»™ phÃ¡t" menuId="speed">
+    <PlayerMenu open={open} title="Tốc độ phát" menuId="speed">
       {SPEEDS.map((speed) => (
         <MenuOption
           key={speed}
@@ -386,10 +386,10 @@ function AudioSubtitleMenu({
       {hasSubtitleTracks && (
         <>
           <div className="px-3 pb-1 pt-2 text-xs font-black uppercase tracking-[0.18em] text-white/35">
-            Phá»¥ Ä‘á»
+            Phụ đề
           </div>
           <MenuOption
-            label="Táº¯t phá»¥ Ä‘á»"
+            label="Tắt phụ đề"
             active={selectedSubtitleId === "off"}
             onClick={() => onSelectSubtitleTrack("off")}
           />
@@ -407,7 +407,7 @@ function AudioSubtitleMenu({
       )}
 
       <div className="px-3 pb-1 pt-2 text-xs font-black uppercase tracking-[0.18em] text-white/35">
-        Kiá»ƒu hiá»ƒn thá»‹ phá»¥ Ä‘á»
+        Kiểu hiển thị phụ đề
       </div>
       {SUBTITLE_STYLES.map((style) => (
         <MenuOption
@@ -421,14 +421,14 @@ function AudioSubtitleMenu({
 
       <div className="my-2 border-t border-white/10" />
       <ToggleRow
-        label="Tá»± phÃ¡t táº­p tiáº¿p"
-        detail="Khi táº­p hiá»‡n táº¡i káº¿t thÃºc"
+        label="Tự phát tập tiếp"
+        detail="Khi tập hiện tại kết thúc"
         checked={Boolean(playerSettings.autoplayNext)}
         onChange={(value) => onPlayerSettingChange?.("autoplayNext", value)}
       />
       <ToggleRow
-        label="Máº·c Ä‘á»‹nh táº¯t Ä‘Ã¨n"
-        detail="Tá»± báº­t cinema mode khi vÃ o xem"
+        label="Mặc định tắt đèn"
+        detail="Tự bật cinema mode khi vào xem"
         checked={Boolean(playerSettings.cinemaDefault)}
         onChange={(value) => onPlayerSettingChange?.("cinemaDefault", value)}
       />
@@ -452,8 +452,8 @@ function VolumeControl({ volume, muted, onToggleMute, onVolumeChange }) {
     >
       <ControlButton
         icon={muted || volume === 0 ? <FaVolumeMute size={30} /> : <FaVolumeUp size={30} />}
-        ariaLabel={muted || volume === 0 ? "Báº­t Ã¢m" : "Táº¯t Ã¢m"}
-        title={muted || volume === 0 ? "Báº­t Ã¢m" : "Táº¯t Ã¢m"}
+        ariaLabel={muted || volume === 0 ? "Bật âm" : "Tắt âm"}
+        title={muted || volume === 0 ? "Bật âm" : "Tắt âm"}
         action="mute"
         onClick={onToggleMute}
       />
@@ -465,7 +465,7 @@ function VolumeControl({ volume, muted, onToggleMute, onVolumeChange }) {
           step="0.01"
           value={visibleVolume}
           onChange={(event) => onVolumeChange(Number(event.target.value))}
-          aria-label="Ã‚m lÆ°á»£ng"
+          aria-label="Âm lượng"
           className="h-2 w-full cursor-pointer accent-[#e50914]"
           style={{ accentColor: ACCENT }}
         />
@@ -566,7 +566,7 @@ const VideoPlayer = forwardRef(({
       try {
         await video.play();
       } catch {
-        setError("KhÃ´ng thá»ƒ phÃ¡t video nÃ y.");
+        setError("Không thể phát video này.");
       }
     } else {
       video.pause();
@@ -787,7 +787,7 @@ const VideoPlayer = forwardRef(({
     let hlsInstance = null;
     let nativeAttached = false;
 
-    import("hls.js")
+    import("hls.js/light")
       .then(({ default: Hls }) => {
         if (disposed) return;
 
@@ -822,7 +822,7 @@ const VideoPlayer = forwardRef(({
             }
 
             setBuffering(false);
-            setError("KhÃ´ng thá»ƒ phÃ¡t video nÃ y.");
+            setError("Không thể phát video này.");
           });
           return;
         }
@@ -836,13 +836,13 @@ const VideoPlayer = forwardRef(({
 
         if (!disposed) {
           setBuffering(false);
-          setError("TrÃ¬nh duyá»‡t khÃ´ng há»— trá»£ nguá»“n phÃ¡t nÃ y.");
+          setError("Trình duyệt không hỗ trợ nguồn phát này.");
         }
       })
       .catch(() => {
         if (!disposed) {
           setBuffering(false);
-          setError("KhÃ´ng thá»ƒ táº£i trÃ¬nh phÃ¡t HLS.");
+          setError("Không thể tải trình phát HLS.");
         }
       });
 
@@ -1002,7 +1002,7 @@ const VideoPlayer = forwardRef(({
           }}
           onError={() => {
             setBuffering(false);
-            setError("KhÃ´ng thá»ƒ phÃ¡t video nÃ y.");
+            setError("Không thể phát video này.");
           }}
         >
           {subtitleTracks.map((subtitle) => (
@@ -1056,14 +1056,14 @@ const VideoPlayer = forwardRef(({
       {error && (
         <div data-player-error="true" className={`${mediaFrameClass} z-40 flex flex-col items-center justify-center bg-black/90 px-6 text-center`}>
           <div className="mb-3 text-2xl font-black text-[#e50914]">{error}</div>
-          <p className="max-w-md text-sm text-white/65">HÃ£y thá»­ chá»n táº­p khÃ¡c hoáº·c gá»­i bÃ¡o lá»—i Ä‘á»ƒ admin kiá»ƒm tra.</p>
+          <p className="max-w-md text-sm text-white/65">Hãy thử chọn tập khác hoặc gửi báo lỗi để admin kiểm tra.</p>
         </div>
       )}
 
       {!iframeSource && !missingSource && !error && !playing && (
         <button
           type="button"
-          aria-label="PhÃ¡t"
+          aria-label="Phát"
           data-player-action="center-play"
           onClick={handlePlayPause}
           className="absolute left-1/2 top-1/2 z-40 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white/20 text-white shadow-2xl backdrop-blur-md transition-colors duration-150 hover:bg-white/30"
@@ -1087,30 +1087,30 @@ const VideoPlayer = forwardRef(({
             <div className="flex h-16 items-center gap-2 overflow-hidden md:gap-3">
               <ControlButton
                 icon={<FaPlay size={31} />}
-                ariaLabel="PhÃ¡t"
+                ariaLabel="Phát"
                 action="play"
-                title="Nguá»“n nhÃºng tá»± quáº£n lÃ½ nÃºt phÃ¡t"
+                title="Nguồn nhúng tự quản lý nút phát"
                 disabled
               />
               <ControlButton
                 icon={<MdReplay10 size={36} />}
-                ariaLabel="Tua lÃ¹i 10 giÃ¢y"
+                ariaLabel="Tua lùi 10 giây"
                 action="rewind"
-                title="Nguá»“n nhÃºng khÃ´ng há»— trá»£ tua tá»« bÃªn ngoÃ i"
+                title="Nguồn nhúng không hỗ trợ tua từ bên ngoài"
                 disabled
               />
               <ControlButton
                 icon={<MdForward10 size={36} />}
-                ariaLabel="Tua tá»›i 10 giÃ¢y"
+                ariaLabel="Tua tới 10 giây"
                 action="forward"
-                title="Nguá»“n nhÃºng khÃ´ng há»— trá»£ tua tá»« bÃªn ngoÃ i"
+                title="Nguồn nhúng không hỗ trợ tua từ bên ngoài"
                 disabled
               />
               <ControlButton
                 icon={<FaVolumeUp size={30} />}
-                ariaLabel="Ã‚m lÆ°á»£ng"
+                ariaLabel="Âm lượng"
                 action="mute"
-                title="Nguá»“n nhÃºng tá»± quáº£n lÃ½ Ã¢m lÆ°á»£ng"
+                title="Nguồn nhúng tự quản lý âm lượng"
                 disabled
               />
 
@@ -1118,7 +1118,7 @@ const VideoPlayer = forwardRef(({
 
               <ControlButton
                 icon={<FaBug size={25} />}
-                label="BÃ¡o lá»—i"
+                label="Báo lỗi"
                 width="medium"
                 action="report"
                 disabled={!onReport}
@@ -1126,15 +1126,15 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={<MdSpeed size={30} />}
-                label="Tá»‘c Ä‘á»™ phÃ¡t"
+                label="Tốc độ phát"
                 width="medium"
                 action="speed"
-                title="Nguá»“n nhÃºng tá»± quáº£n lÃ½ tá»‘c Ä‘á»™"
+                title="Nguồn nhúng tự quản lý tốc độ"
                 disabled
               />
               <ControlButton
                 icon={<MdHighQuality size={31} />}
-                label="Cháº¥t lÆ°á»£ng"
+                label="Chất lượng"
                 width="medium"
                 action="quality"
                 active={menu === "quality"}
@@ -1142,7 +1142,7 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={<NextEpisodeIcon size={36} />}
-                label="Táº­p tiáº¿p theo"
+                label="Tập tiếp theo"
                 width="wide"
                 action="next"
                 disabled={!hasNextEpisode}
@@ -1150,7 +1150,7 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={<EpisodeStackIcon size={38} />}
-                label="Danh sÃ¡ch táº­p"
+                label="Danh sách tập"
                 width="wide"
                 action="episodes"
                 disabled={!onOpenEpisodeList}
@@ -1158,15 +1158,15 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={<MdSubtitles size={33} />}
-                label="Ã‚m thanh & Phá»¥ Ä‘á»"
+                label="Âm thanh & Phụ đề"
                 width="extraWide"
                 action="audio"
-                title="Nguá»“n nhÃºng tá»± quáº£n lÃ½ Ã¢m thanh vÃ  phá»¥ Ä‘á»"
+                title="Nguồn nhúng tự quản lý âm thanh và phụ đề"
                 disabled
               />
               <ControlButton
                 icon={fullscreen ? <FaCompress size={27} /> : <FaExpand size={27} />}
-                ariaLabel={fullscreen ? "ThoÃ¡t toÃ n mÃ n hÃ¬nh" : "ToÃ n mÃ n hÃ¬nh"}
+                ariaLabel={fullscreen ? "Thoát toàn màn hình" : "Toàn màn hình"}
                 action="fullscreen"
                 onClick={handleFullscreen}
               />
@@ -1184,19 +1184,19 @@ const VideoPlayer = forwardRef(({
             <div className="flex h-16 items-center gap-2 overflow-hidden md:gap-3">
               <ControlButton
                 icon={playing ? <FaPause size={31} /> : <FaPlay size={31} />}
-                ariaLabel={playing ? "Táº¡m dá»«ng" : "PhÃ¡t"}
+                ariaLabel={playing ? "Tạm dừng" : "Phát"}
                 action="play"
                 onClick={handlePlayPause}
               />
               <ControlButton
                 icon={<MdReplay10 size={36} />}
-                ariaLabel="Tua lÃ¹i 10 giÃ¢y"
+                ariaLabel="Tua lùi 10 giây"
                 action="rewind"
                 onClick={() => handleSkip(-10)}
               />
               <ControlButton
                 icon={<MdForward10 size={36} />}
-                ariaLabel="Tua tá»›i 10 giÃ¢y"
+                ariaLabel="Tua tới 10 giây"
                 action="forward"
                 onClick={() => handleSkip(10)}
               />
@@ -1211,7 +1211,7 @@ const VideoPlayer = forwardRef(({
 
               <ControlButton
                 icon={<FaBug size={25} />}
-                label="BÃ¡o lá»—i"
+                label="Báo lỗi"
                 width="medium"
                 action="report"
                 disabled={!onReport}
@@ -1219,7 +1219,7 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={<MdSpeed size={30} />}
-                label="Tá»‘c Ä‘á»™ phÃ¡t"
+                label="Tốc độ phát"
                 width="medium"
                 action="speed"
                 active={menu === "speed"}
@@ -1227,7 +1227,7 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={<MdHighQuality size={31} />}
-                label="Cháº¥t lÆ°á»£ng"
+                label="Chất lượng"
                 width="medium"
                 action="quality"
                 active={menu === "quality"}
@@ -1235,7 +1235,7 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={<NextEpisodeIcon size={36} />}
-                label="Táº­p tiáº¿p theo"
+                label="Tập tiếp theo"
                 width="wide"
                 action="next"
                 disabled={!hasNextEpisode}
@@ -1243,7 +1243,7 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={<EpisodeStackIcon size={38} />}
-                label="Danh sÃ¡ch táº­p"
+                label="Danh sách tập"
                 width="wide"
                 action="episodes"
                 disabled={!onOpenEpisodeList}
@@ -1251,7 +1251,7 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={<MdSubtitles size={33} />}
-                label="Ã‚m thanh & Phá»¥ Ä‘á»"
+                label="Âm thanh & Phụ đề"
                 width="extraWide"
                 action="audio"
                 active={menu === "audio" || selectedSubtitleId !== "off"}
@@ -1259,7 +1259,7 @@ const VideoPlayer = forwardRef(({
               />
               <ControlButton
                 icon={fullscreen ? <FaCompress size={27} /> : <FaExpand size={27} />}
-                ariaLabel={fullscreen ? "ThoÃ¡t toÃ n mÃ n hÃ¬nh" : "ToÃ n mÃ n hÃ¬nh"}
+                ariaLabel={fullscreen ? "Thoát toàn màn hình" : "Toàn màn hình"}
                 action="fullscreen"
                 onClick={handleFullscreen}
               />

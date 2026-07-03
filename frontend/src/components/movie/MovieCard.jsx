@@ -1,11 +1,10 @@
-import { useEffect, useState } from 'react';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-
-export const FALLBACK_POSTER =
-  "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='450' viewBox='0 0 300 450'%3E%3Crect width='300' height='450' fill='%23111111'/%3E%3Cpath d='M118 170v110l92-55z' fill='%23E50914'/%3E%3Ctext x='150' y='330' fill='%23fff' font-family='Arial,sans-serif' font-size='20' text-anchor='middle'%3ENo poster%3C/text%3E%3C/svg%3E";
+import { memo, useEffect, useState } from 'react';
+import ImageLoader from '../common/ImageLoader';
+import InlineIcon from '../common/InlineIcon';
+import { FALLBACK_POSTER, safePosterUrl } from '../../utils/imageFallbacks';
 
 function getPosterUrl(movie) {
-  return movie?.poster_url || movie?.poster || movie?.posterPath || movie?.poster_path || FALLBACK_POSTER;
+  return safePosterUrl(movie?.poster_url || movie?.poster || movie?.posterPath || movie?.poster_path);
 }
 
 function getSubtitle(movie) {
@@ -37,15 +36,21 @@ export function MovieRatingBadge({ rating, className = '' }) {
 
 export function MovieCardSkeleton({ className = '' }) {
   return (
-    <div className={`animate-pulse flex flex-col gap-2 ${className}`}>
-      <div className="bg-white/10 rounded-xl aspect-[2/3] w-full" />
-      <div className="bg-white/10 h-4 rounded w-3/4 mx-auto mt-2" />
-      <div className="bg-white/10 h-3 rounded w-1/2 mx-auto" />
+    <div className={`flex flex-col gap-3 ${className}`}>
+      <div className="relative overflow-hidden bg-[#1A1A1A] rounded-2xl aspect-[2/3] w-full">
+        <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+      </div>
+      <div className="bg-[#1A1A1A] h-4 rounded w-3/4 mx-auto relative overflow-hidden">
+         <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+      </div>
+      <div className="bg-[#1A1A1A] h-3 rounded w-1/2 mx-auto relative overflow-hidden">
+         <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+      </div>
     </div>
   );
 }
 
-export default function MovieCard({
+const MovieCard = memo(function MovieCard({
   movie,
   onClick,
   onPlay,
@@ -55,7 +60,6 @@ export default function MovieCard({
   titleClassName = '',
   subtitleClassName = '',
 }) {
-  const [imageLoaded, setImageLoaded] = useState(false);
   const posterUrl = getPosterUrl(movie);
   const [posterSrc, setPosterSrc] = useState(posterUrl);
   const rating = getRating(movie);
@@ -64,12 +68,11 @@ export default function MovieCard({
 
   useEffect(() => {
     setPosterSrc(posterUrl);
-    setImageLoaded(false);
   }, [posterUrl]);
 
   return (
     <div
-      className={`relative flex flex-col group/card cursor-pointer min-w-0 ${className}`}
+      className={`relative flex flex-col group/card cursor-pointer min-w-0 z-0 hover:z-20 ${className}`}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
@@ -81,76 +84,63 @@ export default function MovieCard({
         }
       }}
     >
-      <div className="relative overflow-hidden rounded-xl aspect-[2/3] shadow-lg transition-transform duration-300 group-hover/card:scale-105 group-hover/card:shadow-2xl bg-surface">
-        {!imageLoaded && (
-          <div className="absolute inset-0 z-0 flex items-center justify-center bg-white/10">
-            <div className="h-7 w-7 rounded-full border-2 border-white/20 border-t-primary animate-spin" />
-          </div>
-        )}
-        <img
+      <div className="relative overflow-hidden rounded-2xl aspect-[2/3] shadow-[0_4px_20px_rgba(0,0,0,0.3)] transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] group-hover/card:scale-[1.08] group-hover/card:shadow-[0_15px_40px_rgba(168,85,247,0.4)] group-hover/card:-translate-y-3 bg-[#141414] ring-1 ring-white/5 group-hover/card:ring-2 group-hover/card:ring-purple-500/60">
+        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-500 z-10 pointer-events-none mix-blend-overlay" />
+        <ImageLoader
           src={posterSrc}
           alt={movie?.title || 'Movie poster'}
-          referrerPolicy="no-referrer"
-          loading="lazy"
-          className={`w-full h-full object-cover pointer-events-none transition-opacity duration-300 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
-          onLoad={() => setImageLoaded(true)}
-          onError={() => {
-            if (posterSrc !== FALLBACK_POSTER) {
-              setPosterSrc(FALLBACK_POSTER);
-              setImageLoaded(false);
-            } else {
-              setImageLoaded(true);
-            }
-          }}
+          className="absolute inset-0 w-full h-full"
         />
 
         {showScore && score > 0 && (
-          <div className="absolute top-2 left-2 bg-primary/85 backdrop-blur-md px-2 py-1 rounded text-[11px] font-bold text-white shadow-md">
+          <div className="absolute top-2 left-2 bg-gradient-to-r from-purple-600 to-pink-600 backdrop-blur-md px-2 py-1 rounded-md text-[11px] font-bold text-white shadow-[0_0_10px_rgba(236,72,153,0.5)] z-20">
             {Math.round(score)}
           </div>
         )}
 
         {!showScore && movie?.badge && (
-          <div className="absolute top-2 left-2 bg-primary text-white text-xs font-bold px-2 py-0.5 rounded shadow-md">
+          <div className="absolute top-2 left-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold px-2 py-0.5 rounded-md shadow-[0_0_10px_rgba(236,72,153,0.5)] z-20">
             {movie.badge}
           </div>
         )}
 
-        <MovieRatingBadge rating={rating} />
+        <MovieRatingBadge rating={rating} className="z-20" />
 
         {movie?.quality && (
-          <div className="absolute bottom-2 left-2 rounded bg-black/65 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/90 border border-white/10">
+          <div className="absolute bottom-2 left-2 rounded-md bg-black/65 backdrop-blur-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/90 border border-white/10 z-20">
             {movie.quality}
           </div>
         )}
 
         {showPlay && (
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[2px] z-10">
             <button
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
                 onPlay?.(event);
               }}
-              className="w-12 h-12 rounded-full border-2 border-primary bg-primary/20 flex items-center justify-center backdrop-blur-sm text-primary group-hover/card:scale-110 transition-transform"
+              className="w-14 h-14 rounded-full bg-gradient-to-tr from-purple-600 to-pink-600 flex items-center justify-center text-white shadow-[0_0_20px_rgba(236,72,153,0.6)] group-hover/card:scale-110 transition-transform duration-300"
               aria-label="Xem phim"
             >
-              <PlayArrowIcon />
+              <InlineIcon name="play" size={28} className="ml-1 drop-shadow-md" />
             </button>
           </div>
         )}
       </div>
 
-      <div className="mt-3 text-center px-1">
-        <h3 className={`text-white font-medium text-sm line-clamp-1 group-hover/card:text-primary transition-colors ${titleClassName}`}>
+      <div className="mt-3 text-center px-1 transition-transform duration-300 group-hover/card:-translate-y-1">
+        <h3 className={`text-white font-bold text-sm line-clamp-1 group-hover/card:text-transparent group-hover/card:bg-clip-text group-hover/card:bg-gradient-to-r group-hover/card:from-purple-300 group-hover/card:to-pink-300 transition-all ${titleClassName}`}>
           {movie?.title || 'Chưa có tên phim'}
         </h3>
         {subtitle && (
-          <p className={`text-text-secondary text-xs mt-0.5 line-clamp-1 ${subtitleClassName}`}>
+          <p className={`text-text-secondary text-xs mt-0.5 line-clamp-1 transition-colors group-hover/card:text-white/80 ${subtitleClassName}`}>
             {subtitle}
           </p>
         )}
       </div>
     </div>
   );
-}
+});
+
+export default MovieCard;

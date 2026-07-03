@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FaPaperPlane, FaPlay, FaRedo, FaStar, FaTimes } from 'react-icons/fa';
+import { FaBookmark, FaCheck, FaInfoCircle, FaPaperPlane, FaPlay, FaRedo, FaTimes } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import './MovieChatbot.css';
 import { API_BASE_URL as API } from '../../config/api';
@@ -95,12 +95,16 @@ export default function MovieChatbot() {
   const navigate = useNavigate();
   const inputRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const historyLoadedRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [messages, setMessages] = useState(loadMessagesFromSession);
   const [chatSessionId, setChatSessionId] = useState(loadChatSessionId);
+  const [watchlistIds, setWatchlistIds] = useState(() => new Set());
+  const [watchlistBusyId, setWatchlistBusyId] = useState(null);
+  const [actionMessage, setActionMessage] = useState('');
 
   useEffect(() => {
     if (open) {
@@ -125,10 +129,40 @@ export default function MovieChatbot() {
     }
   }, [chatSessionId]);
 
+  useEffect(() => {
+    if (historyLoadedRef.current) return;
+    if (chatSessionId || messages.length > 1) return;
+
+    const user = getStoredUser();
+    if (!user.id) return;
+
+    historyLoadedRef.current = true;
+    const controller = new AbortController();
+
+    fetch(`${API}/api/ai/chat/history?limit=${MAX_MESSAGES}`, {
+      headers: getProfileHeaders(),
+      signal: controller.signal,
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body) => {
+        if (!body || !Array.isArray(body.messages) || !body.messages.length) return;
+        const restoredMessages = normalizeStoredMessages(body.messages);
+        if (restoredMessages?.length) setMessages(restoredMessages);
+        if (body.session_id) setChatSessionId(body.session_id);
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') console.warn('[Chat history]', err.message);
+      });
+
+    return () => controller.abort();
+  }, [chatSessionId, messages.length]);
+
   const resetChat = () => {
     setMessages([welcomeMessage]);
     setChatSessionId('');
+    historyLoadedRef.current = true;
     setError('');
+    setActionMessage('');
     setInput('');
     try {
       sessionStorage.removeItem(CHAT_STORAGE_KEY);
@@ -154,6 +188,7 @@ export default function MovieChatbot() {
 
     setInput('');
     setError('');
+    setActionMessage('');
     setMessages((prev) => [...prev, { role: 'user', content: message, recommendations: [] }].slice(-MAX_MESSAGES));
     setLoading(true);
 
@@ -226,13 +261,60 @@ export default function MovieChatbot() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const renderMovieCard = (movie) => (
-    <button
-      type="button"
+  const watchMovie = (movieId) => {
+    setOpen(false);
+    navigate(`/watch/${movieId}`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const addToWatchlist = async (movie, event) => {
+    event?.stopPropagation();
+    const movieId = Number(movie?.id);
+    if (!movieId || watchlistBusyId) return;
+
+    const user = getStoredUser();
+    if (!user.id) {
+      setActionMessage('Đăng nhập để lưu phim vào danh sách.');
+      return;
+    }
+
+    setWatchlistBusyId(movieId);
+    setActionMessage('');
+    try {
+      const response = await fetch(`${API}/api/user/watchlist`, {
+        method: 'POST',
+        headers: getProfileHeaders({
+          'Content-Type': 'application/json',
+        }),
+        body: JSON.stringify({ movie_id: movieId }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.message || 'Không thể thêm vào danh sách.');
+
+      setWatchlistIds((current) => {
+        const next = new Set(current);
+        next.add(movieId);
+        return next;
+      });
+      setActionMessage(`Đã thêm "${movie.title}" vào danh sách.`);
+    } catch (err) {
+      setActionMessage(err.message || 'Không thể thêm vào danh sách.');
+    } finally {
+      setWatchlistBusyId(null);
+    }
+  };
+
+  const renderMovieCard = (movie) => {
+    const movieId = Number(movie.id);
+    const saved = watchlistIds.has(movieId);
+    const busy = watchlistBusyId === movieId;
+
+    return (
+    <article
       className="movie-chatbot-card"
       key={movie.id}
-      onClick={() => openMovie(movie.id)}
     >
+      <button type="button" className="movie-chatbot-card-main" onClick={() => openMovie(movie.id)}>
       <span className={`movie-chatbot-poster${movie.poster_url ? '' : ' is-empty'}`}>
         {movie.poster_url && (
           <img
@@ -253,10 +335,26 @@ export default function MovieChatbot() {
         {getVisibleMatchReasons(movie).length > 0 && (
           <small className="movie-chatbot-reason">{getVisibleMatchReasons(movie).join(' · ')}</small>
         )}
-        <em>Xem ngay</em>
+        <span className="movie-chatbot-detail-link"><FaInfoCircle /> Chi tiết</span>
       </span>
-    </button>
-  );
+      </button>
+      <span className="movie-chatbot-card-actions">
+        <button type="button" className="watch-now" onClick={() => watchMovie(movie.id)}>
+          <FaPlay /> Xem ngay
+        </button>
+        <button
+          type="button"
+          className="save"
+          disabled={busy || saved}
+          onClick={(event) => addToWatchlist(movie, event)}
+        >
+          {saved ? <FaCheck /> : <FaBookmark />}
+          {saved ? 'Đã lưu' : busy ? 'Đang lưu' : 'Thêm'}
+        </button>
+      </span>
+    </article>
+    );
+  };
 
   const suggestions = getActiveSuggestions(messages);
 
@@ -267,7 +365,7 @@ export default function MovieChatbot() {
           <header className="movie-chatbot-header">
             <div className="movie-chatbot-title">
               <span className="movie-chatbot-avatar" style={{ padding: 0, overflow: 'hidden', background: 'transparent' }}>
-                <img src="/chatbot-logo.png" alt="NetDL Assistant" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src="/chatbot-logo-128.png" alt="NetDL Assistant" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </span>
               <div>
                 <strong>NetDL Assistant</strong>
@@ -324,6 +422,7 @@ export default function MovieChatbot() {
           )}
 
           {error && <div className="movie-chatbot-error">{error}</div>}
+          {actionMessage && <div className="movie-chatbot-action-message">{actionMessage}</div>}
 
           <form className="movie-chatbot-input" onSubmit={handleSubmit}>
             <input
@@ -350,7 +449,7 @@ export default function MovieChatbot() {
         aria-label="Mở tư vấn phim"
         style={{ padding: open ? undefined : 0, overflow: open ? undefined : 'hidden' }}
       >
-        {open ? <FaTimes /> : <img src="/chatbot-logo.png" alt="NetDL Assistant" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+        {open ? <FaTimes /> : <img src="/chatbot-logo-128.png" alt="NetDL Assistant" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
       </button>
     </div>
   );

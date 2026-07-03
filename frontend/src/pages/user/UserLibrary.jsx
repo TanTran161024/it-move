@@ -52,7 +52,7 @@ const PAGE_CONFIG = {
   '/user/notifications': {
     title: 'Thông báo',
     description: 'Các cập nhật và thông báo tài khoản của bạn.',
-    endpoint: null,
+    endpoint: '/api/user/notifications',
     empty: 'Bạn chưa có thông báo nào.',
     icon: NotificationsNoneIcon,
     removeEndpoint: null,
@@ -292,6 +292,7 @@ export default function UserLibrary() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const showWatchStats = WATCH_STATS_PATHS.has(location.pathname);
+  const showNotifications = location.pathname === '/user/notifications';
   const [watchStats, setWatchStats] = useState(null);
   const [watchStatsLoading, setWatchStatsLoading] = useState(false);
   const [watchStatsError, setWatchStatsError] = useState('');
@@ -380,6 +381,20 @@ export default function UserLibrary() {
     navigate(`/movies/${item.id}`);
   };
 
+  const handleOpenNotification = async (item) => {
+    if (!item.is_read) {
+      await fetch(apiUrl(`/api/user/notifications/${item.id}/read`), {
+        method: 'PATCH',
+        headers: getProfileHeaders(),
+      }).catch(() => {});
+      setItems((current) => current.map((entry) => (
+        entry.id === item.id ? { ...entry, is_read: true } : entry
+      )));
+    }
+
+    if (item.link_url) navigate(item.link_url);
+  };
+
   return (
     <div className="min-h-screen bg-background pt-24 pb-12">
       <div className="container mx-auto px-4 md:px-8 max-w-7xl flex flex-col lg:flex-row gap-8">
@@ -412,6 +427,32 @@ export default function UserLibrary() {
                 <Icon className="text-6xl text-white/10 mb-4" />
                 <p className="text-text-secondary mb-6 text-lg">{config.empty}</p>
                 <button type="button" className="px-6 py-2.5 bg-primary hover:bg-red-600 text-white font-medium rounded-full transition-colors" onClick={() => navigate('/movies')}>Khám phá phim</button>
+              </div>
+            ) : showNotifications ? (
+              <div className="space-y-3">
+                {items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleOpenNotification(item)}
+                    className={`w-full rounded-2xl border p-4 text-left transition-colors ${
+                      item.is_read
+                        ? 'border-white/5 bg-black/20 text-text-secondary hover:bg-white/[0.04]'
+                        : 'border-primary/35 bg-primary/10 text-white hover:bg-primary/15'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-black text-white">{item.title}</div>
+                        {item.message && <p className="mt-1 text-sm leading-relaxed text-text-secondary">{item.message}</p>}
+                      </div>
+                      {!item.is_read && <span className="mt-2 h-2.5 w-2.5 shrink-0 rounded-full bg-primary" />}
+                    </div>
+                    <div className="mt-3 text-xs text-text-secondary">
+                      {new Date(item.created_at).toLocaleString('vi-VN')}
+                    </div>
+                  </button>
+                ))}
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">

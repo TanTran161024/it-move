@@ -1,35 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  Avatar,
-  Box,
-  Divider,
-  IconButton,
-  Menu,
-  MenuItem,
-  Typography,
-} from '@mui/material';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import AddIcon from '@mui/icons-material/Add';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import BarChartIcon from '@mui/icons-material/BarChart';
-import CloseIcon from '@mui/icons-material/Close';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
-import HistoryIcon from '@mui/icons-material/History';
-import LogoutIcon from '@mui/icons-material/Logout';
-import MenuIcon from '@mui/icons-material/Menu';
-import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
-import PersonIcon from '@mui/icons-material/Person';
-import PlayCircleIcon from '@mui/icons-material/PlayCircle';
-import SearchIcon from '@mui/icons-material/Search';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
-import ForgotPasswordDialog from '../auth/ForgotPasswordDialog';
-import LoginDialog from '../auth/LoginDialog';
-import RegisterDialog from '../auth/RegisterDialog';
-import { motion, AnimatePresence } from 'framer-motion';
 import { API_BASE_URL as API } from '../../config/api';
 import { clearActiveProfile, getActiveProfile, PROFILE_CHANGE_EVENT, profileInitial } from '../../utils/profile';
+
+const ForgotPasswordDialog = lazy(() => import('../auth/ForgotPasswordDialog'));
+const LoginDialog = lazy(() => import('../auth/LoginDialog'));
+const RegisterDialog = lazy(() => import('../auth/RegisterDialog'));
 
 const NAV_ITEMS = [
   { label: 'Dành cho bạn', path: '/for-you' },
@@ -58,6 +35,107 @@ const SEARCH_EMPTY_SUGGESTIONS = [
 
 const RECENT_SEARCHES_KEY = 'movie_recent_searches';
 
+const ICON_PATHS = {
+  account: ['M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z', 'M4.5 20a7.5 7.5 0 0 1 15 0'],
+  bell: ['M18 8a6 6 0 0 0-12 0c0 7-3 8-3 8h18s-3-1-3-8', 'M10 20a2 2 0 0 0 4 0'],
+  chart: ['M5 19V9', 'M12 19V5', 'M19 19v-7'],
+  chevronDown: ['M6 9l6 6 6-6'],
+  close: ['M6 6l12 12', 'M18 6 6 18'],
+  heart: ['M20.8 8.6a5.4 5.4 0 0 0-9.8-3A5.4 5.4 0 0 0 1.2 8.6c0 6.2 10.8 12 10.8 12s10.8-5.8 10.8-12Z'],
+  history: ['M3 12a9 9 0 1 0 3-6.7', 'M3 4v5h5', 'M12 7v5l3 2'],
+  logout: ['M10 17l5-5-5-5', 'M15 12H3', 'M21 5v14'],
+  menu: ['M4 6h16', 'M4 12h16', 'M4 18h16'],
+  plus: ['M12 5v14', 'M5 12h14'],
+  play: ['M10 8l7 4-7 4V8Z'],
+  playCircle: ['M10 8l7 4-7 4V8Z', 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z'],
+  search: ['M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z', 'M21 21l-4.35-4.35'],
+  sparkles: ['M12 3l1.6 4.6L18 9l-4.4 1.4L12 15l-1.6-4.6L6 9l4.4-1.4L12 3Z', 'M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14Z'],
+  user: ['M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z', 'M4 21a8 8 0 0 1 16 0'],
+};
+
+function Icon({ name, className = '', size = 22 }) {
+  const paths = ICON_PATHS[name] || ICON_PATHS.search;
+  return (
+    <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      {paths.map((path) => (
+        <path key={path} d={path} stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
+      ))}
+    </svg>
+  );
+}
+
+function HeaderIconButton({ children, className = '', ...props }) {
+  return (
+    <button
+      type="button"
+      className={`grid h-10 w-10 place-items-center rounded-full text-white transition-colors hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/80 ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+function UserAvatar({ user, activeProfile, size = 32 }) {
+  const avatarText = activeProfile?.id
+    ? profileInitial(activeProfile.name)
+    : (!user?.avatar && user?.username?.[0]?.toUpperCase());
+  const style = {
+    width: size,
+    height: size,
+    backgroundColor: activeProfile?.avatar_color || '#E50914',
+  };
+
+  return (
+    <span
+      className="inline-grid shrink-0 place-items-center overflow-hidden rounded-full border border-white/15 text-sm font-extrabold text-white"
+      style={style}
+    >
+      {!activeProfile?.id && user?.avatar ? (
+        <img src={user.avatar} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+      ) : avatarText}
+    </span>
+  );
+}
+
+function MenuPanel({ open, onClose, align = 'right', width = 'w-[280px]', children }) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[9997]" onClick={onClose} role="presentation">
+      <div
+        className={`absolute top-[72px] ${align === 'left' ? 'left-4 md:left-8' : 'right-4 md:right-8'} ${width} max-w-[calc(100vw-32px)] rounded-3xl border border-white/10 bg-[#0f0f0f]/90 p-2 text-white shadow-[0_20px_40px_rgba(0,0,0,0.8)] backdrop-blur-2xl`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function MenuAction({ icon, children, onClick, danger = false, accent = false }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-semibold transition-colors ${
+        danger
+          ? 'text-red-300 hover:bg-red-500/10 hover:text-red-200'
+          : accent
+            ? 'text-blue-300 hover:bg-blue-500/10 hover:text-blue-200'
+            : 'text-white/80 hover:bg-white/10 hover:text-white'
+      }`}
+    >
+      <Icon name={icon} size={19} className="shrink-0" />
+      <span>{children}</span>
+    </button>
+  );
+}
+
+function MenuDivider() {
+  return <div className="my-2 h-px bg-white/10" />;
+}
+
 function buildMoviesUrl(query) {
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => params.set(key, value));
@@ -75,8 +153,6 @@ function getSmartFilterLabels(filters) {
   ].filter(Boolean).slice(0, 8);
 }
 
-const MotionDiv = motion.div;
-
 export default function Header() {
   const [openLogin, setOpenLogin] = useState(false);
   const [openRegister, setOpenRegister] = useState(false);
@@ -91,11 +167,6 @@ export default function Header() {
   const [recentSearches, setRecentSearches] = useState([]);
   const [isScrolled, setIsScrolled] = useState(false);
   
-  const [genres, setGenres] = useState([]);
-  const [countries, setCountries] = useState([]);
-  
-  const [genreAnchor, setGenreAnchor] = useState(null);
-  const [countryAnchor, setCountryAnchor] = useState(null);
   const [mobileAnchor, setMobileAnchor] = useState(null);
   const [userAnchor, setUserAnchor] = useState(null);
   const [notificationAnchor, setNotificationAnchor] = useState(null);
@@ -260,21 +331,7 @@ export default function Header() {
     };
   }, [isSearchOpen, searchValue]);
 
-  useEffect(() => {
-    Promise.all([
-      fetch(`${API}/api/genres`).then((res) => res.json()),
-      fetch(`${API}/api/countries`).then((res) => res.json()),
-    ])
-      .then(([genreData, countryData]) => {
-        setGenres(Array.isArray(genreData) ? genreData : []);
-        setCountries(Array.isArray(countryData) ? countryData : []);
-      })
-      .catch((error) => console.error('Không thể tải dữ liệu menu:', error));
-  }, []);
-
   const closeMenus = () => {
-    setGenreAnchor(null);
-    setCountryAnchor(null);
     setMobileAnchor(null);
   };
 
@@ -335,21 +392,19 @@ export default function Header() {
     window.setTimeout(() => searchInputRef.current?.focus(), 0);
   };
 
-  const handleNavClick = (event, item) => {
+  const handleNavClick = (_event, item) => {
     if (item.path) {
       goTo(item.path);
       return;
     }
 
     if (item.menu === 'genres') {
-      setCountryAnchor(null);
-      setGenreAnchor(event.currentTarget);
+      goTo('/movies');
       return;
     }
 
     if (item.menu === 'countries') {
-      setGenreAnchor(null);
-      setCountryAnchor(event.currentTarget);
+      goTo('/movies');
       return;
     }
 
@@ -384,54 +439,30 @@ export default function Header() {
   const handleLogout = () => {
     localStorage.removeItem('user');
     clearActiveProfile();
-    setUserAnchor(null);
+      setUserAnchor(null);
     navigate('/');
   };
 
-  const modernPaperProps = {
-    elevation: 0,
-    sx: {
-      bgcolor: 'rgba(15, 15, 15, 0.85)',
-      backdropFilter: 'blur(24px)',
-      WebkitBackdropFilter: 'blur(24px)',
-      color: 'white',
-      border: '1px solid rgba(255,255,255,0.08)',
-      borderRadius: 3,
-      boxShadow: '0 20px 40px rgba(0,0,0,0.8)',
-      mt: 1.5,
-      '& .MuiMenuItem-root': {
-        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-        borderRadius: 1.5,
-        mx: 1,
-        my: 0.5,
-        px: 2,
-        py: 1.2,
-        fontSize: '0.9rem',
-        fontWeight: 500,
-        color: 'rgba(255,255,255,0.85)',
-        '&:hover': {
-          bgcolor: 'rgba(255,255,255,0.1)',
-          color: 'white',
-          transform: 'translateX(6px)'
-        }
-      }
-    }
-  };
-
   return (
-    <header className={`fixed top-0 w-full z-50 transition-all duration-500 ease-in-out ${isScrolled ? 'bg-background/95 backdrop-blur-md shadow-lg shadow-black/20 py-2' : 'bg-gradient-to-b from-black/80 to-transparent py-4'}`}>
-      <div className="container mx-auto px-4 md:px-8 flex items-center justify-between">
+    <header className={`fixed top-0 w-full z-50 transition-all duration-500 ease-in-out border-b ${isScrolled ? 'bg-[#0a0a0a]/40 backdrop-blur-2xl border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.8)] py-2' : 'bg-gradient-to-b from-black/90 to-transparent border-transparent py-4'}`}>
+      <div className="w-full px-[16px] md:px-[32px] lg:px-[48px] xl:px-[72px] flex items-center justify-between">
         {/* Left Side: Brand & Nav */}
         <div className="flex items-center gap-8">
-          <IconButton
-            className="md:!hidden !text-white"
-            onClick={(event) => setMobileAnchor(event.currentTarget)}
+          <HeaderIconButton
+            className="md:hidden"
+            onClick={() => setMobileAnchor(true)}
+            aria-label="Mở menu"
           >
-            <MenuIcon />
-          </IconButton>
+            <Icon name="menu" />
+          </HeaderIconButton>
 
-          <RouterLink to="/" className="flex items-center gap-2 group" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-            <PlayCircleIcon className="text-primary text-4xl group-hover:scale-110 transition-transform" />
+          <RouterLink
+            to="/"
+            aria-label="IT Move - Trang chủ"
+            className="flex items-center gap-2 group"
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          >
+            <Icon name="playCircle" size={36} className="text-primary transition-transform group-hover:scale-110" />
             <span className="font-heading font-bold text-2xl tracking-wide hidden sm:block text-white">IT Move</span>
           </RouterLink>
 
@@ -444,7 +475,7 @@ export default function Header() {
                 onClick={(event) => handleNavClick(event, item)}
               >
                 {item.label}
-                {item.menu && <ExpandMoreIcon fontSize="small" className="opacity-70" />}
+                {item.menu && <Icon name="chevronDown" size={17} className="opacity-70" />}
               </button>
             ))}
           </nav>
@@ -452,50 +483,39 @@ export default function Header() {
 
         {/* Right Side: Search & User */}
         <div className="flex items-center gap-4">
-          <IconButton
+          <HeaderIconButton
             onClick={openSearch}
-            className="!text-white hover:!bg-white/10"
             data-search-open-button="true"
             aria-label="Mở tìm kiếm"
           >
-            <SearchIcon />
-          </IconButton>
+            <Icon name="search" />
+          </HeaderIconButton>
 
           {user?.username ? (
             <div className="flex items-center gap-2">
-              <IconButton
-                className="!text-white hover:!bg-white/10"
-                onClick={(event) => setNotificationAnchor(event.currentTarget)}
+              <HeaderIconButton
+                onClick={() => setNotificationAnchor(true)}
+                aria-label="Mở thông báo"
               >
-                <NotificationsNoneIcon />
-              </IconButton>
+                <Icon name="bell" />
+              </HeaderIconButton>
               
               <button
-                onClick={(event) => setUserAnchor(event.currentTarget)}
+                onClick={() => setUserAnchor(true)}
                 className="flex items-center gap-2 hover:bg-white/5 p-1 rounded-md transition-colors"
+                aria-label="Mở menu tài khoản"
               >
-                <Avatar
-                  src={activeProfile?.id ? undefined : (user.avatar || undefined)}
-                  sx={{
-                    width: 32,
-                    height: 32,
-                    bgcolor: activeProfile?.avatar_color || '#E50914',
-                    color: 'white',
-                    fontWeight: 800,
-                  }}
-                  className="border border-border"
-                >
-                  {activeProfile?.id ? profileInitial(activeProfile.name) : (!user.avatar && user.username[0]?.toUpperCase())}
-                </Avatar>
-                <ExpandMoreIcon className="text-white/70" fontSize="small" />
+                <UserAvatar user={user} activeProfile={activeProfile} />
+                <Icon name="chevronDown" size={17} className="text-white/70" />
               </button>
             </div>
           ) : (
             <button
               onClick={() => setOpenLogin(true)}
+              aria-label="Đăng nhập"
               className="bg-primary hover:bg-red-600 text-white font-medium text-sm px-4 py-1.5 rounded flex items-center gap-2 transition-colors"
             >
-              <PersonIcon fontSize="small" />
+              <Icon name="user" size={18} />
               <span className="hidden sm:inline">Đăng nhập</span>
             </button>
           )}
@@ -503,16 +523,11 @@ export default function Header() {
       </div>
 
       {typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
-        {isSearchOpen && (
-          <MotionDiv
+        isSearchOpen ? (
+          <div
             ref={searchOverlayRef}
             data-search-overlay="true"
             className="fixed inset-0 z-[9998] h-[100dvh] overscroll-contain bg-[#050505]/95 backdrop-blur-2xl text-white overflow-y-auto"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
           >
             <button
               type="button"
@@ -521,19 +536,19 @@ export default function Header() {
               onClick={closeSearch}
             />
 
-            <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 pb-14 pt-20 md:px-8 md:pt-24">
+            <div className="relative z-10 w-full flex min-h-screen flex-col px-[16px] md:px-[32px] lg:px-[48px] xl:px-[72px] pb-14 pt-20 md:pt-24">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <div className="text-xs font-bold uppercase tracking-[0.28em] text-primary/90">Tìm kiếm</div>
                   <h2 className="mt-2 text-2xl font-black tracking-tight text-white md:text-4xl">Bạn muốn xem gì?</h2>
                 </div>
-                <IconButton
+                <HeaderIconButton
                   onClick={closeSearch}
-                  className="!h-11 !w-11 !bg-white/10 !text-white hover:!bg-white/20"
+                  className="h-11 w-11 bg-white/10 hover:bg-white/20"
                   aria-label="Đóng tìm kiếm"
                 >
-                  <CloseIcon />
-                </IconButton>
+                  <Icon name="close" />
+                </HeaderIconButton>
               </div>
 
               <form
@@ -543,7 +558,7 @@ export default function Header() {
                   goToSearchResults();
                 }}
               >
-                <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-white/45 md:!text-4xl" />
+                <Icon name="search" size={36} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/45" />
                 <input
                   ref={searchInputRef}
                   data-search-input="true"
@@ -601,7 +616,7 @@ export default function Header() {
                           className="flex items-center justify-between rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-left text-sm font-semibold text-white/80 transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-white"
                         >
                           <span>{example}</span>
-                          <SearchIcon fontSize="small" className="text-white/35" />
+                          <Icon name="search" size={16} className="text-white/35" />
                         </button>
                       ))}
                     </div>
@@ -618,7 +633,7 @@ export default function Header() {
                             onClick={() => applySearchTerm(term)}
                             className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-white/70 transition-colors hover:bg-white/10 hover:text-white"
                           >
-                            <SearchIcon fontSize="small" className="text-white/35" />
+                            <Icon name="search" size={16} className="text-white/35" />
                             <span className="truncate">{term}</span>
                           </button>
                         ))}
@@ -704,7 +719,7 @@ export default function Header() {
                     </>
                   ) : (
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-10 text-center">
-                      <SearchIcon className="!text-5xl text-white/15" />
+                      <Icon name="search" size={48} className="mx-auto text-white/15" />
                       <h4 className="mt-4 text-xl font-black text-white">Chưa có kết quả thật sự khớp</h4>
                       <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-white/55">
                         Thử bỏ bớt quốc gia, đổi thể loại hoặc mô tả mood ngắn hơn.
@@ -733,149 +748,83 @@ export default function Header() {
                 </div>
               )}
             </div>
-          </MotionDiv>
-        )}
-        </AnimatePresence>,
+          </div>
+        ) : null,
         document.body
       )}
 
-      {/* Menus using MUI (Keeping business logic intact) */}
-      <Menu
-        anchorEl={genreAnchor}
-        open={Boolean(genreAnchor)}
-        onClose={() => setGenreAnchor(null)}
-        disableScrollLock={true}
-        PaperProps={{ sx: { ...modernPaperProps.sx, minWidth: 400, p: 2 } }}
-      >
-        <Typography variant="subtitle2" sx={{ color: '#B3B3B3', mb: 2 }}>Chọn thể loại</Typography>
-        <div className="grid grid-cols-3 gap-2">
-          {genres.map((genre) => (
-            <button
-              key={genre.id}
-              className="text-left text-sm text-gray-300 hover:text-white hover:bg-white/10 py-1.5 px-3 rounded transition-colors"
-              onClick={() => goTo(`/movies?genre=${encodeURIComponent(genre.name)}`)}
-            >
-              {genre.name}
-            </button>
-          ))}
+      <MenuPanel open={Boolean(mobileAnchor)} onClose={() => setMobileAnchor(null)} align="left">
+        <div className="flex items-center justify-between px-4 py-3">
+          <span className="text-lg font-bold">Menu</span>
+          <HeaderIconButton onClick={() => setMobileAnchor(null)} className="h-9 w-9" aria-label="Đóng menu">
+            <Icon name="close" size={20} />
+          </HeaderIconButton>
         </div>
-      </Menu>
+        <MenuDivider />
+        <MenuAction icon="sparkles" onClick={() => goTo('/for-you')}>Dành cho bạn</MenuAction>
+        <MenuAction icon="play" onClick={() => goTo('/movies?is_series=0')}>Phim lẻ</MenuAction>
+        <MenuAction icon="playCircle" onClick={() => goTo('/movies?is_series=1')}>Phim bộ</MenuAction>
+        <MenuAction icon="user" onClick={() => goTo('/movies?tab=actor')}>Diễn viên</MenuAction>
+      </MenuPanel>
 
-      <Menu
-        anchorEl={countryAnchor}
-        open={Boolean(countryAnchor)}
-        onClose={() => setCountryAnchor(null)}
-        disableScrollLock={true}
-        PaperProps={{ sx: { ...modernPaperProps.sx, minWidth: 200, p: 2 } }}
-      >
-        <Typography variant="subtitle2" sx={{ color: '#B3B3B3', mb: 2 }}>Chọn quốc gia</Typography>
-        <div className="flex flex-col gap-1">
-          {countries.map((country) => (
-            <button
-              key={country.id}
-              className="text-left text-sm text-gray-300 hover:text-white hover:bg-white/10 py-1.5 px-3 rounded transition-colors"
-              onClick={() => goTo(`/movies?country=${encodeURIComponent(country.name)}`)}
-            >
-              {country.name}
-            </button>
-          ))}
-        </div>
-      </Menu>
-
-      <Menu
-        anchorEl={mobileAnchor}
-        open={Boolean(mobileAnchor)}
-        onClose={() => setMobileAnchor(null)}
-        disableScrollLock={true}
-        PaperProps={{ sx: { ...modernPaperProps.sx, width: 280 } }}
-      >
-        <div className="flex items-center justify-between p-4 pb-2">
-          <span className="font-bold text-lg">Menu</span>
-          <IconButton onClick={() => setMobileAnchor(null)} size="small" className="!text-white hover:!bg-white/10"><CloseIcon /></IconButton>
-        </div>
-        <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)', mb: 1 }} />
-        <MenuItem onClick={() => goTo('/for-you')}>Dành cho bạn</MenuItem>
-        <MenuItem onClick={() => goTo('/movies?is_series=0')}>Phim lẻ</MenuItem>
-        <MenuItem onClick={() => goTo('/movies?is_series=1')}>Phim bộ</MenuItem>
-        <MenuItem onClick={() => goTo('/movies?tab=actor')}>Diễn viên</MenuItem>
-      </Menu>
-
-      <Menu
-        anchorEl={userAnchor}
-        open={Boolean(userAnchor)}
-        onClose={() => setUserAnchor(null)}
-        disableScrollLock={true}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        PaperProps={{ sx: { ...modernPaperProps.sx, width: 250 } }}
-      >
-        <div className="px-5 pt-4 pb-3 flex items-center gap-3">
-          <Avatar
-            src={activeProfile?.id ? undefined : (user.avatar || undefined)}
-            sx={{
-              width: 40,
-              height: 40,
-              border: '2px solid rgba(255,255,255,0.1)',
-              bgcolor: activeProfile?.avatar_color || '#E50914',
-              color: 'white',
-              fontWeight: 800,
-            }}
-          >
-            {activeProfile?.id ? profileInitial(activeProfile.name) : (!user.avatar && user.username?.[0]?.toUpperCase())}
-          </Avatar>
-          <div>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>Xin chào,</Typography>
-            <Typography variant="subtitle1" fontWeight="bold" sx={{ color: 'white', lineHeight: 1.2 }}>{activeProfile?.name || user.username}</Typography>
-            {activeProfile?.name && (
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)' }}>{user.username}</Typography>
-            )}
+      <MenuPanel open={Boolean(userAnchor)} onClose={() => setUserAnchor(null)} width="w-[260px]">
+        <div className="flex items-center gap-3 px-4 pb-3 pt-4">
+          <UserAvatar user={user} activeProfile={activeProfile} size={40} />
+          <div className="min-w-0">
+            <div className="text-xs text-white/50">Xin chào,</div>
+            <div className="truncate text-base font-bold leading-tight text-white">{activeProfile?.name || user.username}</div>
+            {activeProfile?.name && <div className="truncate text-xs text-white/45">{user.username}</div>}
           </div>
         </div>
-        <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)', my: 1 }} />
-        <MenuItem onClick={() => { setUserAnchor(null); navigate('/for-you'); }} sx={{ gap: 1.5 }}><AutoAwesomeIcon fontSize="small" /> Dành cho bạn</MenuItem>
-        <MenuItem onClick={() => { setUserAnchor(null); clearActiveProfile(); }} sx={{ gap: 1.5 }}><AccountCircleIcon fontSize="small" /> Đổi profile</MenuItem>
-        <MenuItem onClick={() => { setUserAnchor(null); navigate('/user/favorites'); }} sx={{ gap: 1.5 }}><FavoriteBorderIcon fontSize="small" /> Yêu thích</MenuItem>
-        <MenuItem onClick={() => { setUserAnchor(null); navigate('/user/list'); }} sx={{ gap: 1.5 }}><AddIcon fontSize="small" /> Danh sách</MenuItem>
-        <MenuItem onClick={() => { setUserAnchor(null); navigate('/user/history'); }} sx={{ gap: 1.5 }}><HistoryIcon fontSize="small" /> Lịch sử xem</MenuItem>
-        <MenuItem onClick={() => { setUserAnchor(null); navigate('/user/continue'); }} sx={{ gap: 1.5 }}><PlayCircleIcon fontSize="small" /> Xem tiếp</MenuItem>
-        <MenuItem onClick={() => { setUserAnchor(null); navigate('/user/profile'); }} sx={{ gap: 1.5 }}><AccountCircleIcon fontSize="small" /> Tài khoản</MenuItem>
+        <MenuDivider />
+        <MenuAction icon="sparkles" onClick={() => { setUserAnchor(null); navigate('/for-you'); }}>Dành cho bạn</MenuAction>
+        <MenuAction icon="account" onClick={() => { setUserAnchor(null); clearActiveProfile(); }}>Đổi profile</MenuAction>
+        <MenuAction icon="heart" onClick={() => { setUserAnchor(null); navigate('/user/favorites'); }}>Yêu thích</MenuAction>
+        <MenuAction icon="plus" onClick={() => { setUserAnchor(null); navigate('/user/list'); }}>Danh sách</MenuAction>
+        <MenuAction icon="history" onClick={() => { setUserAnchor(null); navigate('/user/history'); }}>Lịch sử xem</MenuAction>
+        <MenuAction icon="playCircle" onClick={() => { setUserAnchor(null); navigate('/user/continue'); }}>Xem tiếp</MenuAction>
+        <MenuAction icon="account" onClick={() => { setUserAnchor(null); navigate('/user/profile'); }}>Tài khoản</MenuAction>
         {Boolean(user.is_admin) && (
-          <MenuItem onClick={() => { setUserAnchor(null); navigate('/admin'); }} sx={{ gap: 1.5, color: '#3498db' }}><BarChartIcon fontSize="small" /> Admin Dashboard</MenuItem>
+          <MenuAction icon="chart" accent onClick={() => { setUserAnchor(null); navigate('/admin'); }}>Admin Dashboard</MenuAction>
         )}
-        <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)', my: 1 }} />
-        <MenuItem onClick={handleLogout} sx={{ gap: 1.5, color: '#ff4757', '&:hover': { bgcolor: 'rgba(255, 71, 87, 0.1) !important', color: '#ff6b81' } }}><LogoutIcon fontSize="small" /> Đăng xuất</MenuItem>
-      </Menu>
+        <MenuDivider />
+        <MenuAction icon="logout" danger onClick={handleLogout}>Đăng xuất</MenuAction>
+      </MenuPanel>
 
-      <Menu
-        anchorEl={notificationAnchor}
-        open={Boolean(notificationAnchor)}
-        onClose={() => setNotificationAnchor(null)}
-        disableScrollLock={true}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        PaperProps={{ sx: { ...modernPaperProps.sx, width: 320, p: 2 } }}
-      >
-        <Typography variant="subtitle1" fontWeight="bold" mb={1}>Thông báo</Typography>
-        <Divider sx={{ borderColor: 'rgba(255,255,255,0.1)', mb: 2 }} />
-        <Typography variant="body2" sx={{ color: '#B3B3B3', textAlign: 'center', py: 4 }}>Chưa có thông báo mới</Typography>
-      </Menu>
+      <MenuPanel open={Boolean(notificationAnchor)} onClose={() => setNotificationAnchor(null)} width="w-[320px]">
+        <div className="px-4 py-3">
+          <div className="text-base font-bold">Thông báo</div>
+          <MenuDivider />
+          <div className="py-8 text-center text-sm text-white/50">Chưa có thông báo mới</div>
+        </div>
+      </MenuPanel>
 
-      <LoginDialog
-        open={openLogin}
-        onClose={() => setOpenLogin(false)}
-        onRegister={() => { setOpenLogin(false); setOpenRegister(true); }}
-        onForgot={() => { setOpenLogin(false); setOpenForgot(true); }}
-      />
-      <RegisterDialog
-        open={openRegister}
-        onClose={() => setOpenRegister(false)}
-        onLogin={() => { setOpenRegister(false); setOpenLogin(true); }}
-      />
-      <ForgotPasswordDialog
-        open={openForgot}
-        onClose={() => setOpenForgot(false)}
-        onLogin={() => { setOpenForgot(false); setOpenLogin(true); }}
-      />
+      {(openLogin || openRegister || openForgot) && (
+        <Suspense fallback={null}>
+          {openLogin && (
+            <LoginDialog
+              open={openLogin}
+              onClose={() => setOpenLogin(false)}
+              onRegister={() => { setOpenLogin(false); setOpenRegister(true); }}
+              onForgot={() => { setOpenLogin(false); setOpenForgot(true); }}
+            />
+          )}
+          {openRegister && (
+            <RegisterDialog
+              open={openRegister}
+              onClose={() => setOpenRegister(false)}
+              onLogin={() => { setOpenRegister(false); setOpenLogin(true); }}
+            />
+          )}
+          {openForgot && (
+            <ForgotPasswordDialog
+              open={openForgot}
+              onClose={() => setOpenForgot(false)}
+              onLogin={() => { setOpenForgot(false); setOpenLogin(true); }}
+            />
+          )}
+        </Suspense>
+      )}
     </header>
   );
 }

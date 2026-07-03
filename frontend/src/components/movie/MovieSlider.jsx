@@ -1,17 +1,23 @@
 import React, { useState, useRef, useEffect } from 'react';
-import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
-import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import { useNavigate } from 'react-router-dom';
-import { FALLBACK_POSTER, MovieRatingBadge } from './MovieCard';
+import InlineIcon from '../common/InlineIcon';
+import { FALLBACK_POSTER, safePosterUrl } from '../../utils/imageFallbacks';
+import { MovieRatingBadge } from './MovieCard';
 
 const MAX_VISIBLE = 8;
 const POSTER_WIDTH = 200 + 24; // 200px width + 24px gap
+
+function resizeTmdbImage(url, size) {
+  const safeUrl = safePosterUrl(url);
+  return safeUrl.replace('/t/p/original/', `/t/p/${size}/`);
+}
 
 export default function MovieSlider({ movies, title, categoryId, categoryName }) {
   const [startIndex, setStartIndex] = useState(0);
   const [hovered, setHovered] = useState(null);
   const [popupPos, setPopupPos] = useState(null);
   const [popupOpen, setPopupOpen] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
   const hoverTimeout = useRef();
   const sliderRef = useRef();
   const posterRefs = useRef([]);
@@ -23,7 +29,7 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
   const [visibleCount, setVisibleCount] = useState(MAX_VISIBLE);
   const navigate = useNavigate();
 
-  const MAX_POSTERS = 16;
+  const MAX_POSTERS = 8;
   const displayMovies = movies.slice(-MAX_POSTERS);
 
   const handlePrev = () => setStartIndex(i => Math.max(0, i - 1));
@@ -122,7 +128,9 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
   const canScroll = displayMovies.length > visibleCount;
 
   return (
-    <div className="relative mt-4">
+    <div
+      className="relative mt-4 min-h-[390px] md:min-h-[430px]"
+    >
       {/* Header */}
       <div className="flex items-center justify-between mb-4 px-2 md:px-0">
         <h2 className="text-xl md:text-2xl font-bold text-white font-heading tracking-wide">
@@ -139,10 +147,10 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
         >
           {seeMoreHover ? (
             <>
-              Xem tất cả <ArrowForwardIosIcon className="ml-1 text-sm" />
+              Xem tất cả <InlineIcon name="chevronRight" size={16} className="ml-1" />
             </>
           ) : (
-            <span className="flex items-center text-sm font-medium">Xem tất cả <ArrowForwardIosIcon className="ml-1 text-xs" /></span>
+            <span className="flex items-center text-sm font-medium">Xem tất cả <InlineIcon name="chevronRight" size={14} className="ml-1" /></span>
           )}
         </button>
       </div>
@@ -150,12 +158,15 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
       {/* Slider Container */}
       <div className="relative flex items-center group/slider">
         {/* Prev Arrow */}
-        {canScroll && startIndex > 0 && (
+        {canScroll && (
           <button 
+            type="button"
             onClick={handlePrev} 
-            className="absolute -left-4 md:-left-8 z-20 w-10 md:w-14 h-full bg-black/40 hover:bg-black/80 text-white opacity-0 group-hover/slider:opacity-100 transition-opacity flex items-center justify-center rounded-r-md backdrop-blur-sm"
+            disabled={startIndex === 0}
+            aria-label="Cuộn trang phim trước"
+            className="absolute -left-4 md:-left-8 z-20 w-10 md:w-14 h-full bg-black/40 hover:bg-black/80 text-white opacity-0 group-hover/slider:opacity-100 transition-opacity flex items-center justify-center rounded-r-md backdrop-blur-sm disabled:opacity-0"
           >
-            <ArrowBackIosNewIcon className="text-2xl md:text-4xl shadow-lg" />
+            <InlineIcon name="chevronLeft" size={36} className="drop-shadow-lg" />
           </button>
         )}
 
@@ -180,7 +191,10 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
               willChange: 'transform',
             }}
           >
-            {displayMovies.map((movie, idx) => (
+            {displayMovies.map((movie, idx) => {
+              const shouldLoadPoster = idx >= startIndex - 1 && idx <= startIndex + visibleCount + 1;
+
+              return (
               <div
                 key={movie.id || idx}
                 className="relative flex-shrink-0 group/card w-[200px]"
@@ -188,18 +202,28 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
                 onMouseLeave={handleMouseLeave}
                 ref={el => posterRefs.current[idx] = el}
               >
-                <div className="relative overflow-hidden rounded-xl aspect-[2/3] shadow-lg transition-transform duration-300 group-hover/card:scale-105 group-hover/card:shadow-2xl bg-surface cursor-pointer" onClick={() => navigate(`/watch/${movie.id}`)}>
+                <div className="relative overflow-hidden rounded-2xl aspect-[2/3] shadow-[0_4px_20px_rgba(0,0,0,0.3)] transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] group-hover/card:scale-[1.12] group-hover/card:shadow-[0_20px_40px_rgba(0,0,0,0.6)] group-hover/card:-translate-y-2 bg-surface ring-1 ring-white/5 group-hover/card:ring-white/20 cursor-pointer" onClick={() => navigate(`/watch/${movie.id}`)}>
+                  <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-500 z-10 pointer-events-none mix-blend-overlay" />
+                  <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-br from-white/10 via-white/[0.03] to-black px-3 py-4 pointer-events-none">
+                    <div className="line-clamp-2 text-sm font-bold text-white/70">{movie.title || 'Đang tải poster'}</div>
+                    {movie.originalTitle && (
+                      <div className="mt-1 line-clamp-1 text-[11px] text-white/35">{movie.originalTitle}</div>
+                    )}
+                  </div>
                   <img
-                    src={movie.poster_url || movie.poster || FALLBACK_POSTER}
+                    src={shouldLoadPoster ? resizeTmdbImage(movie.poster_url || movie.poster || FALLBACK_POSTER, 'w342') : FALLBACK_POSTER}
                     alt={movie.title}
                     referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover pointer-events-none"
+                    loading="lazy"
+                    fetchPriority="low"
+                    decoding="async"
+                    className="absolute inset-0 w-full h-full object-cover pointer-events-none"
                     onError={(e) => { e.currentTarget.src = FALLBACK_POSTER; }}
                   />
                   <MovieRatingBadge rating={movie.imdb_rating} />
                   {/* Play Button Overlay */}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                    <div className="w-12 h-12 rounded-full border-2 border-primary bg-primary/20 flex items-center justify-center backdrop-blur-sm text-primary group-hover/card:scale-110 transition-transform">
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 flex items-center justify-center z-20">
+                    <div className="w-12 h-12 rounded-full border-2 border-primary bg-primary/20 flex items-center justify-center backdrop-blur-sm text-primary group-hover/card:scale-110 transition-transform shadow-[0_0_15px_rgba(79,70,229,0.5)]">
                       <svg className="w-6 h-6 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                     </div>
                   </div>
@@ -214,50 +238,65 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
                   </p>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
         {/* Next Arrow */}
         {canScroll && startIndex < displayMovies.length - visibleCount && (
           <button 
+            type="button"
             onClick={handleNext} 
+            aria-label="Cuộn trang phim kế tiếp"
             className="absolute -right-4 md:-right-8 z-20 w-10 md:w-14 h-full bg-black/40 hover:bg-black/80 text-white opacity-0 group-hover/slider:opacity-100 transition-opacity flex items-center justify-center rounded-l-md backdrop-blur-sm"
           >
-            <ArrowForwardIosIcon className="text-2xl md:text-4xl shadow-lg" />
+            <InlineIcon name="chevronRight" size={36} className="drop-shadow-lg" />
           </button>
         )}
 
         {/* Hover Popup */}
         {hovered !== null && popupPos && displayMovies[hovered] && (
           <div
-            className="absolute z-[100] w-[350px] bg-[#141414] rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.8)] overflow-hidden border border-white/5 scale-100 origin-center"
-            style={{ 
-              top: popupPos.top, 
-              left: popupPos.left,
-              animation: 'popup-fade-in 0.3s cubic-bezier(0.2, 0, 0, 1) forwards'
-            }}
+            className="absolute z-[100] w-[350px] bg-surface rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.8)] overflow-hidden border border-white/10 ring-1 ring-white/5 transition-opacity duration-200"
+            style={{ top: popupPos.top, left: popupPos.left }}
             onMouseEnter={handlePopupEnter}
             onMouseLeave={handlePopupLeave}
           >
-            {/* Custom Keyframe for Popup */}
-            <style>{`
-              @keyframes popup-fade-in {
-                from { opacity: 0; transform: translateY(20px) scale(0.95); }
-                to { opacity: 1; transform: translateY(0) scale(1); }
-              }
-            `}</style>
-            
-            {/* Backdrop Image */}
+            {/* Backdrop Image or Video */}
             <div className="w-full aspect-video relative bg-black cursor-pointer group/popup-img overflow-hidden" onClick={() => navigate(`/watch/${displayMovies[hovered].id}`)}>
               <img
-                src={displayMovies[hovered].backdrop || displayMovies[hovered].backdrop_url || displayMovies[hovered].poster_url || displayMovies[hovered].poster || FALLBACK_POSTER}
+                src={resizeTmdbImage(displayMovies[hovered].backdrop || displayMovies[hovered].backdrop_url || displayMovies[hovered].poster_url || displayMovies[hovered].poster || FALLBACK_POSTER, 'w780')}
                 alt={displayMovies[hovered].title}
                 referrerPolicy="no-referrer"
                 onError={(e) => { e.currentTarget.src = FALLBACK_POSTER; }}
-                className="w-full h-full object-cover transition-transform duration-700 group-hover/popup-img:scale-105"
+                className={`w-full h-full object-cover transition-transform duration-700 group-hover/popup-img:scale-105 ${displayMovies[hovered].trailer_url ? 'opacity-0' : 'opacity-100'}`}
               />
+              {displayMovies[hovered].trailer_url && (
+                <video
+                  src={displayMovies[hovered].trailer_url}
+                  autoPlay
+                  loop
+                  muted={isMuted}
+                  playsInline
+                  className="absolute inset-0 w-full h-full object-cover animate-fade-in"
+                />
+              )}
               <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-transparent to-transparent" />
+              
+              {/* Mute toggle */}
+              {displayMovies[hovered].trailer_url && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setIsMuted(!isMuted); }}
+                  className="absolute bottom-3 right-3 z-30 w-8 h-8 rounded-full bg-black/50 border border-white/20 text-white flex items-center justify-center hover:bg-black/80"
+                >
+                  {isMuted ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+                  )}
+                </button>
+              )}
             </div>
 
             {/* Content */}

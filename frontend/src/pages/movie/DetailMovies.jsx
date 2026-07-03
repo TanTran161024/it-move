@@ -15,12 +15,17 @@ import PersonIcon from '@mui/icons-material/Person';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PublicIcon from '@mui/icons-material/Public';
 import ReportProblemOutlinedIcon from '@mui/icons-material/ReportProblemOutlined';
+import ReplyIcon from '@mui/icons-material/Reply';
 import StarIcon from '@mui/icons-material/Star';
+import ThumbUpAltIcon from '@mui/icons-material/ThumbUpAlt';
+import ThumbUpAltOutlinedIcon from '@mui/icons-material/ThumbUpAltOutlined';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import ForgotPasswordDialog from '../../components/auth/ForgotPasswordDialog';
 import LoginDialog from '../../components/auth/LoginDialog';
 import RegisterDialog from '../../components/auth/RegisterDialog';
-import MovieCard, { FALLBACK_POSTER, MovieCardSkeleton } from '../../components/movie/MovieCard';
+import MovieCard, { MovieCardSkeleton } from '../../components/movie/MovieCard';
+import { FALLBACK_POSTER } from '../../utils/imageFallbacks';
 import { API_URL as API } from '../../config/api';
 import { getProfileHeaders, getStoredUser } from '../../utils/profile';
 
@@ -38,6 +43,20 @@ const tabs = [
   { id: 'cast', label: 'Diễn viên' },
   { id: 'comments', label: 'Bình luận' },
   { id: 'suggested', label: 'Đề xuất' },
+];
+
+const commentSortOptions = [
+  { value: 'newest', label: 'Mới nhất' },
+  { value: 'popular', label: 'Nổi bật' },
+  { value: 'oldest', label: 'Cũ nhất' },
+];
+
+const commentReportReasons = [
+  'Nội dung không phù hợp',
+  'Spam hoặc quảng cáo',
+  'Tiết lộ nội dung phim',
+  'Công kích người khác',
+  'Khác',
 ];
 
 const getTrailerUrl = (movie) => String(movie?.trailer_url || movie?.trailerUrl || movie?.trailer || '').trim();
@@ -154,6 +173,30 @@ const buildRecommendationReasons = (movie) => {
 
   return reasons.slice(0, 3);
 };
+
+const countNestedComments = (items = []) => items.reduce(
+  (total, comment) => total + 1 + countNestedComments(comment.replies || []),
+  0
+);
+
+const updateCommentLikeState = (items, commentId, liked, likeCount) => items.map((comment) => {
+  if (Number(comment.id) === Number(commentId)) {
+    return {
+      ...comment,
+      my_liked: liked,
+      like_count: likeCount,
+    };
+  }
+
+  if (comment.replies?.length) {
+    return {
+      ...comment,
+      replies: updateCommentLikeState(comment.replies, commentId, liked, likeCount),
+    };
+  }
+
+  return comment;
+});
 
 function InfoPill({ icon, label, value }) {
   if (!value && value !== 0) return null;
@@ -329,6 +372,14 @@ const DetailMovies = () => {
   const [reviewRating, setReviewRating] = useState(0);
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState('');
+  const [commentSort, setCommentSort] = useState('newest');
+  const [commentSpoiler, setCommentSpoiler] = useState(false);
+  const [replyTargetId, setReplyTargetId] = useState(null);
+  const [replyText, setReplyText] = useState('');
+  const [revealedSpoilers, setRevealedSpoilers] = useState(() => new Set());
+  const [reportingCommentId, setReportingCommentId] = useState(null);
+  const [commentReportReason, setCommentReportReason] = useState(commentReportReasons[0]);
+  const [commentReportText, setCommentReportText] = useState('');
   const [reportReason, setReportReason] = useState(reportReasons[0]);
   const [reportText, setReportText] = useState('');
   const [feedbackMessage, setFeedbackMessage] = useState('');
@@ -461,15 +512,15 @@ const DetailMovies = () => {
     const headers = user.id ? getProfileHeaders() : {};
     Promise.all([
       fetch(`${API}/movies/${id}/ratings`, { headers }).then((res) => res.json()),
-      fetch(`${API}/movies/${id}/comments`).then((res) => res.json()),
+      fetch(`${API}/movies/${id}/comments?sort=${encodeURIComponent(commentSort)}`, { headers }).then((res) => res.json()),
     ])
       .then(([ratings, commentsData]) => {
         setRatingInfo(ratings);
         setReviewRating(Number(ratings.my_rating) || 0);
-        setComments(Array.isArray(commentsData) ? commentsData : []);
+        setComments(Array.isArray(commentsData?.comments) ? commentsData.comments : (Array.isArray(commentsData) ? commentsData : []));
       })
       .catch(() => {});
-  }, [id, user.id]);
+  }, [commentSort, id, user.id]);
 
   useEffect(() => {
     fetchFeedback();
@@ -553,11 +604,12 @@ const DetailMovies = () => {
     const commentRes = await fetch(`${API}/movies/${id}/comments`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ content: commentText.trim() }),
+      body: JSON.stringify({ content: commentText.trim(), is_spoiler: commentSpoiler }),
     });
 
     if (ratingRes.ok && commentRes.ok) {
       setCommentText('');
+      setCommentSpoiler(false);
       setFeedbackMessage('Đã gửi đánh giá và bình luận.');
       fetchFeedback();
       return;
@@ -565,6 +617,78 @@ const DetailMovies = () => {
 
     const errorBody = await (ratingRes.ok ? commentRes : ratingRes).json().catch(() => ({}));
     setFeedbackMessage(errorBody.message || 'Không thể gửi đánh giá và bình luận.');
+  };
+
+  const handleToggleLikeComment = async (commentId) => {
+    if (!user.id) {
+      requireLogin();
+      return;
+    }
+
+    const res = await fetch(`${API}/comments/${commentId}/like`, {
+      method: 'POST',
+      headers: getProfileHeaders({ 'Content-Type': 'application/json' }),
+    });
+
+    if (res.ok) {
+      const body = await res.json();
+      setComments((items) => updateCommentLikeState(items, commentId, Boolean(body.liked), Number(body.like_count) || 0));
+    }
+  };
+
+  const handleSubmitReply = async (parentId) => {
+    if (!user.id) {
+      requireLogin();
+      return;
+    }
+    if (!replyText.trim()) return;
+
+    const res = await fetch(`${API}/movies/${id}/comments`, {
+      method: 'POST',
+      headers: getProfileHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ content: replyText.trim(), parent_id: parentId }),
+    });
+
+    if (res.ok) {
+      setReplyText('');
+      setReplyTargetId(null);
+      fetchFeedback();
+      return;
+    }
+
+    const body = await res.json().catch(() => ({}));
+    setFeedbackMessage(body.message || 'Khong the gui phan hoi.');
+  };
+
+  const handleReportComment = async (commentId) => {
+    const res = await fetch(`${API}/comments/${commentId}/report`, {
+      method: 'POST',
+      headers: getProfileHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        reason: commentReportReason,
+        description: commentReportText.trim(),
+      }),
+    });
+
+    if (res.ok) {
+      setCommentReportReason(commentReportReasons[0]);
+      setCommentReportText('');
+      setReportingCommentId(null);
+      setFeedbackMessage('Da gui bao cao binh luan cho admin.');
+      return;
+    }
+
+    const body = await res.json().catch(() => ({}));
+    setFeedbackMessage(body.message || 'Khong the bao cao binh luan.');
+  };
+
+  const toggleSpoilerReveal = (commentId) => {
+    setRevealedSpoilers((prev) => {
+      const next = new Set(prev);
+      if (next.has(commentId)) next.delete(commentId);
+      else next.add(commentId);
+      return next;
+    });
   };
 
   const handleSubmitReport = async (event) => {
@@ -588,6 +712,178 @@ const DetailMovies = () => {
       setFeedbackMessage(body.message || 'Không thể gửi báo lỗi.');
     }
   };
+
+  const commentsTotal = countNestedComments(comments);
+
+  const renderCommentBody = (comment) => {
+    const spoilerHidden = comment.is_spoiler && !revealedSpoilers.has(comment.id);
+
+    if (spoilerHidden) {
+      return (
+        <div className="rounded-2xl border border-yellow-400/20 bg-yellow-400/10 p-4">
+          <div className="mb-3 flex items-center gap-2 text-sm font-black text-yellow-200">
+            <VisibilityOffIcon fontSize="small" />
+            Bình luận có spoiler
+          </div>
+          <button
+            type="button"
+            onClick={() => toggleSpoilerReveal(comment.id)}
+            className="rounded-full border border-white/15 px-4 py-2 text-xs font-black text-white transition-colors hover:bg-white/10"
+          >
+            Hiện nội dung
+          </button>
+        </div>
+      );
+    }
+
+    return <p className="whitespace-pre-line text-sm leading-relaxed text-white/75">{comment.content}</p>;
+  };
+
+  const renderCommentCard = (comment, depth = 0) => (
+    <div key={comment.id} className="space-y-3" style={{ marginLeft: depth ? 18 : 0 }}>
+      <article className="flex gap-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-orange-600 text-lg font-black text-white">
+          {comment.username?.[0]?.toUpperCase() || '?'}
+        </div>
+        <div className="min-w-0 flex-1 rounded-2xl rounded-tl-sm border border-white/10 bg-black/20 p-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <h5 className="truncate text-sm font-black text-white">{comment.username}</h5>
+              {comment.is_spoiler && (
+                <span className="rounded-full border border-yellow-400/25 bg-yellow-400/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-yellow-200">
+                  Spoiler
+                </span>
+              )}
+            </div>
+            <span className="text-xs font-bold text-white/35">{new Date(comment.created_at).toLocaleString('vi-VN')}</span>
+          </div>
+
+          {renderCommentBody(comment)}
+
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
+            <button
+              type="button"
+              onClick={() => handleToggleLikeComment(comment.id)}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-black transition-colors ${
+                comment.my_liked ? 'bg-primary/20 text-primary' : 'bg-white/5 text-white/55 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              {comment.my_liked ? <ThumbUpAltIcon fontSize="inherit" /> : <ThumbUpAltOutlinedIcon fontSize="inherit" />}
+              {comment.like_count || 0}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setReplyTargetId(replyTargetId === comment.id ? null : comment.id);
+                setReplyText('');
+              }}
+              className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1.5 text-xs font-black text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <ReplyIcon fontSize="inherit" />
+              Trả lời
+            </button>
+            {comment.is_spoiler && (
+              <button
+                type="button"
+                onClick={() => toggleSpoilerReveal(comment.id)}
+                className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1.5 text-xs font-black text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <VisibilityIcon fontSize="inherit" />
+                {revealedSpoilers.has(comment.id) ? 'Ẩn spoiler' : 'Hiện spoiler'}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setReportingCommentId(reportingCommentId === comment.id ? null : comment.id);
+                setCommentReportText('');
+              }}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1.5 text-xs font-black text-white/45 transition-colors hover:bg-red-500/10 hover:text-red-200"
+            >
+              <ReportProblemOutlinedIcon fontSize="inherit" />
+              Báo cáo
+            </button>
+          </div>
+
+          {replyTargetId === comment.id && (
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+              <textarea
+                value={replyText}
+                onChange={(event) => setReplyText(event.target.value)}
+                placeholder={user.id ? 'Viết phản hồi của bạn...' : 'Đăng nhập để trả lời'}
+                disabled={!user.id}
+                maxLength={1000}
+                className="min-h-[84px] w-full resize-y rounded-xl border border-white/10 bg-black/35 p-3 text-sm text-white outline-none transition-colors placeholder:text-white/30 focus:border-primary disabled:cursor-not-allowed disabled:opacity-60"
+              />
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReplyTargetId(null);
+                    setReplyText('');
+                  }}
+                  className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-white/60 transition-colors hover:bg-white/10"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSubmitReply(comment.id)}
+                  disabled={!user.id || !replyText.trim()}
+                  className="rounded-full bg-primary px-4 py-2 text-xs font-black text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/35"
+                >
+                  Gửi trả lời
+                </button>
+              </div>
+            </div>
+          )}
+
+          {reportingCommentId === comment.id && (
+            <div className="mt-4 rounded-2xl border border-red-400/20 bg-red-500/10 p-3">
+              <select
+                value={commentReportReason}
+                onChange={(event) => setCommentReportReason(event.target.value)}
+                className="mb-3 w-full rounded-xl border border-white/10 bg-black/40 p-3 text-sm font-bold text-white outline-none focus:border-red-300"
+              >
+                {commentReportReasons.map((reason) => (
+                  <option key={reason} value={reason}>{reason}</option>
+                ))}
+              </select>
+              <textarea
+                value={commentReportText}
+                onChange={(event) => setCommentReportText(event.target.value)}
+                placeholder="Mô tả thêm nếu cần..."
+                maxLength={500}
+                className="min-h-[80px] w-full resize-y rounded-xl border border-white/10 bg-black/35 p-3 text-sm text-white outline-none transition-colors placeholder:text-white/30 focus:border-red-300"
+              />
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setReportingCommentId(null)}
+                  className="rounded-full border border-white/10 px-4 py-2 text-xs font-black text-white/60 transition-colors hover:bg-white/10"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleReportComment(comment.id)}
+                  className="rounded-full bg-red-500 px-4 py-2 text-xs font-black text-white transition-colors hover:bg-red-400"
+                >
+                  Gửi báo cáo
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </article>
+
+      {comment.replies?.length > 0 && (
+        <div className="ml-8 space-y-3 border-l border-white/10 pl-4">
+          {comment.replies.map((reply) => renderCommentCard(reply, depth + 1))}
+        </div>
+      )}
+    </div>
+  );
 
   if (loading) {
     return (
@@ -897,29 +1193,53 @@ const DetailMovies = () => {
                 <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
                   <div className="lg:col-span-2">
                     <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 md:p-8">
-                      <div className="mb-6 flex items-center justify-between border-b border-white/10 pb-5">
-                        <h3 className="text-2xl font-black text-white">Đánh giá & Bình luận ({comments.length})</h3>
+                      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
+                        <h3 className="text-2xl font-black text-white">Đánh giá & Bình luận ({commentsTotal})</h3>
+                        <div className="flex rounded-full border border-white/10 bg-black/30 p-1">
+                          {commentSortOptions.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => setCommentSort(option.value)}
+                              className={`rounded-full px-3 py-1.5 text-xs font-black transition-colors ${
+                                commentSort === option.value ? 'bg-primary text-white' : 'text-white/50 hover:text-white'
+                              }`}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
 
                       <form onSubmit={handleSubmitReview} className="mb-10">
-                        <div className="mb-4 flex items-center gap-4">
-                          <div className="rounded-2xl border border-white/10 bg-black/35 px-4 py-3">
-                            <span className="text-3xl font-black text-primary">{ratingInfo.average_rating || 0}</span>
+                        <div className="mb-4 flex flex-col gap-4 rounded-2xl border border-white/10 bg-black/25 p-4 md:flex-row md:items-center">
+                          <div className="shrink-0 rounded-2xl border border-yellow-400/20 bg-yellow-400/10 px-4 py-3">
+                            <span className="text-3xl font-black text-yellow-300">{ratingInfo.average_rating || 0}</span>
                             <span className="ml-1 text-xs font-black text-white/50">/10</span>
+                            <p className="mt-1 text-xs font-bold text-white/45">{ratingInfo.rating_count || 0} lượt từ người dùng</p>
                           </div>
-                          <div className="flex flex-1 items-center gap-1 overflow-x-auto pb-1">
-                            {Array.from({ length: 10 }, (_, i) => i + 1).map((score) => (
-                              <button
-                                type="button"
-                                key={score}
-                                onClick={() => setReviewRating(score)}
-                                className={`h-10 w-10 shrink-0 rounded-xl text-sm font-black transition-colors ${
-                                  Number(reviewRating) === score ? 'bg-primary text-white' : 'bg-white/5 text-white/45 hover:bg-white/15 hover:text-white'
-                                }`}
-                              >
-                                {score}
-                              </button>
-                            ))}
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-2 flex items-center justify-between gap-3">
+                              <span className="text-sm font-black text-white">Chọn điểm của bạn</span>
+                              <span className="text-sm font-black text-primary">{reviewRating ? `${reviewRating}/10` : 'Chưa chọn'}</span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {Array.from({ length: 10 }, (_, i) => i + 1).map((score) => (
+                                <button
+                                  type="button"
+                                  key={score}
+                                  onClick={() => setReviewRating(score)}
+                                  className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
+                                    Number(reviewRating) >= score
+                                      ? 'border-yellow-300/60 bg-yellow-300/15 text-yellow-300'
+                                      : 'border-white/10 bg-white/5 text-white/35 hover:border-yellow-300/35 hover:text-yellow-200'
+                                  }`}
+                                  aria-label={`Chọn ${score} điểm`}
+                                >
+                                  <StarIcon sx={{ fontSize: 18 }} />
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         </div>
                         <textarea
@@ -930,6 +1250,15 @@ const DetailMovies = () => {
                           className="min-h-[120px] w-full resize-y rounded-2xl border border-white/10 bg-black/35 p-4 text-white outline-none transition-colors placeholder:text-white/30 focus:border-primary disabled:cursor-not-allowed disabled:opacity-60"
                           maxLength={1000}
                         />
+                        <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-bold text-white/65 transition-colors hover:bg-white/[0.08]">
+                          <input
+                            type="checkbox"
+                            checked={commentSpoiler}
+                            onChange={(event) => setCommentSpoiler(event.target.checked)}
+                            className="h-4 w-4 accent-primary"
+                          />
+                          Ẩn nội dung spoiler
+                        </label>
                         <div className="mt-4 flex items-center justify-between gap-4">
                           <span className="text-xs font-bold text-white/40">{commentText.length}/1000</span>
                           <button
@@ -948,20 +1277,7 @@ const DetailMovies = () => {
                       </form>
 
                       <div className="space-y-5">
-                        {comments.length > 0 ? comments.map((comment) => (
-                          <article key={comment.id} className="flex gap-4">
-                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-orange-600 text-lg font-black text-white">
-                              {comment.username?.[0]?.toUpperCase() || '?'}
-                            </div>
-                            <div className="flex-1 rounded-2xl rounded-tl-sm border border-white/10 bg-black/20 p-4">
-                              <div className="mb-2 flex items-center justify-between gap-3">
-                                <h5 className="text-sm font-black text-white">{comment.username}</h5>
-                                <span className="text-xs font-bold text-white/35">{new Date(comment.created_at).toLocaleString('vi-VN')}</span>
-                              </div>
-                              <p className="whitespace-pre-line text-sm leading-relaxed text-white/75">{comment.content}</p>
-                            </div>
-                          </article>
-                        )) : (
+                        {comments.length > 0 ? comments.map((comment) => renderCommentCard(comment)) : (
                           <div className="rounded-3xl border border-white/10 bg-black/20 py-12 text-center">
                             <ChatBubbleOutlineIcon className="mb-4 text-6xl text-white/10" />
                             <p className="font-bold text-white/55">Chưa có bình luận nào. Hãy là người đầu tiên!</p>
