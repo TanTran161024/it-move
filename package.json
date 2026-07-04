@@ -14,5 +14,24 @@
   },
   "dependencies": {
     "swiper": "^11.2.10"
-  }
+  },
+  "version": "1.0.0",
+  "description": "IT Move là website xem phim trực tuyến dùng React + Vite cho frontend, Node.js + Express cho backend và MySQL/MariaDB cho database.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TanTran161024/it-move.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/TanTran161024/it-move/issues"
+  },
+  "homepage": "https://github.com/TanTran161024/it-move#readme"
 }

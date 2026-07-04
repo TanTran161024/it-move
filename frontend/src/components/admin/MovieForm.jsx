@@ -20,13 +20,21 @@ import { getProfileHeaders } from '../../utils/profile';
 import '../../pages/admin/AdminStyles.css';
 
 const darkFieldSx = {
-  '& .MuiInputBase-input': { color: '#fff' },
+  '& .MuiInputBase-input': { color: 'var(--admin-text)' },
   '& .MuiInputLabel-root': { color: 'var(--admin-text-muted)' },
   '& .MuiOutlinedInput-root': {
-    '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' },
-    '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.25)' },
+    background: 'var(--admin-input-bg)',
+    '& fieldset': { borderColor: 'var(--admin-border)' },
+    '&:hover fieldset': { borderColor: 'var(--admin-border-strong)' },
     '&.Mui-focused fieldset': { borderColor: 'var(--admin-accent)' },
   },
+};
+
+const formPanelSx = {
+  bgcolor: 'var(--admin-bg-soft)',
+  p: 3,
+  borderRadius: 3,
+  border: '1px solid var(--admin-border)',
 };
 
 function cleanText(value) {
@@ -183,10 +191,10 @@ export default function MovieForm({
   };
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth className="admin-dialog">
-      <DialogTitle sx={{ fontWeight: 700, borderBottom: '1px solid rgba(255,255,255,0.1)', pb: 2, mb: 2 }}>{editMovie ? 'Sửa thông tin phim' : 'Thêm phim mới'}</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 700, borderBottom: '1px solid var(--admin-border)', pb: 2, mb: 2 }}>{editMovie ? 'Sửa thông tin phim' : 'Thêm phim mới'}</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {/* Hiển thị */}
-        <Box sx={{ bgcolor: 'rgba(0,0,0,0.2)', p: 3, borderRadius: 3, border: '1px solid var(--admin-border)' }}>
+        <Box sx={formPanelSx}>
           <div className="admin-form-section" style={{ marginTop: 0 }}>Trạng thái hiển thị</div>
           <FormControlLabel
             sx={{ mt: 1, mb: 0 }}
@@ -198,7 +206,7 @@ export default function MovieForm({
               />
             }
             label={
-              <span style={{ color: visible ? '#4ade80' : '#f87171', fontWeight: 600, fontSize: '0.88rem' }}>
+              <span style={{ color: visible ? 'var(--admin-success)' : 'var(--admin-danger)', fontWeight: 600, fontSize: '0.88rem' }}>
                 {visible ? 'Đang hiển thị trên web' : 'Đang ẩn khỏi người dùng'}
               </span>
             }
@@ -206,7 +214,7 @@ export default function MovieForm({
         </Box>
 
         {/* Thông tin cơ bản */}
-        <Box sx={{ bgcolor: 'rgba(0,0,0,0.2)', p: 3, borderRadius: 3, border: '1px solid var(--admin-border)' }}>
+        <Box sx={formPanelSx}>
           <div className="admin-form-section" style={{ marginTop: 0 }}>Thông tin cơ bản</div>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mb: 2 }}>
             <TextField label="Tên phim" name="title" fullWidth value={form.title || ''} onChange={onChange} sx={darkFieldSx} />
@@ -247,7 +255,7 @@ export default function MovieForm({
                     onClick={handleCopyDescription}
                     variant="outlined"
                     size="small"
-                    sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.18)' }}
+                    sx={{ color: 'var(--admin-text)', borderColor: 'var(--admin-border-strong)' }}
                   >
                     {copied ? 'Đã copy' : 'Copy'}
                   </Button>
@@ -256,7 +264,7 @@ export default function MovieForm({
                     onClick={handleApplyDescription}
                     variant="contained"
                     size="small"
-                    sx={{ bgcolor: 'var(--admin-success)', '&:hover': { bgcolor: '#16a34a' } }}
+                    sx={{ bgcolor: 'var(--admin-accent)', '&:hover': { bgcolor: 'var(--admin-accent-hover)' } }}
                   >
                     Áp dụng vào mô tả
                   </Button>
@@ -267,7 +275,7 @@ export default function MovieForm({
         </Box>
 
         {/* Phân loại */}
-        <Box sx={{ bgcolor: 'rgba(0,0,0,0.2)', p: 3, borderRadius: 3, border: '1px solid var(--admin-border)' }}>
+        <Box sx={formPanelSx}>
           <div className="admin-form-section" style={{ marginTop: 0 }}>Phân loại</div>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
             <Autocomplete
@@ -306,7 +314,7 @@ export default function MovieForm({
         </Box>
 
         {/* Chi tiết */}
-        <Box sx={{ bgcolor: 'rgba(0,0,0,0.2)', p: 3, borderRadius: 3, border: '1px solid var(--admin-border)' }}>
+        <Box sx={formPanelSx}>
           <div className="admin-form-section" style={{ marginTop: 0 }}>Thông số chi tiết</div>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 2 }}>
             <TextField label="Năm phát hành" name="release_year" type="number" fullWidth value={form.release_year || ''} onChange={onChange} sx={darkFieldSx} />
@@ -320,7 +328,7 @@ export default function MovieForm({
         </Box>
 
         {/* Media */}
-        <Box sx={{ bgcolor: 'rgba(0,0,0,0.2)', p: 3, borderRadius: 3, border: '1px solid var(--admin-border)' }}>
+        <Box sx={formPanelSx}>
           <div className="admin-form-section" style={{ marginTop: 0 }}>Media</div>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <TextField label="Poster URL" name="poster_url" fullWidth value={form.poster_url || ''} onChange={onChange} sx={darkFieldSx} />

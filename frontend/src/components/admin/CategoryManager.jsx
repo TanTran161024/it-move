@@ -11,11 +11,12 @@ import { API_BASE_URL as API } from '../../config/api';
 import '../../pages/admin/AdminStyles.css';
 
 const darkFieldSx = {
-  '& .MuiInputBase-input': { color: '#fff' },
+  '& .MuiInputBase-input': { color: 'var(--admin-text)' },
   '& .MuiInputLabel-root': { color: 'var(--admin-text-muted)' },
   '& .MuiOutlinedInput-root': {
-    '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' },
-    '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.25)' },
+    background: 'var(--admin-input-bg)',
+    '& fieldset': { borderColor: 'var(--admin-border)' },
+    '&:hover fieldset': { borderColor: 'var(--admin-border-strong)' },
     '&.Mui-focused fieldset': { borderColor: 'var(--admin-accent)' },
   },
 };
@@ -196,8 +197,8 @@ export default function CategoryManager() {
 
   return (
     <Box sx={{ p: { xs: 1, md: 3 }, maxWidth: 1400, mx: 'auto' }}>
-      <Typography variant="h4" mb={3} sx={{ color: '#fff', fontWeight: 700 }}>
-        Quản lý danh mục Custom
+      <Typography variant="h4" mb={3} sx={{ color: 'var(--admin-text-strong)', fontWeight: 700, fontSize: '1.7rem' }}>
+        Quản lý danh mục
       </Typography>
 
       <Button 
@@ -226,13 +227,13 @@ export default function CategoryManager() {
           {categories.map(category => (
             <Card key={category.id} className="admin-panel" sx={{ p: 0, mb: 0 }}>
               <CardContent>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: 'var(--admin-accent)' }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: 'var(--admin-text-strong)' }}>
                   {category.name}
                 </Typography>
                 
                 {/* Hiển thị thể loại */}
                 <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" sx={{ color: 'var(--admin-text-muted)', mb: 1, fontWeight: 600, textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em' }}>
+                  <Typography variant="body2" sx={{ color: 'var(--admin-text-muted)', mb: 1, fontWeight: 650, textTransform: 'uppercase', fontSize: '0.72rem', letterSpacing: 0 }}>
                     Thể loại:
                   </Typography>
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
@@ -243,16 +244,16 @@ export default function CategoryManager() {
                           label={genre.name}
                           size="small"
                           sx={{
-                            bgcolor: 'rgba(59, 130, 246, 0.15)',
-                            color: '#60a5fa',
+                            bgcolor: 'var(--admin-bg-soft)',
+                            color: 'var(--admin-text-soft)',
                             fontSize: '0.75rem',
                             fontWeight: 500,
-                            border: '1px solid rgba(59, 130, 246, 0.3)'
+                            border: '1px solid var(--admin-border)'
                           }}
                         />
                       ))
                     ) : (
-                      <Typography variant="body2" sx={{ color: '#666', fontStyle: 'italic' }}>
+                      <Typography variant="body2" sx={{ color: 'var(--admin-text-muted)', fontStyle: 'italic' }}>
                         Chưa có thể loại
                       </Typography>
                     )}
@@ -261,7 +262,7 @@ export default function CategoryManager() {
 
                 {/* Hiển thị quốc gia */}
                 <Box sx={{ mb: 1 }}>
-                  <Typography variant="body2" sx={{ color: 'var(--admin-text-muted)', mb: 1, fontWeight: 600, textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em' }}>
+                  <Typography variant="body2" sx={{ color: 'var(--admin-text-muted)', mb: 1, fontWeight: 650, textTransform: 'uppercase', fontSize: '0.72rem', letterSpacing: 0 }}>
                     Quốc gia:
                   </Typography>
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
@@ -272,16 +273,16 @@ export default function CategoryManager() {
                           label={country.name}
                           size="small"
                           sx={{
-                            bgcolor: 'rgba(34, 197, 94, 0.15)',
-                            color: '#4ade80',
+                            bgcolor: 'var(--admin-bg-soft)',
+                            color: 'var(--admin-text-soft)',
                             fontSize: '0.75rem',
                             fontWeight: 500,
-                            border: '1px solid rgba(34, 197, 94, 0.3)'
+                            border: '1px solid var(--admin-border)'
                           }}
                         />
                       ))
                     ) : (
-                      <Typography variant="body2" sx={{ color: '#666', fontStyle: 'italic' }}>
+                      <Typography variant="body2" sx={{ color: 'var(--admin-text-muted)', fontStyle: 'italic' }}>
                         Chưa có quốc gia
                       </Typography>
                     )}
@@ -294,7 +295,7 @@ export default function CategoryManager() {
                     size="small"
                     onClick={() => handleOpen(category)}
                     sx={{
-                      bgcolor: 'rgba(255,255,255,0.05)',
+                      bgcolor: 'var(--admin-bg-soft)',
                       color: 'var(--admin-text)',
                       '&:hover': { bgcolor: 'var(--admin-accent)', color: '#fff' }
                     }}
@@ -307,7 +308,7 @@ export default function CategoryManager() {
                     size="small"
                     onClick={() => handleDelete(category.id)}
                     sx={{
-                      bgcolor: 'rgba(255,255,255,0.05)',
+                      bgcolor: 'var(--admin-bg-soft)',
                       color: 'var(--admin-danger)',
                       '&:hover': { bgcolor: 'var(--admin-danger)', color: '#fff' }
                     }}
@@ -360,7 +361,7 @@ export default function CategoryManager() {
               )}
               MenuProps={{
                 PaperProps: {
-                  style: { maxHeight: 400, background: 'var(--admin-surface)', color: '#fff', border: '1px solid var(--admin-border)' },
+                  style: { maxHeight: 400, background: 'var(--admin-surface)', color: 'var(--admin-text)', border: '1px solid var(--admin-border)' },
                 },
               }}
               sx={{ '& .MuiSelect-icon': { color: 'var(--admin-text-muted)' } }}
@@ -390,7 +391,7 @@ export default function CategoryManager() {
                         key={id} 
                         label={country ? country.name : id} 
                         size="small"
-                        sx={{ bgcolor: 'var(--admin-success)', color: '#fff' }}
+                        sx={{ bgcolor: 'var(--admin-accent)', color: '#fff' }}
                       />
                     );
                   })}
@@ -398,7 +399,7 @@ export default function CategoryManager() {
               )}
               MenuProps={{
                 PaperProps: {
-                  style: { maxHeight: 400, background: 'var(--admin-surface)', color: '#fff', border: '1px solid var(--admin-border)' },
+                  style: { maxHeight: 400, background: 'var(--admin-surface)', color: 'var(--admin-text)', border: '1px solid var(--admin-border)' },
                 },
               }}
               sx={{ '& .MuiSelect-icon': { color: 'var(--admin-text-muted)' } }}

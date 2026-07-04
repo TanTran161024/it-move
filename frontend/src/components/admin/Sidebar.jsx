@@ -1,76 +1,73 @@
-import { List, ListItem, ListItemButton, ListItemIcon, ListItemText, Typography, IconButton, Divider } from '@mui/material';
-import MovieIcon from '@mui/icons-material/Movie';
-import CategoryIcon from '@mui/icons-material/Category';
-import PeopleIcon from '@mui/icons-material/People';
-import BarChartIcon from '@mui/icons-material/BarChart';
-import ImageIcon from '@mui/icons-material/Image';
-import RateReviewIcon from '@mui/icons-material/RateReview';
-import SubtitlesIcon from '@mui/icons-material/Subtitles';
-import LogoutIcon from '@mui/icons-material/Logout';
-import HomeIcon from '@mui/icons-material/Home';
+import { Divider, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import DarkModeIcon from '@mui/icons-material/DarkMode';
+import HomeIcon from '@mui/icons-material/Home';
+import LightModeIcon from '@mui/icons-material/LightMode';
+import LogoutIcon from '@mui/icons-material/Logout';
 import PlayCircleIcon from '@mui/icons-material/PlayCircle';
 import { clearActiveProfile } from '../../utils/profile';
+import { adminMenuGroups } from './adminMenu';
 import '../../pages/admin/AdminStyles.css';
 
-const menuItems = [
-  { key: 'dashboard', label: 'Thống kê', icon: <BarChartIcon /> },
-  { key: 'movies', label: 'Quản lý phim', icon: <MovieIcon /> },
-  { key: 'banners', label: 'Quản lý banner', icon: <ImageIcon /> },
-  { key: 'general', label: 'Quản lý chung', icon: <CategoryIcon /> },
-  { key: 'categories', label: 'Quản lý danh mục', icon: <CategoryIcon /> },
-  { key: 'subtitles', label: 'Phụ đề theo tập', icon: <SubtitlesIcon /> },
-  { key: 'users', label: 'Quản lý người dùng', icon: <PeopleIcon /> },
-  { key: 'feedback', label: 'Quản lý phản hồi', icon: <RateReviewIcon /> },
-];
-
-export default function Sidebar({ selected, onSelect, open = true, onClose }) {
+export default function Sidebar({ selected, onSelect, open = true, onClose, theme = 'dark', onThemeToggle }) {
   if (!open) return null;
+
+  const isLight = theme === 'light';
+
   return (
-    <aside className={`admin-sidebar ${open ? '' : 'closed'}`}>
-      <div>
-        {/* Header */}
+    <aside className="admin-sidebar">
+      <div className="admin-sidebar-scroll">
         <div className="admin-sidebar-header">
           <div className="admin-sidebar-brand">
             <div className="admin-sidebar-brand-icon">
-              <PlayCircleIcon sx={{ fontSize: 18, color: '#fff' }} />
+              <PlayCircleIcon sx={{ fontSize: 19, color: '#fff' }} />
             </div>
             <span>IT Move Admin</span>
           </div>
           {onClose && (
             <IconButton
               onClick={onClose}
-              sx={{ color: 'var(--admin-text-muted)', '&:hover': { bgcolor: 'rgba(255,255,255,0.06)' } }}
+              sx={{ color: 'var(--admin-text-muted)', '&:hover': { bgcolor: 'var(--admin-card-hover)' } }}
               size="small"
+              aria-label="Thu gọn menu"
             >
               <CloseIcon />
             </IconButton>
           )}
         </div>
 
-        {/* Menu Label */}
-        <div className="admin-sidebar-label">Menu chính</div>
-
-        {/* Main Menu */}
-        <List sx={{ px: 0 }}>
-          {menuItems.map(item => (
-            <ListItem key={item.key} disablePadding>
-              <ListItemButton
-                selected={selected === item.key}
-                onClick={() => { onSelect(item.key); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-              >
-                <ListItemIcon>{item.icon}</ListItemIcon>
-                <ListItemText primary={item.label} />
-              </ListItemButton>
-            </ListItem>
-          ))}
-        </List>
+        {adminMenuGroups.map((group) => (
+          <div key={group.title} className="admin-sidebar-group">
+            <div className="admin-sidebar-label">{group.title}</div>
+            <List sx={{ px: 0, py: 0 }}>
+              {group.items.map((item) => {
+                const Icon = item.Icon;
+                return (
+                  <ListItem key={item.key} disablePadding>
+                    <ListItemButton
+                      selected={selected === item.key}
+                      onClick={() => onSelect(item.key)}
+                    >
+                      <ListItemIcon><Icon /></ListItemIcon>
+                      <ListItemText primary={item.label} />
+                    </ListItemButton>
+                  </ListItem>
+                );
+              })}
+            </List>
+          </div>
+        ))}
       </div>
 
-      {/* Bottom actions */}
-      <div>
+      <div className="admin-sidebar-footer">
         <Divider className="admin-sidebar-divider" />
-        <List sx={{ pb: 2 }}>
+        <List sx={{ pb: 2, pt: 0 }}>
+          <ListItem disablePadding>
+            <ListItemButton onClick={onThemeToggle}>
+              <ListItemIcon>{isLight ? <DarkModeIcon /> : <LightModeIcon />}</ListItemIcon>
+              <ListItemText primary={isLight ? 'Giao diện tối' : 'Giao diện sáng'} />
+            </ListItemButton>
+          </ListItem>
           <ListItem disablePadding>
             <ListItemButton onClick={() => { window.location.href = '/'; }}>
               <ListItemIcon><HomeIcon /></ListItemIcon>
@@ -82,8 +79,8 @@ export default function Sidebar({ selected, onSelect, open = true, onClose }) {
               onClick={() => { localStorage.removeItem('user'); clearActiveProfile(); window.location.assign('/'); }}
               sx={{ '&:hover': { bgcolor: 'rgba(239,68,68,0.08) !important' } }}
             >
-              <ListItemIcon sx={{ color: '#f87171 !important' }}><LogoutIcon /></ListItemIcon>
-              <ListItemText primary="Đăng xuất" sx={{ '& .MuiListItemText-primary': { color: '#f87171 !important' } }} />
+              <ListItemIcon sx={{ color: '#ef4444 !important' }}><LogoutIcon /></ListItemIcon>
+              <ListItemText primary="Đăng xuất" sx={{ '& .MuiListItemText-primary': { color: '#ef4444 !important' } }} />
             </ListItemButton>
           </ListItem>
         </List>

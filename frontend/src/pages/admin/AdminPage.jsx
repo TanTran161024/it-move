@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Box, Container, Typography, Grid, Card, CardMedia, CardContent, CardActions, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Alert, Toolbar, Autocomplete, Tabs, Tab, Switch, CircularProgress } from '@mui/material';
+import { Box, Typography, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Alert, Autocomplete, Tabs, Tab, CircularProgress } from '@mui/material';
 import axios from 'axios';
 import MovieTable from '../../components/admin/MovieTable';
 import MovieForm from '../../components/admin/MovieForm';
 import EpisodeManager from '../../components/admin/EpisodeManager';
 import Sidebar from '../../components/admin/Sidebar';
+import { adminMenuItems } from '../../components/admin/adminMenu';
 import CategoryManager from '../../components/admin/CategoryManager';
 import AdminFeedbackManager from '../../components/admin/AdminFeedbackManager';
 import SubtitleTranslator from '../../components/admin/SubtitleTranslator';
 import AdminDashboardStats from '../../components/admin/AdminDashboardStats';
+import AdminAutomationHub from '../../components/admin/AdminAutomationHub';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
@@ -16,15 +18,11 @@ import CloseIcon from '@mui/icons-material/Close';
 import Tooltip from '@mui/material/Tooltip';
 import IconButton from '@mui/material/IconButton';
 import MenuIcon from '@mui/icons-material/Menu';
-import BarChartIcon from '@mui/icons-material/BarChart';
-import MovieIcon from '@mui/icons-material/Movie';
-import ImageIcon from '@mui/icons-material/Image';
-import CategoryIcon from '@mui/icons-material/Category';
+import DarkModeIcon from '@mui/icons-material/DarkMode';
+import LightModeIcon from '@mui/icons-material/LightMode';
 import PeopleIcon from '@mui/icons-material/People';
 import HomeIcon from '@mui/icons-material/Home';
 import LogoutIcon from '@mui/icons-material/Logout';
-import RateReviewIcon from '@mui/icons-material/RateReview';
-import SubtitlesIcon from '@mui/icons-material/Subtitles';
 import { API_BASE_URL as API } from '../../config/api';
 
 export default function Admin() {
@@ -267,6 +265,15 @@ export default function Admin() {
   // Removed old stats state for AdminDashboardStats
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [adminTheme, setAdminTheme] = useState(() => localStorage.getItem('admin-theme') || 'dark');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-admin-theme', adminTheme);
+    localStorage.setItem('admin-theme', adminTheme);
+    return () => {
+      document.documentElement.removeAttribute('data-admin-theme');
+    };
+  }, [adminTheme]);
 
   if (!user.is_admin) return <Alert severity="error">Bạn không có quyền truy cập trang này!</Alert>;
 
@@ -493,15 +500,28 @@ export default function Admin() {
   };
 
   // Thêm sx cho TextField: input và placeholder đều màu trắng
-  const whiteTextFieldSx = { minWidth: 160, mr: 1, bgcolor: '#23242a', '& .MuiInputBase-input': { color: '#fff' }, '& .MuiInputLabel-root': { color: '#bbb' }, '& .MuiOutlinedInput-root': { '& fieldset': { borderColor: '#444' }, '&:hover fieldset': { borderColor: '#2196f3' }, '&.Mui-focused fieldset': { borderColor: '#2196f3' } }, '& .MuiInputBase-input::placeholder': { color: '#fff', opacity: 1 } };
+  const whiteTextFieldSx = {
+    minWidth: 160,
+    mr: 1,
+    bgcolor: 'var(--admin-input-bg)',
+    '& .MuiInputBase-input': { color: 'var(--admin-text)' },
+    '& .MuiInputLabel-root': { color: 'var(--admin-text-muted)' },
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '10px',
+      '& fieldset': { borderColor: 'var(--admin-border)' },
+      '&:hover fieldset': { borderColor: 'var(--admin-border-strong)' },
+      '&.Mui-focused fieldset': { borderColor: 'var(--admin-accent)' },
+    },
+    '& .MuiInputBase-input::placeholder': { color: 'var(--admin-text-muted)', opacity: 1 },
+  };
 
   // Sử dụng InputProps và InputLabelProps để ép màu trắng cho input, label, placeholder
   const whiteTextFieldProps = {
     InputProps: {
-      style: { color: '#fff' },
+      style: { color: 'var(--admin-text)' },
     },
     InputLabelProps: {
-      style: { color: '#fff' },
+      style: { color: 'var(--admin-text-muted)' },
     },
   };
 
@@ -519,13 +539,13 @@ export default function Admin() {
     minWidth: 0,
     width: '100%',
     '& .MuiInputBase-root': {
-      background: 'rgba(15, 17, 23, 0.75)',
+      background: 'var(--admin-input-bg)',
       borderRadius: '10px',
-      color: '#fff',
+      color: 'var(--admin-text)',
     },
-    '& .MuiInputBase-input': { color: '#fff', fontWeight: 700 },
-    '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' },
-    '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.28)' },
+    '& .MuiInputBase-input': { color: 'var(--admin-text)', fontWeight: 700 },
+    '& fieldset': { borderColor: 'var(--admin-border)' },
+    '&:hover fieldset': { borderColor: 'var(--admin-border-strong)' },
     '& option': { color: '#111', background: '#fff' },
   };
   const genderLabel = (value) => ({
@@ -535,74 +555,100 @@ export default function Admin() {
   }[value] || 'Chưa cập nhật');
   const userInitial = (value) => String(value || '?').trim().charAt(0).toUpperCase() || '?';
 
-  const menuItems = [
-    { key: 'dashboard', icon: <BarChartIcon /> },
-    { key: 'movies', icon: <MovieIcon /> },
-    { key: 'banners', icon: <ImageIcon /> },
-    { key: 'categories', icon: <CategoryIcon /> },
-    { key: 'subtitles', icon: <SubtitlesIcon /> },
-    { key: 'users', icon: <PeopleIcon /> },
-    { key: 'feedback', icon: <RateReviewIcon /> },
-  ];
+  const menuItems = adminMenuItems;
+  const activeMenu = menuItems.find((item) => item.key === selectedMenu) || menuItems[0];
+  const toggleAdminTheme = () => setAdminTheme((current) => (current === 'light' ? 'dark' : 'light'));
 
   return (
-    <Box sx={{ display: 'flex', bgcolor: '#181920', height: '100vh', overflow: 'hidden' }}>
-      {/* Mini sidebar khi đóng */}
+    <Box className={`admin-shell admin-theme-${adminTheme}`}>
       {!sidebarOpen && (
-        <Box sx={{ flexShrink: 0, width: 64, height: '100vh', bgcolor: '#20222b', zIndex: 1200, display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 2, borderRight: '1px solid var(--admin-border)' }}>
-          {/* Nút mở sidebar */}
+        <Box className="admin-mini-sidebar">
           <Tooltip title="Mở menu" placement="right">
-            <IconButton onClick={() => setSidebarOpen(true)} sx={{ color: '#fff', mb: 2, bgcolor: 'transparent', '&:hover': { bgcolor: '#23243a' } }}>
+            <IconButton onClick={() => setSidebarOpen(true)} aria-label="Mở menu">
               <MenuIcon />
             </IconButton>
           </Tooltip>
-          {menuItems.map(item => (
-            <Tooltip key={item.key} title={item.key.charAt(0).toUpperCase() + item.key.slice(1)} placement="right">
-              <IconButton sx={{ color: selectedMenu === item.key ? '#FFD600' : '#fff', mb: 2, bgcolor: selectedMenu === item.key ? '#23243a' : 'transparent', '&:hover': { bgcolor: '#23243a' } }} onClick={() => setSelectedMenu(item.key)}>
-                {item.icon}
-              </IconButton>
-            </Tooltip>
-          ))}
-          <Box sx={{ flexGrow: 1 }} />
-          {/* Home icon */}
-          <Tooltip title="Home" placement="right">
-            <IconButton sx={{ color: '#fff', mb: 2, bgcolor: 'transparent', '&:hover': { bgcolor: '#23243a' } }} onClick={() => { window.location.href = '/'; }}>
+          {menuItems.map(item => {
+            const Icon = item.Icon;
+            return (
+              <Tooltip key={item.key} title={item.label} placement="right">
+                <IconButton
+                  className={selectedMenu === item.key ? 'active' : ''}
+                  onClick={() => setSelectedMenu(item.key)}
+                  aria-label={item.label}
+                >
+                  <Icon />
+                </IconButton>
+              </Tooltip>
+            );
+          })}
+          <div className="admin-mini-spacer" />
+          <Tooltip title={adminTheme === 'light' ? 'Giao diện tối' : 'Giao diện sáng'} placement="right">
+            <IconButton onClick={toggleAdminTheme} aria-label="Đổi giao diện">
+              {adminTheme === 'light' ? <DarkModeIcon /> : <LightModeIcon />}
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Trang chủ" placement="right">
+            <IconButton onClick={() => { window.location.href = '/'; }} aria-label="Trang chủ">
               <HomeIcon />
             </IconButton>
           </Tooltip>
-          {/* Logout icon */}
           <Tooltip title="Đăng xuất" placement="right">
-            <IconButton sx={{ color: '#fff', mb: 2, bgcolor: 'transparent', '&:hover': { bgcolor: '#23243a' } }} onClick={() => { localStorage.removeItem('user'); window.location.href = 'http://localhost:5173/'; }}>
+            <IconButton onClick={() => { localStorage.removeItem('user'); window.location.href = '/'; }} aria-label="Đăng xuất">
               <LogoutIcon />
             </IconButton>
           </Tooltip>
         </Box>
       )}
-      <Sidebar onSelect={setSelectedMenu} selected={selectedMenu} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <Box component="main" sx={{ flex: 1, minWidth: 0, p: 3, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-        <Toolbar />
-        {selectedMenu !== 'dashboard' && (
-          <Typography variant="h4" sx={{ color: '#fff', fontWeight: 700, textAlign: 'center', mb: 4, letterSpacing: 2, textShadow: '0 2px 8px #0006' }}>
-            Admin Dashboard
-          </Typography>
-        )}
+      <Sidebar
+        onSelect={setSelectedMenu}
+        selected={selectedMenu}
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        theme={adminTheme}
+        onThemeToggle={toggleAdminTheme}
+      />
+      <Box component="main" className="admin-main-content">
+        <div className="admin-topbar">
+          <div className="admin-title-wrap">
+            <span className="admin-eyebrow">{activeMenu.group}</span>
+            <h1 className="admin-page-title">{activeMenu.label}</h1>
+            <p className="admin-page-subtitle">{activeMenu.description}</p>
+          </div>
+          <div className="admin-topbar-actions">
+            {sidebarOpen ? null : (
+              <button type="button" className="admin-tool-button" onClick={() => setSidebarOpen(true)}>
+                <MenuIcon fontSize="small" />
+                Menu
+              </button>
+            )}
+            <button type="button" className="admin-tool-button" onClick={toggleAdminTheme}>
+              {adminTheme === 'light' ? <DarkModeIcon fontSize="small" /> : <LightModeIcon fontSize="small" />}
+              {adminTheme === 'light' ? 'Tối' : 'Sáng'}
+            </button>
+          </div>
+        </div>
         {selectedMenu === 'movies' && (
-          <Box sx={{ width: '100%', px: { xs: 1, md: 3 }, mt: 4 }}>
-            <Typography variant="h4" gutterBottom sx={{ color: '#fff', fontWeight:700 }}>Quản lý phim</Typography>
+          <Box className="admin-content-section">
+            <div className="admin-section-header">
+              <div>
+                <h2 className="admin-section-title">Kho phim</h2>
+                <p className="admin-section-subtitle">Tìm kiếm, chỉnh sửa, ẩn hiện phim và bổ sung dữ liệu TMDb khi cần.</p>
+              </div>
+              <div className="admin-topbar-actions">
+                <Button variant="contained" onClick={() => handleOpen(null)}>Thêm phim</Button>
+                <Button
+                  variant="outlined"
+                  onClick={handleTmdbBulkEnrich}
+                  disabled={tmdbBulkLoading}
+                  startIcon={tmdbBulkLoading ? <CircularProgress size={16} color="inherit" /> : null}
+                >
+                  {tmdbBulkLoading ? 'Đang bổ sung...' : 'Bổ sung TMDb'}
+                </Button>
+              </div>
+            </div>
             {notice && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setNotice('')}>{notice}</Alert>}
             {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
-            <Button variant="contained" onClick={() => handleOpen(null)} sx={{ mb: 2 }}>Thêm phim</Button>
-            <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 2 }}>
-              <Button
-                variant="outlined"
-                onClick={handleTmdbBulkEnrich}
-                disabled={tmdbBulkLoading}
-                sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.2)' }}
-                startIcon={tmdbBulkLoading ? <CircularProgress size={16} color="inherit" /> : null}
-              >
-                {tmdbBulkLoading ? 'Đang bổ sung...' : 'Bổ sung hàng loạt'}
-              </Button>
-            </Box>
             <MovieTable
               movies={movies}
               onEdit={handleOpen}
@@ -669,14 +715,14 @@ export default function Admin() {
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Xóa" arrow>
-                        <IconButton size="small" sx={{ bgcolor: 'rgba(0,0,0,0.6)', color: '#f87171', '&:hover': { bgcolor: 'var(--admin-danger)', color: '#fff' }, backdropFilter: 'blur(4px)' }} onClick={() => handleBannerDelete(banner.id)}>
+                        <IconButton size="small" sx={{ bgcolor: 'rgba(15,23,42,0.62)', color: 'var(--admin-danger)', '&:hover': { bgcolor: 'var(--admin-danger)', color: '#fff' }, backdropFilter: 'blur(4px)' }} onClick={() => handleBannerDelete(banner.id)}>
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                     </div>
                   </div>
                   <div className="admin-movie-card-body">
-                    <Typography variant="subtitle1" sx={{ color: '#fff', fontWeight: 700, fontSize: '1.05rem', mb: 0.5, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                    <Typography variant="subtitle1" sx={{ color: 'var(--admin-text-strong)', fontWeight: 700, fontSize: '1.05rem', mb: 0.5, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                       {banner.movie_title}
                     </Typography>
                     <Typography variant="body2" sx={{ color: 'var(--admin-text-muted)', fontSize: '0.85rem', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
@@ -723,11 +769,11 @@ export default function Admin() {
               textColor="inherit"
               TabIndicatorProps={{ style: { background: 'var(--admin-accent)', height: '4px', borderRadius: '4px 4px 0 0' } }}
             >
-              <Tab label="THỂ LOẠI" sx={{ color: '#fff', fontWeight: 700, fontSize: '0.85rem' }} />
-              <Tab label="QUỐC GIA" sx={{ color: '#fff', fontWeight: 700, fontSize: '0.85rem' }} />
-              <Tab label="NHÀ SẢN XUẤT" sx={{ color: '#fff', fontWeight: 700, fontSize: '0.85rem' }} />
-              <Tab label="DIỄN VIÊN" sx={{ color: '#fff', fontWeight: 700, fontSize: '0.85rem' }} />
-              <Tab label="ĐẠO DIỄN" sx={{ color: '#fff', fontWeight: 700, fontSize: '0.85rem' }} />
+              <Tab label="Thể loại" sx={{ color: 'var(--admin-text-muted)', fontWeight: 720, fontSize: '0.85rem' }} />
+              <Tab label="Quốc gia" sx={{ color: 'var(--admin-text-muted)', fontWeight: 720, fontSize: '0.85rem' }} />
+              <Tab label="Nhà sản xuất" sx={{ color: 'var(--admin-text-muted)', fontWeight: 720, fontSize: '0.85rem' }} />
+              <Tab label="Diễn viên" sx={{ color: 'var(--admin-text-muted)', fontWeight: 720, fontSize: '0.85rem' }} />
+              <Tab label="Đạo diễn" sx={{ color: 'var(--admin-text-muted)', fontWeight: 720, fontSize: '0.85rem' }} />
             </Tabs>
             {/* Form thêm mới */}
             <div className="admin-panel" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -753,10 +799,10 @@ export default function Admin() {
                 const isEditing = catEditId === item.id;
                 return (
                   <Box key={item.id} sx={{
-                    display: 'flex', alignItems: 'center', bgcolor: isEditing ? 'rgba(99, 102, 241, 0.1)' : 'var(--admin-surface)', color: '#fff', borderRadius: '12px', p: 2, boxShadow: isEditing ? '0 0 0 2px var(--admin-accent)' : '0 1px 3px rgba(0,0,0,0.1)',
+                    display: 'flex', alignItems: 'center', bgcolor: isEditing ? 'var(--admin-accent-soft)' : 'var(--admin-surface)', color: 'var(--admin-text)', borderRadius: '12px', p: 2, boxShadow: isEditing ? '0 0 0 2px var(--admin-accent)' : 'var(--admin-shadow-soft)',
                     border: '1px solid', borderColor: isEditing ? 'var(--admin-accent)' : 'var(--admin-border)',
-                    transition: 'all 0.2s ease',
-                    '&:hover': { borderColor: isEditing ? 'var(--admin-accent)' : 'rgba(255,255,255,0.2)', transform: isEditing ? 'none' : 'translateY(-2px)' },
+                    transition: 'background-color 160ms ease, border-color 160ms ease, transform 160ms ease',
+                    '&:hover': { borderColor: isEditing ? 'var(--admin-accent)' : 'var(--admin-border-strong)', transform: isEditing ? 'none' : 'translateY(-2px)' },
                     flexWrap: 'wrap', gap: 1.5
                   }}>
                     {/* Inline form sửa */}
@@ -776,7 +822,7 @@ export default function Admin() {
                           </>
                         )}
                         <Box sx={{ display: 'flex', gap: 1, width: '100%', justifyContent: 'flex-end', mt: 1 }}>
-                          <Button variant="contained" size="small" onClick={handleCatSubmit} sx={{ minWidth: 80, bgcolor: 'var(--admin-success)', '&:hover': { bgcolor: '#059669' } }}>Lưu</Button>
+                          <Button variant="contained" size="small" onClick={handleCatSubmit} sx={{ minWidth: 80, bgcolor: 'var(--admin-accent)', '&:hover': { bgcolor: 'var(--admin-accent-hover)' } }}>Lưu</Button>
                           <Button variant="outlined" size="small" onClick={handleCatCancel} sx={{ minWidth: 80, color: 'var(--admin-text-muted)', borderColor: 'var(--admin-border)' }}>Hủy</Button>
                         </Box>
                         {catError && <Alert severity="error" sx={{ width: '100%' }}>{catError}</Alert>}
@@ -793,12 +839,12 @@ export default function Admin() {
                         </Box>
                         <Box sx={{ display: 'flex', gap: 0.5 }}>
                           <Tooltip title="Sửa" arrow>
-                            <IconButton size="small" sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'var(--admin-text-muted)', '&:hover': { bgcolor: 'var(--admin-accent)', color: '#fff' } }} onClick={() => handleCatEdit(item)}>
+                            <IconButton size="small" sx={{ bgcolor: 'var(--admin-bg-soft)', color: 'var(--admin-text-muted)', '&:hover': { bgcolor: 'var(--admin-accent)', color: '#fff' } }} onClick={() => handleCatEdit(item)}>
                               <EditIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Xóa" arrow>
-                            <IconButton size="small" sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'var(--admin-danger)', '&:hover': { bgcolor: 'var(--admin-danger)', color: '#fff' } }} onClick={() => handleCatDelete(item.id)}>
+                            <IconButton size="small" sx={{ bgcolor: 'var(--admin-bg-soft)', color: 'var(--admin-danger)', '&:hover': { bgcolor: 'var(--admin-danger)', color: '#fff' } }} onClick={() => handleCatDelete(item.id)}>
                               <DeleteIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
@@ -818,7 +864,7 @@ export default function Admin() {
           <SubtitleTranslator />
         )}
         {selectedMenu === 'users' && (
-          <Box sx={{ color: '#fff', mt: 4, width: '100%' }}>
+          <Box sx={{ color: 'var(--admin-text)', mt: 4, width: '100%' }}>
             <div className="admin-section-header">
               <div>
                 <h2 className="admin-section-title">Quản lý người dùng</h2>
@@ -828,7 +874,7 @@ export default function Admin() {
                 startIcon={<PeopleIcon />}
                 variant="outlined"
                 onClick={fetchUsers}
-                sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.16)' }}
+                sx={{ color: 'var(--admin-text)', borderColor: 'var(--admin-border-strong)' }}
               >
                 Làm mới
               </Button>
@@ -974,6 +1020,13 @@ export default function Admin() {
         )}
         {selectedMenu === 'feedback' && (
           <AdminFeedbackManager />
+        )}
+        {selectedMenu === 'ai_tools' && <AdminAutomationHub />}
+        {selectedMenu === 'settings' && (
+          <Box className="admin-empty">
+            <Typography variant="h5" sx={{ color: 'var(--admin-text-strong)', mb: 2 }}>Cài đặt hệ thống</Typography>
+            <Typography sx={{ color: 'var(--admin-text-muted)' }}>Cấu hình SEO, API keys, và bảo trì hệ thống.</Typography>
+          </Box>
         )}
         {selectedMenu === 'dashboard' && <AdminDashboardStats />}
       </Box>

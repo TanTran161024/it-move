@@ -88,12 +88,16 @@ function UserAvatar({ user, activeProfile, size = 32 }) {
 
   return (
     <span
-      className="inline-grid shrink-0 place-items-center overflow-hidden rounded-full border border-white/15 text-sm font-extrabold text-white"
+      className="relative inline-grid shrink-0 place-items-center overflow-hidden rounded-full border border-white/20 text-sm font-black text-white shadow-lg transition-transform select-none"
       style={style}
     >
-      {!activeProfile?.id && user?.avatar ? (
-        <img src={user.avatar} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
-      ) : avatarText}
+      <div className="absolute inset-0 bg-gradient-to-tr from-black/40 to-transparent mix-blend-overlay pointer-events-none"></div>
+      <div className="absolute inset-0 bg-gradient-to-bl from-white/30 to-transparent mix-blend-overlay pointer-events-none"></div>
+      <span className="relative z-10 drop-shadow-md flex items-center justify-center w-full h-full pointer-events-none">
+        {!activeProfile?.id && user?.avatar ? (
+          <img src={user.avatar} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+        ) : avatarText}
+      </span>
     </span>
   );
 }
@@ -502,11 +506,13 @@ export default function Header() {
               
               <button
                 onClick={() => setUserAnchor(true)}
-                className="flex items-center gap-2 hover:bg-white/5 p-1 rounded-md transition-colors"
+                className="flex items-center gap-2 hover:bg-white/10 p-1 pl-1 pr-2 rounded-full transition-all duration-300 border border-transparent hover:border-white/10 hover:shadow-[0_0_15px_rgba(255,255,255,0.1)] group select-none outline-none caret-transparent"
                 aria-label="Mở menu tài khoản"
               >
-                <UserAvatar user={user} activeProfile={activeProfile} />
-                <Icon name="chevronDown" size={17} className="text-white/70" />
+                <div className="ring-2 ring-transparent group-hover:ring-purple-500/50 rounded-full transition-all duration-300 flex">
+                  <UserAvatar user={user} activeProfile={activeProfile} />
+                </div>
+                <Icon name="chevronDown" size={16} className="text-white/60 group-hover:text-white transition-colors" />
               </button>
             </div>
           ) : (

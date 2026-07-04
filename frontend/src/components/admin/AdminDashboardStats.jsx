@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Box, Typography, Alert, CircularProgress, Select, MenuItem, FormControl, Button, Chip, Stack } from '@mui/material';
+import { Box, Typography, Alert, CircularProgress, Select, MenuItem, FormControl, Button, Stack } from '@mui/material';
 import MovieIcon from '@mui/icons-material/Movie';
 import CategoryIcon from '@mui/icons-material/Category';
 import HomeIcon from '@mui/icons-material/Home';
@@ -16,15 +16,30 @@ import {
 } from 'recharts';
 import { getProfileHeaders } from '../../utils/profile';
 import { API_URL } from '../../config/api';
+import AdminAlertCenter from './AdminAlertCenter';
+import AdminOperationalQueue from './AdminOperationalQueue';
+import AdminAutomationHub from './AdminAutomationHub';
+import { safePosterUrl } from '../../utils/imageFallbacks';
 import '../../pages/admin/AdminStyles.css';
 
-const COLORS = ['#FFD600', '#42a5f5', '#66bb6a', '#ff7043', '#ab47bc', '#ec407a'];
+const COLORS = ['#4f6f9f', '#8aa0bd', '#b6c0cd', '#6f7d8f', '#9aa4b2', '#cbd5e1'];
 const STATUS_COLORS = {
-  new: '#ef4444',
-  processing: '#ff9800',
-  resolved: '#4caf50',
-  rejected: '#f44336'
+  new: '#b54747',
+  processing: '#9a6a2f',
+  resolved: '#407b5b',
+  rejected: '#8f3f3f'
 };
+
+const CHART_GRID = 'var(--admin-border)';
+const CHART_AXIS = 'var(--admin-text-muted)';
+const CHART_TOOLTIP = {
+  backgroundColor: 'var(--admin-surface)',
+  borderColor: 'var(--admin-border)',
+  color: 'var(--admin-text)',
+  borderRadius: 10,
+  boxShadow: 'var(--admin-shadow-soft)',
+};
+const LEGEND_STYLE = { color: 'var(--admin-text)', fontWeight: 650 };
 
 const REPORT_TYPE_LABELS = {
   playback: 'Video không phát',
@@ -82,32 +97,7 @@ export default function AdminDashboardStats() {
     fetchAiHealth();
   }, [fetchAiHealth]);
 
-  const { overview, charts, recent_reports } = stats || {};
-
-  const renderStatusBadge = (status) => {
-    const meta = {
-      new: { color: 'error', label: 'Mới' },
-      processing: { color: 'warning', label: 'Đang xử lý' },
-      open: { color: 'warning', label: 'Đang mở' },
-      resolved: { color: 'success', label: 'Đã xử lý' },
-      rejected: { color: 'error', label: 'Từ chối' },
-    }[status] || { color: 'default', label: status };
-    return <Chip label={meta.label} color={meta.color} size="small" variant="outlined" />;
-  };
-
-  const formatDateTime = (value) => {
-    if (!value) return '';
-    try {
-      return new Date(value).toLocaleString('vi-VN', {
-        day: '2-digit',
-        month: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return '';
-    }
-  };
+  const { overview, charts } = stats || {};
 
   if (error) {
     return (
@@ -130,14 +120,14 @@ export default function AdminDashboardStats() {
         </div>
         
         <Stack direction="row" gap={2} alignItems="center">
-          <Button startIcon={<RefreshIcon />} onClick={fetchStats} disabled={loading} sx={{ color: '#fff', '&:hover': { background: 'rgba(255,255,255,0.1)' } }}>
+          <Button startIcon={<RefreshIcon />} onClick={fetchStats} disabled={loading} variant="outlined">
             Làm mới
           </Button>
-          <FormControl size="small" sx={{ minWidth: 140, bgcolor: 'var(--admin-panel-bg)', borderRadius: 1 }}>
+          <FormControl size="small" sx={{ minWidth: 140, bgcolor: 'var(--admin-input-bg)', borderRadius: 1 }}>
             <Select 
               value={range} 
               onChange={(e) => setRange(e.target.value)}
-              sx={{ color: '#fff', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' } }}
+              sx={{ color: 'var(--admin-text)', '& .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--admin-border)' } }}
             >
               <MenuItem value="7d">7 ngày qua</MenuItem>
               <MenuItem value="30d">30 ngày qua</MenuItem>
@@ -196,72 +186,7 @@ export default function AdminDashboardStats() {
           </div>
 
           {aiHealth && (
-            <div className="admin-stats-grid" style={{ marginBottom: 28 }}>
-              <div className="admin-stat-card accent-purple">
-                <div className="admin-stat-label">AI Chatbot</div>
-                <div className="admin-stat-value">{aiHealth.status?.configured ? 'Gemini' : 'Rules'}</div>
-                <div className="admin-stat-subtitle">Grounded DB · no fake movies</div>
-              </div>
-              <div className="admin-stat-card accent-blue">
-                <div className="admin-stat-label">Phiên chat</div>
-                <div className="admin-stat-value">{aiHealth.chat?.sessions?.total || 0}</div>
-                <div className="admin-stat-subtitle">7 ngày: {aiHealth.chat?.sessions?.last_7_days || 0}</div>
-              </div>
-              <div className="admin-stat-card accent-green">
-                <div className="admin-stat-label">Tin nhắn AI</div>
-                <div className="admin-stat-value">{aiHealth.chat?.messages?.assistant || 0}</div>
-                <div className="admin-stat-subtitle">Rule: {aiHealth.chat?.messages?.rule_based || 0}</div>
-              </div>
-              <div className="admin-stat-card accent-orange">
-                <div className="admin-stat-label">Fallback</div>
-                <div className="admin-stat-value">{aiHealth.chat?.messages?.fallback || 0}</div>
-                <div className="admin-stat-subtitle">{aiHealth.chat?.persisted ? 'Đang lưu session' : 'Chưa chạy migration'}</div>
-              </div>
-            </div>
-          )}
-
-          {aiHealth && (
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1.35fr 1fr' }, gap: 3, mb: 4 }}>
-              <div className="admin-panel">
-                <div className="admin-panel-title"><CommentIcon sx={{ color: 'var(--admin-accent)' }} /> Câu hỏi chatbot gần đây</div>
-                {aiHealth.chat?.questions?.recent?.length > 0 ? (
-                  <div className="admin-table-wrap">
-                    {aiHealth.chat.questions.recent.slice(0, 6).map((question, index) => (
-                      <div key={`${question.session_id}-${index}`} className="admin-table-row" style={{ gap: 12 }}>
-                        <Box sx={{ flex: 1.6, minWidth: 0 }}>
-                          <Typography variant="body2" sx={{ color: '#fff', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {question.content}
-                          </Typography>
-                        </Box>
-                        <Box sx={{ flex: 0.45, color: '#aaa', fontSize: 13, textAlign: 'right' }}>
-                          {formatDateTime(question.created_at)}
-                        </Box>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <Typography sx={{ color: '#888', textAlign: 'center', py: 4 }}>Chưa có câu hỏi chatbot.</Typography>
-                )}
-              </div>
-
-              <div className="admin-panel">
-                <div className="admin-panel-title"><TrendingUpIcon sx={{ color: 'var(--admin-accent)' }} /> Câu hỏi lặp nhiều</div>
-                {aiHealth.chat?.questions?.top?.length > 0 ? (
-                  <Stack spacing={1.2}>
-                    {aiHealth.chat.questions.top.slice(0, 6).map((question, index) => (
-                      <Box key={`${question.question}-${index}`} sx={{ display: 'flex', alignItems: 'center', gap: 1.2, p: 1.25, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <Chip label={question.total} size="small" sx={{ bgcolor: 'rgba(99,102,241,0.16)', color: '#c7d2fe', fontWeight: 900 }} />
-                        <Typography variant="body2" sx={{ color: '#fff', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {question.question}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </Stack>
-                ) : (
-                  <Typography sx={{ color: '#888', textAlign: 'center', py: 4 }}>Chưa có dữ liệu lặp.</Typography>
-                )}
-              </div>
-            </Box>
+            <AdminAutomationHub aiHealth={aiHealth} />
           )}
 
           {/* Charts Row 1 */}
@@ -272,11 +197,11 @@ export default function AdminDashboardStats() {
                 <Box sx={{ height: 300, mt: 2 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={charts.daily_views}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                      <XAxis dataKey="date" stroke="#888" tickFormatter={(v) => new Date(v).toLocaleDateString('vi-VN', {day:'2-digit', month:'2-digit'})} />
-                      <YAxis stroke="#888" />
+                      <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                      <XAxis dataKey="date" stroke={CHART_AXIS} tickFormatter={(v) => new Date(v).toLocaleDateString('vi-VN', {day:'2-digit', month:'2-digit'})} />
+                      <YAxis stroke={CHART_AXIS} />
                       <RechartsTooltip 
-                        contentStyle={{ backgroundColor: '#222', borderColor: '#444', color: '#fff' }}
+                        contentStyle={CHART_TOOLTIP}
                         labelFormatter={(v) => new Date(v).toLocaleDateString('vi-VN')}
                       />
                       <Line type="monotone" dataKey="views" name="Lượt xem" stroke="var(--admin-accent)" strokeWidth={3} dot={{ r: 4, fill: 'var(--admin-accent)' }} activeDot={{ r: 8 }} />
@@ -284,7 +209,7 @@ export default function AdminDashboardStats() {
                   </ResponsiveContainer>
                 </Box>
               ) : (
-                <Typography sx={{ color: '#888', textAlign: 'center', py: 8 }}>Chưa có dữ liệu</Typography>
+                <Typography sx={{ color: 'var(--admin-text-muted)', textAlign: 'center', py: 8 }}>Chưa có dữ liệu</Typography>
               )}
             </div>
 
@@ -299,13 +224,13 @@ export default function AdminDashboardStats() {
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
-                      <RechartsTooltip contentStyle={{ backgroundColor: '#222', borderColor: '#444', color: '#fff' }} />
-                      <Legend />
+                      <RechartsTooltip contentStyle={CHART_TOOLTIP} />
+                      <Legend wrapperStyle={LEGEND_STYLE} />
                     </PieChart>
                   </ResponsiveContainer>
                 </Box>
               ) : (
-                <Typography sx={{ color: '#888', textAlign: 'center', py: 8 }}>Chưa có dữ liệu</Typography>
+                <Typography sx={{ color: 'var(--admin-text-muted)', textAlign: 'center', py: 8 }}>Chưa có dữ liệu</Typography>
               )}
             </div>
           </Box>
@@ -319,7 +244,13 @@ export default function AdminDashboardStats() {
                 <div className="admin-data-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))' }}>
                   {charts.top_movies.slice(0, 4).map(movie => (
                     <div key={movie.id} className="admin-movie-card">
-                      <img src={movie.poster_url} alt={movie.title} />
+                      <img
+                        src={safePosterUrl(movie.poster_url)}
+                        alt={movie.title}
+                        onError={(event) => {
+                          event.currentTarget.src = safePosterUrl('');
+                        }}
+                      />
                       <div className="admin-movie-card-body" style={{ padding: '8px' }}>
                         <div className="admin-movie-card-title" style={{ fontSize: '13px' }}>{movie.title}</div>
                         <div className="admin-movie-card-meta">{movie.views || 0} lượt xem</div>
@@ -328,7 +259,7 @@ export default function AdminDashboardStats() {
                   ))}
                 </div>
               ) : (
-                <Typography sx={{ color: '#888', textAlign: 'center', py: 4 }}>Chưa có dữ liệu</Typography>
+                <Typography sx={{ color: 'var(--admin-text-muted)', textAlign: 'center', py: 4 }}>Chưa có dữ liệu</Typography>
               )}
             </div>
 
@@ -343,8 +274,8 @@ export default function AdminDashboardStats() {
                         <Cell key={`cell-${index}`} fill={index === 0 ? '#42a5f5' : '#FFD600'} />
                       ))}
                     </Pie>
-                    <RechartsTooltip contentStyle={{ backgroundColor: '#222', borderColor: '#444', color: '#fff' }} />
-                    <Legend />
+                    <RechartsTooltip contentStyle={CHART_TOOLTIP} />
+                    <Legend wrapperStyle={LEGEND_STYLE} />
                   </PieChart>
                 </ResponsiveContainer>
               </Box>
@@ -356,11 +287,11 @@ export default function AdminDashboardStats() {
               <Box sx={{ height: 220, mt: 2 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={[charts.report_stats]} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#333" horizontal={false} />
-                    <XAxis type="number" stroke="#888" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} horizontal={false} />
+                    <XAxis type="number" stroke={CHART_AXIS} />
                     <YAxis type="category" dataKey="name" hide />
-                    <RechartsTooltip contentStyle={{ backgroundColor: '#222', borderColor: '#444', color: '#fff' }} />
-                    <Legend />
+                    <RechartsTooltip contentStyle={CHART_TOOLTIP} />
+                    <Legend wrapperStyle={LEGEND_STYLE} />
                     <Bar dataKey="new" name="Mới" stackId="a" fill={STATUS_COLORS.new} barSize={40} />
                     <Bar dataKey="processing" name="Đang xử lý" stackId="a" fill={STATUS_COLORS.processing} />
                     <Bar dataKey="resolved" name="Đã xử lý" stackId="a" fill={STATUS_COLORS.resolved} />
@@ -392,46 +323,14 @@ export default function AdminDashboardStats() {
                 })}
               </Box>
             ) : (
-              <Typography sx={{ color: '#888', textAlign: 'center', py: 4 }}>Chưa có dữ liệu</Typography>
+              <Typography sx={{ color: 'var(--admin-text-muted)', textAlign: 'center', py: 4 }}>Chưa có dữ liệu</Typography>
             )}
           </div>
 
-          {/* Recent Reports Table */}
+          {/* Operational Queue */}
           <div className="admin-panel">
-            <div className="admin-panel-title"><ReportProblemIcon sx={{ color: 'var(--admin-accent)' }} /> Danh sách báo lỗi gần đây</div>
-            {recent_reports.length > 0 ? (
-              <div className="admin-table-wrap">
-                <div className="admin-table-header">
-                  <Box sx={{ flex: 2 }}>Phim / Tập</Box>
-                  <Box sx={{ flex: 2 }}>Lý do</Box>
-                  <Box sx={{ flex: 1 }}>Người gửi</Box>
-                  <Box sx={{ flex: 1 }}>Trạng thái</Box>
-                  <Box sx={{ flex: 1 }}>Ngày gửi</Box>
-                </div>
-                {recent_reports.map(report => (
-                  <div key={report.id} className="admin-table-row">
-                    <Box sx={{ flex: 2 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{report.movie_title || 'N/A'}</Typography>
-                      {report.episode_id && <Typography variant="caption" sx={{ color: '#888' }}>Tập ID: {report.episode_id}</Typography>}
-                    </Box>
-                    <Box sx={{ flex: 2 }}>
-                      <Typography variant="body2">{report.reason}</Typography>
-                      {report.report_type && (
-                        <Typography variant="caption" sx={{ color: '#fbbf24', display: 'block' }}>
-                          {REPORT_TYPE_LABELS[report.report_type] || report.report_type}
-                        </Typography>
-                      )}
-                      {report.description && <Typography variant="caption" sx={{ color: '#aaa', display: 'block' }}>{report.description}</Typography>}
-                    </Box>
-                    <Box sx={{ flex: 1, color: '#aaa', fontSize: 14 }}>{report.reporter_name || 'Khách'}</Box>
-                    <Box sx={{ flex: 1 }}>{renderStatusBadge(report.status)}</Box>
-                    <Box sx={{ flex: 1, color: '#aaa', fontSize: 13 }}>{new Date(report.created_at).toLocaleDateString('vi-VN')}</Box>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <Typography sx={{ color: '#888', textAlign: 'center', py: 4 }}>Không có báo cáo lỗi nào trong khoảng thời gian này.</Typography>
-            )}
+            <div className="admin-panel-title"><ReportProblemIcon sx={{ color: 'var(--admin-accent)' }} /> Hàng đợi vận hành</div>
+            <AdminOperationalQueue />
           </div>
         </>
       )}

@@ -5,11 +5,12 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import '../../pages/admin/AdminStyles.css';
 
 const darkFieldSx = {
-  '& .MuiInputBase-input': { color: '#fff' },
+  '& .MuiInputBase-input': { color: 'var(--admin-text)' },
   '& .MuiInputLabel-root': { color: 'var(--admin-text-muted)' },
   '& .MuiOutlinedInput-root': {
-    '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' },
-    '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.25)' },
+    background: 'var(--admin-input-bg)',
+    '& fieldset': { borderColor: 'var(--admin-border)' },
+    '&:hover fieldset': { borderColor: 'var(--admin-border-strong)' },
     '&.Mui-focused fieldset': { borderColor: 'var(--admin-accent)' },
   },
 };
@@ -63,10 +64,10 @@ export default function EpisodeManager({ open, onClose, movie, episodes, onAdd, 
                 borderRadius: 2,
                 p: 1.5,
                 border: editId === ep.id ? '1px solid var(--admin-accent)' : '1px solid var(--admin-border)',
-                transition: 'all 0.2s ease',
+                transition: 'background-color 160ms ease, border-color 160ms ease',
                 '&:hover': {
                   background: 'var(--admin-card-hover)',
-                  borderColor: 'rgba(255,255,255,0.15)',
+                  borderColor: 'var(--admin-border-strong)',
                 },
                 gap: 2,
                 flexWrap: { xs: 'wrap', sm: 'nowrap' },
@@ -78,14 +79,14 @@ export default function EpisodeManager({ open, onClose, movie, episodes, onAdd, 
                   <TextField label="Tiêu đề" name="title" value={form.title} onChange={handleChange} sx={{ ...darkFieldSx, flex: 1, minWidth: 120 }} size="small" />
                   <TextField label="Video URL" name="video_url" value={form.video_url} onChange={handleChange} sx={{ ...darkFieldSx, flex: 1, minWidth: 120 }} size="small" />
                   <TextField label="Subtitle URL" name="subtitle_url" value={form.subtitle_url} onChange={handleChange} sx={{ ...darkFieldSx, flex: 1, minWidth: 120 }} size="small" />
-                  <Button variant="contained" onClick={handleSubmit} sx={{ ml: 1, minWidth: 80, bgcolor: 'var(--admin-success)', '&:hover': { bgcolor: '#16a34a' } }}>Lưu</Button>
+                  <Button variant="contained" onClick={handleSubmit} sx={{ ml: 1, minWidth: 80, bgcolor: 'var(--admin-accent)', '&:hover': { bgcolor: 'var(--admin-accent-hover)' } }}>Lưu</Button>
                   <Button onClick={handleCancelEdit} sx={{ ml: 1, minWidth: 60, color: 'var(--admin-text-muted)' }}>Hủy</Button>
                 </>
               ) : (
                 <>
                   <Typography sx={{ width: 60, fontWeight: 700, color: 'var(--admin-accent)', fontSize: '1.1rem', textAlign: 'center' }}>Tập {ep.episode_number}</Typography>
                   <Typography sx={{ width: 54, color: 'var(--admin-text-muted)', fontSize: '0.75rem', fontWeight: 600, textAlign: 'center' }}>ID {ep.id}</Typography>
-                  <Typography sx={{ flex: 2, fontWeight: 600, color: '#fff', fontSize: '1rem', ml: 1, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{ep.title}</Typography>
+                  <Typography sx={{ flex: 2, fontWeight: 700, color: 'var(--admin-text-strong)', fontSize: '1rem', ml: 1, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{ep.title}</Typography>
                   <Box sx={{ flex: 3, display: 'flex', alignItems: 'center', gap: 1, minWidth: 120 }}>
                     <a href={ep.video_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--admin-accent-hover)', textDecoration: 'none', fontWeight: 500, display: 'flex', alignItems: 'center' }}>
                       <svg style={{ marginRight: 6 }} width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -93,8 +94,8 @@ export default function EpisodeManager({ open, onClose, movie, episodes, onAdd, 
                     </a>
                   </Box>
                   <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
-                    <IconButton size="small" onClick={() => handleEdit(ep)} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'var(--admin-text)', '&:hover': { bgcolor: 'var(--admin-accent)', color: '#fff' } }}><EditIcon fontSize="small" /></IconButton>
-                    <IconButton size="small" onClick={() => onDelete(ep.id)} sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'var(--admin-danger)', '&:hover': { bgcolor: 'var(--admin-danger)', color: '#fff' } }}><DeleteIcon fontSize="small" /></IconButton>
+                    <IconButton size="small" onClick={() => handleEdit(ep)} sx={{ bgcolor: 'var(--admin-bg-soft)', color: 'var(--admin-text)', '&:hover': { bgcolor: 'var(--admin-accent)', color: '#fff' } }}><EditIcon fontSize="small" /></IconButton>
+                    <IconButton size="small" onClick={() => onDelete(ep.id)} sx={{ bgcolor: 'var(--admin-bg-soft)', color: 'var(--admin-danger)', '&:hover': { bgcolor: 'var(--admin-danger)', color: '#fff' } }}><DeleteIcon fontSize="small" /></IconButton>
                   </Box>
                 </>
               )}

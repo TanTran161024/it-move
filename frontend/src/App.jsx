@@ -19,6 +19,7 @@ const WatchMovie = lazy(() => import('./pages/movie/WatchMovie'));
 const Search = lazy(() => import('./pages/movie/Search'));
 const ForYou = lazy(() => import('./pages/movie/ForYou'));
 const Profile = lazy(() => import('./pages/user/Profile'));
+const UserSettings = lazy(() => import('./pages/user/UserSettings'));
 const UserLibrary = lazy(() => import('./pages/user/UserLibrary'));
 const MovieChatbot = lazy(() => import('./components/ai/MovieChatbot'));
 
@@ -97,6 +98,7 @@ function App() {
                     <Route path="/search" element={<Search />} />
                     <Route path="/for-you" element={<ForYou />} />
                     <Route path="/user/profile" element={<Profile />} />
+                    <Route path="/user/settings" element={<UserSettings />} />
                     <Route path="/user/favorites" element={<UserLibrary />} />
                     <Route path="/user/list" element={<UserLibrary />} />
                     <Route path="/user/history" element={<UserLibrary />} />

@@ -8,6 +8,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import SearchIcon from '@mui/icons-material/Search';
 import { useState, useMemo } from 'react';
+import { safePosterUrl } from '../../utils/imageFallbacks';
 import '../../pages/admin/AdminStyles.css';
 
 function formatRating(value) {
@@ -62,7 +63,7 @@ export default function MovieTable({
             const hidden = Number(movie.is_visible) === 0;
 
             return (
-              <Grid item xs={12} sm={6} md={4} lg={3} key={movie.id} display="flex" justifyContent="center">
+              <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={movie.id} display="flex" justifyContent="center">
                 <Zoom in>
                   <Card
                     className="admin-movie-card"
@@ -88,11 +89,10 @@ export default function MovieTable({
                       }}
                     >
                       <img
-                        src={movie.poster_url}
+                        src={safePosterUrl(movie.poster_url)}
                         alt={movie.title}
                         onError={(event) => {
-                          if (event.currentTarget.src.includes('/posters/placeholder.svg')) return;
-                          event.currentTarget.src = '/posters/placeholder.svg';
+                          event.currentTarget.src = safePosterUrl('');
                         }}
                         style={{
                           width: '100%',
@@ -118,16 +118,16 @@ export default function MovieTable({
                       
                       {/* Quality & Year Badges */}
                       <Box sx={{ position: 'absolute', right: 10, top: 10, zIndex: 3, display: 'flex', gap: 0.5, flexDirection: 'column', alignItems: 'flex-end' }}>
-                        {movie.quality && <span className="admin-badge info" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>{movie.quality}</span>}
-                        {movie.release_year && <span className="admin-badge warning" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>{movie.release_year}</span>}
-                        {movie.tmdb_id && <span className="admin-badge success" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>TMDb</span>}
+                        {movie.quality && <span className="admin-badge info" style={{ background: 'rgba(15,23,42,0.68)', backdropFilter: 'blur(8px)' }}>{movie.quality}</span>}
+                        {movie.release_year && <span className="admin-badge warning" style={{ background: 'rgba(15,23,42,0.68)', backdropFilter: 'blur(8px)' }}>{movie.release_year}</span>}
+                        {movie.tmdb_id && <span className="admin-badge success" style={{ background: 'rgba(15,23,42,0.68)', backdropFilter: 'blur(8px)' }}>TMDb</span>}
                       </Box>
                       
                       {/* IMDb Badge */}
                       {movie.imdb_rating > 0 && (
                         <Box sx={{ position: 'absolute', left: 10, bottom: 10, zIndex: 3 }}>
-                          <span className="admin-badge warning" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
-                            <span style={{ color: '#f5c518' }}>★</span> {formatRating(movie.imdb_rating)}
+                          <span className="admin-badge warning" style={{ background: 'rgba(15,23,42,0.68)', backdropFilter: 'blur(8px)' }}>
+                            <span style={{ color: 'var(--admin-warning)' }}>★</span> {formatRating(movie.imdb_rating)}
                           </span>
                         </Box>
                       )}
@@ -150,8 +150,7 @@ export default function MovieTable({
                         }}
                       >
                         <IconButton
-                          color="secondary"
-                          sx={{ bgcolor: 'var(--admin-accent)', color: '#fff', '&:hover': { bgcolor: 'var(--admin-accent-hover)', transform: 'scale(1.1)' }, transform: 'scale(1.2)', transition: 'all 0.2s' }}
+                          sx={{ bgcolor: 'var(--admin-accent)', color: '#fff', '&:hover': { bgcolor: 'var(--admin-accent-hover)' }, transition: 'background-color 160ms ease' }}
                           onClick={() => onManageEpisodes(movie)}
                         >
                           <PlaylistPlayIcon sx={{ fontSize: 32 }} />
@@ -161,7 +160,7 @@ export default function MovieTable({
 
                     <CardContent sx={{ pb: 1, pt: 2, width: '100%', flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                       <Tooltip title={movie.title.length > 20 ? movie.title : ''} arrow>
-                        <Typography variant="h6" fontWeight={700} noWrap sx={{ fontSize: '1rem', textAlign: 'center', width: '100%', color: '#fff' }}>
+                        <Typography variant="h6" fontWeight={700} noWrap sx={{ fontSize: '1rem', textAlign: 'center', width: '100%', color: 'var(--admin-text-strong)' }}>
                           {movie.title}
                         </Typography>
                       </Tooltip>
@@ -180,10 +179,10 @@ export default function MovieTable({
                               size="small"
                               disabled={tmdbLoadingId === movie.id}
                               sx={{
-                                bgcolor: 'rgba(99,102,241,0.14)',
-                                color: '#a5b4fc',
+                                bgcolor: 'var(--admin-accent-soft)',
+                                color: 'var(--admin-accent)',
                                 '&:hover': { bgcolor: 'var(--admin-accent)', color: '#fff' },
-                                '&.Mui-disabled': { color: 'rgba(255,255,255,0.35)' },
+                                '&.Mui-disabled': { color: 'var(--admin-text-muted)' },
                               }}
                               onClick={() => onTmdbEnrich(movie)}
                             >
@@ -193,12 +192,12 @@ export default function MovieTable({
                         </Tooltip>
                       )}
                       <Tooltip title="Sửa phim" arrow>
-                        <IconButton size="small" sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'var(--admin-accent)', '&:hover': { bgcolor: 'var(--admin-accent)', color: '#fff' } }} onClick={() => onEdit(movie)}>
+                        <IconButton size="small" sx={{ bgcolor: 'var(--admin-bg-soft)', color: 'var(--admin-accent)', '&:hover': { bgcolor: 'var(--admin-accent)', color: '#fff' } }} onClick={() => onEdit(movie)}>
                           <EditIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Xóa phim" arrow>
-                        <IconButton size="small" sx={{ bgcolor: 'rgba(255,255,255,0.05)', color: 'var(--admin-danger)', '&:hover': { bgcolor: 'var(--admin-danger)', color: '#fff' } }} onClick={() => onDelete(movie.id)}>
+                        <IconButton size="small" sx={{ bgcolor: 'var(--admin-bg-soft)', color: 'var(--admin-danger)', '&:hover': { bgcolor: 'var(--admin-danger)', color: '#fff' } }} onClick={() => onDelete(movie.id)}>
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
@@ -206,7 +205,7 @@ export default function MovieTable({
                         <IconButton
                           size="small"
                           sx={{ 
-                            bgcolor: 'rgba(255,255,255,0.05)', 
+                            bgcolor: 'var(--admin-bg-soft)', 
                             color: hidden ? 'var(--admin-success)' : 'var(--admin-warning)', 
                             '&:hover': { bgcolor: hidden ? 'var(--admin-success)' : 'var(--admin-warning)', color: '#fff' } 
                           }}

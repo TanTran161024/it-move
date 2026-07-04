@@ -9,16 +9,16 @@ import {
   Typography,
 } from '@mui/material';
 import axios from 'axios';
-import { API_BASE_URL as API } from '../../config/api';
+import { API_URL as API } from '../../config/api';
 import '../../pages/admin/AdminStyles.css';
 
 const darkSelectSx = {
-  color: '#fff',
+  color: 'var(--admin-text)',
   bgcolor: 'var(--admin-card)',
   minWidth: 138,
   borderRadius: 2,
   '& .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--admin-border)' },
-  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
+  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--admin-border-strong)' },
   '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'var(--admin-accent)' },
   '& .MuiSvgIcon-root': { color: 'var(--admin-text-muted)' },
 };
@@ -51,15 +51,19 @@ const reportTypeLabels = {
 function MetricChip({ children, tone = 'neutral' }) {
   const palette = {
     neutral: 'rgba(148, 163, 184, 0.14)',
-    success: 'rgba(34, 197, 94, 0.14)',
+    success: 'var(--admin-success-soft)',
     warning: 'rgba(245, 158, 11, 0.16)',
     danger: 'rgba(239, 68, 68, 0.16)',
   };
 
   return (
     <span
-      style={{ background: palette[tone] || palette.neutral }}
-      className="rounded-full border border-white/10 px-3 py-1 text-xs font-black text-white/75"
+      style={{
+        background: palette[tone] || palette.neutral,
+        border: '1px solid var(--admin-border)',
+        color: 'var(--admin-text-soft)',
+      }}
+      className="rounded-full px-3 py-1 text-xs font-bold"
     >
       {children}
     </span>
@@ -154,7 +158,7 @@ export default function AdminFeedbackManager() {
           <h2 className="admin-section-title">Quản lý phản hồi</h2>
           <p className="admin-section-subtitle">Duyệt bình luận, xử lý báo cáo và kiểm soát nội dung người dùng.</p>
         </div>
-        <Button variant="contained" onClick={fetchData} disabled={loading} sx={{ borderRadius: 2, fontWeight: 800 }}>
+        <Button variant="contained" onClick={fetchData} disabled={loading} sx={{ borderRadius: 2, fontWeight: 650 }}>
           Làm mới
         </Button>
       </div>
@@ -162,8 +166,8 @@ export default function AdminFeedbackManager() {
       {notice && <Alert severity="success" sx={{ mb: 3 }}>{notice}</Alert>}
 
       <div className="admin-panel" style={{ padding: 0, overflow: 'hidden', marginBottom: 30 }}>
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--admin-border)', background: 'rgba(0,0,0,0.2)' }}>
-          <Typography variant="h6" sx={{ fontWeight: 800, color: 'var(--admin-accent)' }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--admin-border)', background: 'var(--admin-bg-soft)' }}>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: 'var(--admin-text-strong)' }}>
             Bình luận phim
           </Typography>
           <Typography sx={{ mt: 0.5, color: 'var(--admin-text-muted)', fontSize: '0.9rem' }}>
@@ -190,7 +194,7 @@ export default function AdminFeedbackManager() {
               >
                 <Box sx={{ display: 'flex', gap: 2, justifyContent: 'space-between', flexWrap: 'wrap', mb: 1 }}>
                   <div>
-                    <Typography sx={{ fontWeight: 900, color: '#fff' }}>{comment.movie_title}</Typography>
+                    <Typography sx={{ fontWeight: 700, color: 'var(--admin-text-strong)' }}>{comment.movie_title}</Typography>
                     <Typography sx={{ color: 'var(--admin-accent-hover)', mt: 0.5, fontSize: '0.9rem', fontWeight: 700 }}>
                       {comment.username}
                       <span style={{ color: 'var(--admin-text-muted)', fontWeight: 400 }}> - {comment.email}</span>
@@ -214,7 +218,7 @@ export default function AdminFeedbackManager() {
                   {comment.content}
                 </Typography>
 
-                <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap', pt: 1.5, borderTop: '1px dashed rgba(255,255,255,0.08)' }}>
+                <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap', pt: 1.5, borderTop: '1px dashed var(--admin-border)' }}>
                   <Select
                     size="small"
                     value={comment.status}
@@ -226,13 +230,13 @@ export default function AdminFeedbackManager() {
                     <MenuItem value="hidden">Ẩn</MenuItem>
                     <MenuItem value="deleted">Đã xóa</MenuItem>
                   </Select>
-                  <Button variant="contained" size="small" onClick={() => updateCommentStatus(comment.id, 'visible')} sx={{ borderRadius: 2, fontWeight: 800 }}>
+                  <Button variant="contained" size="small" onClick={() => updateCommentStatus(comment.id, 'visible')} sx={{ borderRadius: 2, fontWeight: 650 }}>
                     Duyệt
                   </Button>
-                  <Button variant="outlined" size="small" onClick={() => updateCommentStatus(comment.id, 'hidden')} sx={{ borderRadius: 2, fontWeight: 800 }}>
+                  <Button variant="outlined" size="small" onClick={() => updateCommentStatus(comment.id, 'hidden')} sx={{ borderRadius: 2, fontWeight: 650 }}>
                     Ẩn
                   </Button>
-                  <Button color="error" variant="outlined" size="small" onClick={() => deleteComment(comment.id)} sx={{ borderRadius: 2, fontWeight: 800 }}>
+                  <Button color="error" variant="outlined" size="small" onClick={() => deleteComment(comment.id)} sx={{ borderRadius: 2, fontWeight: 650 }}>
                     Xóa
                   </Button>
                 </Box>
@@ -243,10 +247,10 @@ export default function AdminFeedbackManager() {
       </div>
 
       <div className="admin-panel" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--admin-border)', background: 'rgba(0,0,0,0.2)' }}>
+        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--admin-border)', background: 'var(--admin-bg-soft)' }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
             <div>
-              <Typography variant="h6" sx={{ fontWeight: 800, color: 'var(--admin-danger)' }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: 'var(--admin-text-strong)' }}>
                 Báo lỗi phim
               </Typography>
               <Typography sx={{ mt: 0.5, color: 'var(--admin-text-muted)', fontSize: '0.9rem' }}>
@@ -281,7 +285,7 @@ export default function AdminFeedbackManager() {
           ) : reports.map((report) => (
             <Box key={report.id} sx={{ bgcolor: 'var(--admin-surface)', borderRadius: 3, p: 2.5, mb: 2, border: '1px solid var(--admin-border)' }}>
               <Box sx={{ display: 'flex', gap: 2, justifyContent: 'space-between', flexWrap: 'wrap', mb: 1 }}>
-                <Typography sx={{ fontWeight: 900, color: '#fff', fontSize: '1.1rem' }}>
+                <Typography sx={{ fontWeight: 700, color: 'var(--admin-text-strong)', fontSize: '1.1rem' }}>
                   {report.movie_title}{report.episode_number ? ` - Tập ${report.episode_number}` : ''}
                 </Typography>
                 <Typography sx={{ color: 'var(--admin-text-muted)', fontSize: '0.85rem' }}>{new Date(report.created_at).toLocaleString('vi-VN')}</Typography>
@@ -328,21 +332,21 @@ export default function AdminFeedbackManager() {
                   sx={{
                     minWidth: 260,
                     bgcolor: 'var(--admin-card)',
-                    input: { color: '#fff' },
+                    input: { color: 'var(--admin-text)' },
                     '& fieldset': { borderColor: 'var(--admin-border)' },
-                    '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.2)' },
+                    '&:hover fieldset': { borderColor: 'var(--admin-border-strong)' },
                     '&.Mui-focused fieldset': { borderColor: 'var(--admin-accent)' },
                     borderRadius: 2,
                   }}
                 />
-                <Button color="error" variant="outlined" size="small" onClick={() => deleteReport(report.id)} sx={{ borderRadius: 2, fontWeight: 800 }}>
+                <Button color="error" variant="outlined" size="small" onClick={() => deleteReport(report.id)} sx={{ borderRadius: 2, fontWeight: 650 }}>
                   Xóa
                 </Button>
-                <Button variant="outlined" size="small" onClick={() => testReportLink(report)} disabled={!report.video_url} sx={{ borderRadius: 2, fontWeight: 800 }}>
+                <Button variant="outlined" size="small" onClick={() => testReportLink(report)} disabled={!report.video_url} sx={{ borderRadius: 2, fontWeight: 650 }}>
                   Test link
                 </Button>
                 {report.video_url && (
-                  <Button variant="text" size="small" onClick={() => window.open(report.video_url, '_blank', 'noopener,noreferrer')} sx={{ borderRadius: 2, fontWeight: 800 }}>
+                  <Button variant="text" size="small" onClick={() => window.open(report.video_url, '_blank', 'noopener,noreferrer')} sx={{ borderRadius: 2, fontWeight: 650 }}>
                     Mở link
                   </Button>
                 )}

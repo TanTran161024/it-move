@@ -23,6 +23,12 @@ const {
   saveEpisodeSubtitle,
   updateEpisodeSubtitle,
 } = require('./services/subtitleService');
+const {
+  importOnlineSubtitle,
+  listSubtitleProviders,
+  searchOnlineSubtitles,
+  updateSubtitleProvider,
+} = require('./services/subtitleProviderService');
 
 const OTP_EXPIRATION_MINUTES = 10;
 const TEST_VIEW_MIN = Number(process.env.TEST_VIEW_MIN || 1000);
@@ -53,7 +59,7 @@ function attachSubtitleTracks(episodes, tracksByEpisode) {
       : normalizeSubtitleUrl(episode.subtitle_url)
         ? [{
             id: `legacy-${episode.id}`,
-            label: 'Phá»¥ Ä‘á»',
+            label: 'Phụ đề',
             srclang: 'vi',
             src: `/api/subtitles/episodes/${episode.id}.vtt`,
             is_default: true,
@@ -965,11 +971,51 @@ router.post('/ai/subtitles/translate', requireAdminMiddleware, async (req, res) 
   }
 });
 
+router.get('/admin/subtitle-providers', requireAdminMiddleware, async (req, res) => {
+  try {
+    const db = getDb(req);
+    const providers = await listSubtitleProviders(db);
+    res.json({ providers });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message || 'Không thể tải danh sách provider phụ đề.' });
+  }
+});
+
+router.put('/admin/subtitle-providers/:id', requireAdminMiddleware, async (req, res) => {
+  try {
+    const db = getDb(req);
+    const provider = await updateSubtitleProvider(db, req.params.id, req.body || {});
+    res.json({ provider });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message || 'Không thể cập nhật provider phụ đề.' });
+  }
+});
+
+router.post('/admin/subtitles/search-online', requireAdminMiddleware, async (req, res) => {
+  try {
+    const db = getDb(req);
+    const result = await searchOnlineSubtitles(db, req.body || {});
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message || 'Không thể tìm phụ đề online.' });
+  }
+});
+
+router.post('/admin/subtitles/import-online', requireAdminMiddleware, async (req, res) => {
+  try {
+    const db = getDb(req);
+    const result = await importOnlineSubtitle(db, req.body || {});
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message || 'Không thể import phụ đề online.' });
+  }
+});
+
 router.post('/subtitles/preview', requireAdminMiddleware, async (req, res) => {
   try {
     const content = String(req.body?.content || '');
-    if (!content.trim()) return res.status(400).json({ message: 'Thiáº¿u ná»™i dung phá»¥ Ä‘á»' });
-    if (content.length > 500000) return res.status(413).json({ message: 'Phá»¥ Ä‘á» quÃ¡ lá»›n' });
+    if (!content.trim()) return res.status(400).json({ message: 'Thiếu nội dung phụ đề' });
+    if (content.length > 500000) return res.status(413).json({ message: 'Phụ đề quá lớn' });
 
     const format = String(req.body?.format || 'auto').toLowerCase();
     const sourceName = format === 'auto' ? 'subtitle.txt' : `subtitle.${format}`;
@@ -1021,7 +1067,7 @@ router.post('/subtitles/episodes/:episodeId', requireAdminMiddleware, async (req
   try {
     const db = getDb(req);
     const subtitle = await saveEpisodeSubtitle(db, req.params.episodeId, req.body);
-    res.json({ message: 'ÄÃ£ lÆ°u phá»¥ Ä‘á» cho táº­p phim.', subtitle });
+    res.json({ message: 'Đã lưu phụ đề cho tập phim.', subtitle });
   } catch (err) {
     res.status(err.statusCode || 500).json({ message: err.message || 'Cannot save subtitle' });
   }
@@ -1041,7 +1087,7 @@ router.put('/subtitles/:subtitleId', requireAdminMiddleware, async (req, res) =>
   try {
     const db = getDb(req);
     const subtitle = await updateEpisodeSubtitle(db, req.params.subtitleId, req.body);
-    res.json({ message: 'ÄÃ£ cáº­p nháº­t phá»¥ Ä‘á».', subtitle });
+    res.json({ message: 'Đã cập nhật phụ đề.', subtitle });
   } catch (err) {
     res.status(err.statusCode || 500).json({ message: err.message || 'Cannot update subtitle' });
   }
@@ -3228,6 +3274,12 @@ router.get('/admin/dashboard-stats', requireAdminMiddleware, async (req, res) =>
     }
     const [[{ new_comments }]] = await db.query(newCommentsQuery);
 
+    const [[{ total_subtitles }]] = await db.query('SELECT COUNT(*) as total_subtitles FROM episode_subtitles');
+    const active_providers = [
+      process.env.OPENSUBTITLES_API_KEY,
+      process.env.SUBDL_API_KEY
+    ].filter(Boolean).length;
+
     // 2. Charts Data
     
     // Daily views
@@ -3394,7 +3446,9 @@ router.get('/admin/dashboard-stats', requireAdminMiddleware, async (req, res) =>
         open_reports,
         new_reports,
         processing_reports,
-        new_comments
+        new_comments,
+        total_subtitles,
+        active_providers
       },
       charts: {
         daily_views,
@@ -3458,6 +3512,207 @@ router.get('/admin/stats', requireAdminMiddleware, async (req, res) => {
       daily_views,
       genre_views
     });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Lấy thông báo khẩn cấp cho Alert Center
+router.get('/admin/dashboard-alerts', requireAdminMiddleware, async (req, res) => {
+  try {
+    const db = getDb(req);
+    const [[{ has_backdrop_column }]] = await db.query(`
+      SELECT COUNT(*) AS has_backdrop_column
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'movies'
+        AND COLUMN_NAME = 'backdrop_url'
+    `);
+    const movieImageWhere = has_backdrop_column
+      ? "poster_url IS NULL OR poster_url = '' OR backdrop_url IS NULL OR backdrop_url = ''"
+      : "poster_url IS NULL OR poster_url = ''";
+
+    // 1. Report mới
+    const [[{ new_reports }]] = await db.query("SELECT COUNT(*) AS count FROM movie_reports WHERE status = 'new'");
+
+    // 2. Video lỗi nhiều người báo
+    const [[{ high_report_episodes }]] = await db.query(`
+      SELECT COUNT(*) AS count FROM (
+        SELECT episode_id FROM movie_reports 
+        WHERE status IN ('new', 'processing') AND episode_id IS NOT NULL 
+        GROUP BY episode_id HAVING COUNT(*) >= 2
+      ) t
+    `);
+
+    // 3. Phim thiếu poster/backdrop
+    const [[{ missing_images }]] = await db.query(`
+      SELECT COUNT(*) AS count FROM movies
+      WHERE ${movieImageWhere}
+    `);
+
+    // 4. Tập thiếu video_url
+    const [[{ missing_video_url }]] = await db.query(`
+      SELECT COUNT(*) AS count FROM episodes 
+      WHERE video_url IS NULL OR video_url = ''
+    `);
+
+    // 5. Phụ đề import lỗi (Mock)
+    const subtitle_import_errors = 0;
+
+    // 6. API chưa cấu hình
+    const apiKeys = {
+      TMDb: process.env.TMDB_API_KEY,
+      Gemini: process.env.GEMINI_API_KEY,
+      OpenSubtitles: process.env.OPENSUBTITLES_API_KEY,
+      SubDL: process.env.SUBDL_API_KEY
+    };
+    const unconfigured_apis = Object.keys(apiKeys).filter(key => !apiKeys[key]);
+
+    res.json({
+      new_reports: Number(new_reports) || 0,
+      high_report_episodes: Number(high_report_episodes) || 0,
+      missing_images: Number(missing_images) || 0,
+      missing_video_url: Number(missing_video_url) || 0,
+      subtitle_import_errors,
+      unconfigured_apis
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Lấy danh sách hàng đợi vận hành (Operational Queue)
+router.get('/admin/dashboard-queue', requireAdminMiddleware, async (req, res) => {
+  try {
+    const db = getDb(req);
+    const [[{ has_backdrop_column }]] = await db.query(`
+      SELECT COUNT(*) AS has_backdrop_column
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'movies'
+        AND COLUMN_NAME = 'backdrop_url'
+    `);
+    const movieMetadataWhere = has_backdrop_column
+      ? "poster_url IS NULL OR poster_url = '' OR backdrop_url IS NULL OR backdrop_url = '' OR description IS NULL OR description = ''"
+      : "poster_url IS NULL OR poster_url = '' OR description IS NULL OR description = ''";
+    const [episodeColumnRows] = await db.query(`
+      SELECT COLUMN_NAME
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'episodes'
+        AND COLUMN_NAME IN ('title', 'name', 'episode_number')
+    `);
+    const episodeColumns = new Set(episodeColumnRows.map((row) => row.COLUMN_NAME));
+    const episodeFallbackTitle = episodeColumns.has('episode_number')
+      ? "CONCAT('Tập ', e.episode_number)"
+      : "CONCAT('Tập #', e.id)";
+    const episodeTitleExpr = episodeColumns.has('title')
+      ? `COALESCE(NULLIF(e.title, ''), ${episodeFallbackTitle})`
+      : episodeColumns.has('name')
+        ? `COALESCE(NULLIF(e.name, ''), ${episodeFallbackTitle})`
+        : episodeFallbackTitle;
+
+    // 1. Video reports mới
+    const [movieReports] = await db.query(`
+      SELECT 
+        'movie_report' AS type, 
+        r.id AS item_id,
+        r.movie_id,
+        r.episode_id,
+        m.title AS movie_title,
+        r.reason AS title,
+        r.description AS content,
+        r.created_at
+      FROM movie_reports r
+      LEFT JOIN movies m ON r.movie_id = m.id
+      WHERE r.status = 'new'
+      ORDER BY r.created_at DESC 
+      LIMIT 10
+    `);
+
+    // 2. Comment bị report
+    const [commentReports] = await db.query(`
+      SELECT 
+        'comment_report' AS type, 
+        cr.id AS item_id,
+        c.movie_id,
+        NULL AS episode_id,
+        m.title AS movie_title,
+        cr.reason AS title,
+        c.content AS content,
+        cr.created_at
+      FROM movie_comment_reports cr
+      JOIN movie_comments c ON cr.comment_id = c.id
+      LEFT JOIN movies m ON c.movie_id = m.id
+      WHERE cr.status IN ('pending', 'new')
+      ORDER BY cr.created_at DESC 
+      LIMIT 10
+    `);
+
+    // 3. Phim thiếu metadata
+    const [missingMetadata] = await db.query(`
+      SELECT 
+        'missing_metadata' AS type,
+        id AS item_id,
+        id AS movie_id,
+        NULL AS episode_id,
+        title AS movie_title,
+        'Thiếu metadata' AS title,
+        'Thiếu Poster, Backdrop hoặc Description' AS content,
+        created_at
+      FROM movies
+      WHERE ${movieMetadataWhere}
+      ORDER BY created_at DESC
+      LIMIT 10
+    `);
+
+    // 4. Phim chưa có tập
+    const [missingEpisodes] = await db.query(`
+      SELECT 
+        'missing_episodes' AS type,
+        m.id AS item_id,
+        m.id AS movie_id,
+        NULL AS episode_id,
+        m.title AS movie_title,
+        'Chưa có tập' AS title,
+        'Phim chưa có tập nào được cập nhật' AS content,
+        m.created_at
+      FROM movies m
+      LEFT JOIN episodes e ON m.id = e.movie_id
+      WHERE e.id IS NULL AND m.is_series = 1
+      ORDER BY m.created_at DESC
+      LIMIT 10
+    `);
+
+    // 5. Tập chưa có phụ đề
+    const [missingSubtitles] = await db.query(`
+      SELECT 
+        'missing_subtitle' AS type,
+        e.id AS item_id,
+        e.movie_id,
+        e.id AS episode_id,
+        m.title AS movie_title,
+        ${episodeTitleExpr} AS title,
+        'Tập phim chưa có phụ đề' AS content,
+        e.created_at
+      FROM episodes e
+      JOIN movies m ON e.movie_id = m.id
+      LEFT JOIN episode_subtitles es ON e.id = es.episode_id
+      WHERE es.id IS NULL
+      ORDER BY e.created_at DESC
+      LIMIT 10
+    `);
+
+    // Merge & Sort
+    const queue = [
+      ...movieReports,
+      ...commentReports,
+      ...missingMetadata,
+      ...missingEpisodes,
+      ...missingSubtitles
+    ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 20);
+
+    res.json(queue);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -3751,5 +4006,3 @@ router.post('/setup/category-countries', requireAdminMiddleware, async (req, res
 });
 
 module.exports = router; 
-
-

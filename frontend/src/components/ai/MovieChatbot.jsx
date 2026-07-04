@@ -365,7 +365,7 @@ export default function MovieChatbot() {
           <header className="movie-chatbot-header">
             <div className="movie-chatbot-title">
               <span className="movie-chatbot-avatar" style={{ padding: 0, overflow: 'hidden', background: 'transparent' }}>
-                <img src="/chatbot-logo-128.png" alt="NetDL Assistant" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src="/chatbot-logo-128.png" alt="NetDL Assistant" style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'drop-shadow(0 0 5px rgba(168,85,247,0.5))' }} />
               </span>
               <div>
                 <strong>NetDL Assistant</strong>
@@ -441,15 +441,17 @@ export default function MovieChatbot() {
 
       <button
         type="button"
-        className="movie-chatbot-fab"
+        className={`movie-chatbot-fab ${open ? 'is-open' : ''}`}
         onClick={() => {
           setOpen((value) => !value);
           setTimeout(() => inputRef.current?.focus(), 0);
         }}
         aria-label="Mở tư vấn phim"
-        style={{ padding: open ? undefined : 0, overflow: open ? undefined : 'hidden' }}
       >
-        {open ? <FaTimes /> : <img src="/chatbot-logo-128.png" alt="NetDL Assistant" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+        <div className="movie-chatbot-fab-icon">
+          {open ? <FaTimes /> : <img src="/chatbot-logo-128.png" alt="NetDL Assistant" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}
+        </div>
+        {!open && <span className="movie-chatbot-fab-text">Tư vấn phim AI</span>}
       </button>
     </div>
   );
