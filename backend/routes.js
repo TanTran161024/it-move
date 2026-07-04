@@ -1556,7 +1556,7 @@ router.get('/movie/:id', async (req, res) => {
 
     // 7. Episodes
     const [episodeRows] = await db.execute(
-      `SELECT id, episode_number, title, video_url, subtitle_url FROM episodes WHERE movie_id = ? ORDER BY episode_number ASC`, [movieId]
+      `SELECT id, episode_number, title, video_url, hls_url, thumbnail_url, preview_url, duration_seconds, description, subtitle_url FROM episodes WHERE movie_id = ? ORDER BY episode_number ASC`, [movieId]
     );
     const subtitleTracksByEpisode = await getEpisodeSubtitleTracks(db, episodeRows.map((episode) => episode.id));
     const episodes = attachSubtitleTracks(episodeRows, subtitleTracksByEpisode);
@@ -1618,16 +1618,40 @@ router.get('/watch/:id', async (req, res) => {
       `SELECT g.id, g.name FROM movie_genres mg JOIN genres g ON mg.genre_id = g.id WHERE mg.movie_id = ?`, [movieId]
     );
 
+    const [countryRows] = await db.execute(
+      `SELECT c.name FROM movie_countries mc JOIN countries c ON mc.country_id = c.id WHERE mc.movie_id = ?`, [movieId]
+    );
+    const countries = countryRows.map(c => c.name);
+
+    const [directorRows] = await db.execute(
+      `SELECT d.id, d.name, d.profile_pic_url, d.bio FROM movie_directors md JOIN directors d ON md.director_id = d.id WHERE md.movie_id = ?`, [movieId]
+    );
+
+    const [actorRows] = await db.execute(
+      `SELECT a.id, a.name, a.profile_pic_url, a.bio FROM movie_actors ma JOIN actors a ON ma.actor_id = a.id WHERE ma.movie_id = ?`, [movieId]
+    );
+
     // 3. Danh sÃ¡ch táº­p
     const [episodeRows] = await db.execute(
-      `SELECT id, episode_number, title, video_url, subtitle_url FROM episodes WHERE movie_id = ? ORDER BY episode_number ASC`, [movieId]
+      `SELECT id, episode_number, title, video_url, hls_url, thumbnail_url, preview_url, duration_seconds, description, subtitle_url FROM episodes WHERE movie_id = ? ORDER BY episode_number ASC`, [movieId]
     );
     const subtitleTracksByEpisode = await getEpisodeSubtitleTracks(db, episodeRows.map((episode) => episode.id));
     const episodes = attachSubtitleTracks(episodeRows, subtitleTracksByEpisode);
+    const suggestedRows = await getSimilarMovies(db, movieId, 12);
 
     res.json({
-      movie,
+      movie: {
+        ...movie,
+        genres: genreRows.map((genre) => genre.name),
+        countries,
+        directors: directorRows,
+        actors: actorRows,
+      },
       genres: genreRows,
+      countries,
+      directors: directorRows,
+      actors: actorRows,
+      suggested: suggestedRows,
       episodes
     });
   } catch (err) {
@@ -1766,15 +1790,38 @@ router.get('/movies/:id/episodes', async (req, res) => {
 
 // ThÃªm táº­p phim má»›i cho phim
 router.post('/movies/:id/episodes', requireAdminMiddleware, async (req, res) => {
-  const { episode_number, title, video_url, subtitle_url } = req.body;
-  if (!episode_number || !title || !video_url) {
+  const {
+    episode_number,
+    title,
+    video_url,
+    hls_url,
+    thumbnail_url,
+    preview_url,
+    duration_seconds,
+    description,
+    subtitle_url,
+  } = req.body;
+  if (!episode_number || !title || (!video_url && !hls_url)) {
     return res.status(400).json({ message: 'Thiáº¿u thÃ´ng tin táº­p phim' });
   }
   try {
     const db = getDb(req);
     await db.execute(
-      'INSERT INTO episodes (movie_id, episode_number, title, video_url, subtitle_url) VALUES (?, ?, ?, ?, ?)',
-      [req.params.id, episode_number, title, video_url, subtitle_url || null]
+      `INSERT INTO episodes
+       (movie_id, episode_number, title, video_url, hls_url, thumbnail_url, preview_url, duration_seconds, description, subtitle_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        req.params.id,
+        episode_number,
+        title,
+        video_url || null,
+        hls_url || null,
+        thumbnail_url || null,
+        preview_url || null,
+        duration_seconds || null,
+        description || null,
+        subtitle_url || null,
+      ]
     );
     res.json({ message: 'ÄÃ£ thÃªm táº­p phim' });
   } catch (err) {
@@ -1784,12 +1831,35 @@ router.post('/movies/:id/episodes', requireAdminMiddleware, async (req, res) => 
 
 // Sá»­a táº­p phim
 router.put('/episodes/:id', requireAdminMiddleware, async (req, res) => {
-  const { episode_number, title, video_url, subtitle_url } = req.body;
+  const {
+    episode_number,
+    title,
+    video_url,
+    hls_url,
+    thumbnail_url,
+    preview_url,
+    duration_seconds,
+    description,
+    subtitle_url,
+  } = req.body;
   try {
     const db = getDb(req);
     await db.execute(
-      'UPDATE episodes SET episode_number=?, title=?, video_url=?, subtitle_url=? WHERE id=?',
-      [episode_number, title, video_url, subtitle_url || null, req.params.id]
+      `UPDATE episodes
+       SET episode_number=?, title=?, video_url=?, hls_url=?, thumbnail_url=?, preview_url=?, duration_seconds=?, description=?, subtitle_url=?
+       WHERE id=?`,
+      [
+        episode_number,
+        title,
+        video_url || null,
+        hls_url || null,
+        thumbnail_url || null,
+        preview_url || null,
+        duration_seconds || null,
+        description || null,
+        subtitle_url || null,
+        req.params.id,
+      ]
     );
     res.json({ message: 'Episode updated' });
   } catch (err) {
@@ -3550,10 +3620,11 @@ router.get('/admin/dashboard-alerts', requireAdminMiddleware, async (req, res) =
       WHERE ${movieImageWhere}
     `);
 
-    // 4. Tập thiếu video_url
+    // 4. Tập thiếu nguồn phát
     const [[{ missing_video_url }]] = await db.query(`
       SELECT COUNT(*) AS count FROM episodes 
-      WHERE video_url IS NULL OR video_url = ''
+      WHERE (video_url IS NULL OR video_url = '')
+        AND (hls_url IS NULL OR hls_url = '')
     `);
 
     // 5. Phụ đề import lỗi (Mock)

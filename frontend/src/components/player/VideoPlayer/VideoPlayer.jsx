@@ -521,6 +521,7 @@ const VideoPlayer = forwardRef(({
   const [menu, setMenu] = useState(null);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [selectedSubtitleId, setSelectedSubtitleId] = useState("off");
+  const [posterDismissed, setPosterDismissed] = useState(false);
 
   useImperativeHandle(ref, () => videoRef.current);
 
@@ -557,12 +558,18 @@ const VideoPlayer = forwardRef(({
     return snapshot;
   }, [getSnapshot, onSnapshot]);
 
+  const dismissPoster = useCallback(() => {
+    setPosterDismissed(true);
+    videoRef.current?.removeAttribute("poster");
+  }, []);
+
   const handlePlayPause = useCallback(async () => {
     if (iframeSource || missingSource || error) return;
     const video = videoRef.current;
     if (!video) return;
 
     if (video.paused) {
+      dismissPoster();
       try {
         await video.play();
       } catch {
@@ -572,7 +579,7 @@ const VideoPlayer = forwardRef(({
       video.pause();
       emitSnapshot();
     }
-  }, [emitSnapshot, error, iframeSource, missingSource]);
+  }, [dismissPoster, emitSnapshot, error, iframeSource, missingSource]);
 
   const attemptAutoPlay = useCallback(async () => {
     if (!autoPlay || iframeSource || missingSource || error) return false;
@@ -743,6 +750,7 @@ const VideoPlayer = forwardRef(({
     setError("");
     setMenu(null);
     setShowControls(true);
+    setPosterDismissed(false);
     pendingPlaybackRestoreRef.current = null;
     autoPlayAttemptedRef.current = false;
   }, [missingSource, src]);
@@ -972,9 +980,11 @@ const VideoPlayer = forwardRef(({
           data-player-media="true"
           ref={videoRef}
           className={`${mediaFrameClass} cursor-pointer object-contain ${subtitleClass}`}
-          poster={poster}
+          poster={posterDismissed ? undefined : poster}
           src={hlsSource ? undefined : playableSource}
           autoPlay={autoPlay}
+          preload="auto"
+          crossOrigin="anonymous"
           playsInline
           onClick={handlePlayPause}
           onLoadedMetadata={handleLoadedMetadata}
@@ -986,10 +996,14 @@ const VideoPlayer = forwardRef(({
           }}
           onWaiting={() => setBuffering(true)}
           onPlaying={() => {
+            dismissPoster();
             setPlaying(true);
             setBuffering(false);
           }}
-          onPlay={() => setPlaying(true)}
+          onPlay={() => {
+            dismissPoster();
+            setPlaying(true);
+          }}
           onPause={() => {
             setPlaying(false);
             emitSnapshot();

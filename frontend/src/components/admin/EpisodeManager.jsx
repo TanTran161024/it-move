@@ -15,8 +15,20 @@ const darkFieldSx = {
   },
 };
 
+const emptyEpisodeForm = {
+  episode_number: '',
+  title: '',
+  video_url: '',
+  hls_url: '',
+  thumbnail_url: '',
+  preview_url: '',
+  duration_seconds: '',
+  description: '',
+  subtitle_url: '',
+};
+
 export default function EpisodeManager({ open, onClose, movie, episodes, onAdd, onEdit, onDelete }) {
-  const [form, setForm] = useState({ episode_number: '', title: '', video_url: '', subtitle_url: '' });
+  const [form, setForm] = useState(emptyEpisodeForm);
   const [editId, setEditId] = useState(null);
 
   const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value });
@@ -25,13 +37,18 @@ export default function EpisodeManager({ open, onClose, movie, episodes, onAdd, 
     setForm({
       episode_number: ep.episode_number,
       title: ep.title,
-      video_url: ep.video_url,
+      video_url: ep.video_url || '',
+      hls_url: ep.hls_url || '',
+      thumbnail_url: ep.thumbnail_url || '',
+      preview_url: ep.preview_url || '',
+      duration_seconds: ep.duration_seconds || '',
+      description: ep.description || '',
       subtitle_url: ep.subtitle_url || ''
     });
   };
   const handleCancelEdit = () => {
     setEditId(null);
-    setForm({ episode_number: '', title: '', video_url: '', subtitle_url: '' });
+    setForm(emptyEpisodeForm);
   };
   const handleSubmit = () => {
     if (editId) {
@@ -43,7 +60,7 @@ export default function EpisodeManager({ open, onClose, movie, episodes, onAdd, 
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth className="admin-dialog">
+    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth className="admin-dialog">
       <DialogTitle>Quản lý tập phim: <span style={{ color: 'var(--admin-accent)' }}>{movie?.title}</span></DialogTitle>
       <DialogContent>
         <Box sx={{ mb: 4, mt: 1 }}>
@@ -77,8 +94,13 @@ export default function EpisodeManager({ open, onClose, movie, episodes, onAdd, 
                 <>
                   <TextField label="Số tập" name="episode_number" type="number" value={form.episode_number} onChange={handleChange} sx={{ ...darkFieldSx, width: 100 }} size="small" />
                   <TextField label="Tiêu đề" name="title" value={form.title} onChange={handleChange} sx={{ ...darkFieldSx, flex: 1, minWidth: 120 }} size="small" />
-                  <TextField label="Video URL" name="video_url" value={form.video_url} onChange={handleChange} sx={{ ...darkFieldSx, flex: 1, minWidth: 120 }} size="small" />
-                  <TextField label="Subtitle URL" name="subtitle_url" value={form.subtitle_url} onChange={handleChange} sx={{ ...darkFieldSx, flex: 1, minWidth: 120 }} size="small" />
+                  <TextField label="MP4 URL fallback" name="video_url" value={form.video_url} onChange={handleChange} sx={{ ...darkFieldSx, flex: 1, minWidth: 150 }} size="small" />
+                  <TextField label="HLS/CDN URL (.m3u8)" name="hls_url" value={form.hls_url} onChange={handleChange} sx={{ ...darkFieldSx, flex: 1.2, minWidth: 180 }} size="small" />
+                  <TextField label="Thumbnail URL" name="thumbnail_url" value={form.thumbnail_url} onChange={handleChange} sx={{ ...darkFieldSx, flex: 1, minWidth: 150 }} size="small" />
+                  <TextField label="Preview URL" name="preview_url" value={form.preview_url} onChange={handleChange} sx={{ ...darkFieldSx, flex: 1, minWidth: 150 }} size="small" />
+                  <TextField label="Duration (s)" name="duration_seconds" type="number" value={form.duration_seconds} onChange={handleChange} sx={{ ...darkFieldSx, width: 120 }} size="small" />
+                  <TextField label="Subtitle URL" name="subtitle_url" value={form.subtitle_url} onChange={handleChange} sx={{ ...darkFieldSx, flex: 1, minWidth: 150 }} size="small" />
+                  <TextField label="Episode description" name="description" value={form.description} onChange={handleChange} sx={{ ...darkFieldSx, flexBasis: '100%' }} size="small" multiline minRows={2} />
                   <Button variant="contained" onClick={handleSubmit} sx={{ ml: 1, minWidth: 80, bgcolor: 'var(--admin-accent)', '&:hover': { bgcolor: 'var(--admin-accent-hover)' } }}>Lưu</Button>
                   <Button onClick={handleCancelEdit} sx={{ ml: 1, minWidth: 60, color: 'var(--admin-text-muted)' }}>Hủy</Button>
                 </>
@@ -88,10 +110,11 @@ export default function EpisodeManager({ open, onClose, movie, episodes, onAdd, 
                   <Typography sx={{ width: 54, color: 'var(--admin-text-muted)', fontSize: '0.75rem', fontWeight: 600, textAlign: 'center' }}>ID {ep.id}</Typography>
                   <Typography sx={{ flex: 2, fontWeight: 700, color: 'var(--admin-text-strong)', fontSize: '1rem', ml: 1, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{ep.title}</Typography>
                   <Box sx={{ flex: 3, display: 'flex', alignItems: 'center', gap: 1, minWidth: 120 }}>
-                    <a href={ep.video_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--admin-accent-hover)', textDecoration: 'none', fontWeight: 500, display: 'flex', alignItems: 'center' }}>
+                    <a href={ep.hls_url || ep.video_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--admin-accent-hover)', textDecoration: 'none', fontWeight: 500, display: 'flex', alignItems: 'center' }}>
                       <svg style={{ marginRight: 6 }} width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                      <span style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ep.video_url}</span>
+                      <span style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ep.hls_url || ep.video_url}</span>
                     </a>
+                    {ep.hls_url && <Typography sx={{ color: '#22c55e', fontSize: '0.72rem', fontWeight: 800 }}>HLS</Typography>}
                   </Box>
                   <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
                     <IconButton size="small" onClick={() => handleEdit(ep)} sx={{ bgcolor: 'var(--admin-bg-soft)', color: 'var(--admin-text)', '&:hover': { bgcolor: 'var(--admin-accent)', color: '#fff' } }}><EditIcon fontSize="small" /></IconButton>
@@ -104,11 +127,16 @@ export default function EpisodeManager({ open, onClose, movie, episodes, onAdd, 
         </Box>
         
         <div className="admin-form-section">Thêm tập mới</div>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center', bgcolor: 'var(--admin-card)', p: 2, borderRadius: 2, border: '1px solid var(--admin-border)' }}>
-          <TextField label="Số tập" name="episode_number" type="number" value={form.episode_number} onChange={handleChange} sx={{ ...darkFieldSx, width: 100 }} disabled={!!editId} size="small" />
-          <TextField label="Tiêu đề" name="title" value={form.title} onChange={handleChange} sx={{ ...darkFieldSx, flex: 1, minWidth: 150 }} disabled={!!editId} size="small" />
-          <TextField label="Video URL" name="video_url" value={form.video_url} onChange={handleChange} sx={{ ...darkFieldSx, flex: 1, minWidth: 200 }} disabled={!!editId} size="small" />
-          <TextField label="Subtitle URL" name="subtitle_url" value={form.subtitle_url} onChange={handleChange} sx={{ ...darkFieldSx, flex: 1, minWidth: 200 }} disabled={!!editId} size="small" />
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '100px 1fr 1.3fr' }, gap: 2, alignItems: 'center', bgcolor: 'var(--admin-card)', p: 2, borderRadius: 2, border: '1px solid var(--admin-border)' }}>
+          <TextField label="Số tập" name="episode_number" type="number" value={form.episode_number} onChange={handleChange} sx={darkFieldSx} disabled={!!editId} size="small" />
+          <TextField label="Tiêu đề" name="title" value={form.title} onChange={handleChange} sx={darkFieldSx} disabled={!!editId} size="small" />
+          <TextField label="HLS/CDN URL (.m3u8)" name="hls_url" value={form.hls_url} onChange={handleChange} sx={darkFieldSx} disabled={!!editId} size="small" />
+          <TextField label="MP4 URL fallback" name="video_url" value={form.video_url} onChange={handleChange} sx={darkFieldSx} disabled={!!editId} size="small" />
+          <TextField label="Thumbnail URL" name="thumbnail_url" value={form.thumbnail_url} onChange={handleChange} sx={darkFieldSx} disabled={!!editId} size="small" />
+          <TextField label="Preview URL" name="preview_url" value={form.preview_url} onChange={handleChange} sx={darkFieldSx} disabled={!!editId} size="small" />
+          <TextField label="Thời lượng (giây)" name="duration_seconds" type="number" value={form.duration_seconds} onChange={handleChange} sx={darkFieldSx} disabled={!!editId} size="small" />
+          <TextField label="Subtitle URL" name="subtitle_url" value={form.subtitle_url} onChange={handleChange} sx={darkFieldSx} disabled={!!editId} size="small" />
+          <TextField label="Mô tả tập" name="description" value={form.description} onChange={handleChange} sx={{ ...darkFieldSx, gridColumn: { xs: 'auto', md: '1 / -1' } }} disabled={!!editId} size="small" multiline minRows={2} />
           <Button variant="contained" onClick={handleSubmit} disabled={!!editId} sx={{ bgcolor: 'var(--admin-accent)', '&:hover': { bgcolor: 'var(--admin-accent-hover)' } }}>
             {editId ? 'Đang sửa...' : 'Thêm mới'}
           </Button>

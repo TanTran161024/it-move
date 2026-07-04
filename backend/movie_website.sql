@@ -180,6 +180,11 @@ CREATE TABLE `episodes` (
   `episode_number` int(11) DEFAULT NULL,
   `title` varchar(255) DEFAULT NULL,
   `video_url` text DEFAULT NULL,
+  `hls_url` text DEFAULT NULL,
+  `thumbnail_url` text DEFAULT NULL,
+  `preview_url` text DEFAULT NULL,
+  `duration_seconds` int(11) DEFAULT NULL,
+  `description` text DEFAULT NULL,
   `subtitle_url` text DEFAULT NULL,
   `created_at` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

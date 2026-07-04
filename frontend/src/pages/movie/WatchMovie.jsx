@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FaArrowLeft, FaTimes } from "react-icons/fa";
+import { FaArrowLeft, FaChevronLeft, FaChevronRight, FaRegCommentDots, FaRegHeart, FaShareAlt, FaStar, FaTimes } from "react-icons/fa";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import VideoPlayer from "../../components/player/VideoPlayer";
@@ -77,78 +77,160 @@ function normalizeSubtitleTracks(currentEpisode) {
   ];
 }
 
+function getItemName(item) {
+  if (typeof item === "string") return item.trim();
+  return String(item?.name || item?.title || "").trim();
+}
+
+function normalizeNameList(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(getItemName).filter(Boolean);
+}
+
+function formatViewCount(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return "";
+  return `${new Intl.NumberFormat("vi-VN").format(number)} lượt xem`;
+}
+
+function formatRating(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return "";
+  return number > 10 ? number.toFixed(0) : number.toFixed(1);
+}
+
+function formatAgeLimit(value) {
+  if (!value) return "";
+  const label = String(value).trim();
+  if (!label) return "";
+  return /^\d+$/.test(label) ? `T${label}` : label;
+}
+
+function formatDuration(value) {
+  const label = String(value || "").trim();
+  if (!label) return "";
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return label;
+  return `${number} phút`;
+}
+
+function buildMetaItems(movie, episodes, countries) {
+  return [
+    movie?.release_year,
+    formatAgeLimit(movie?.age_limit),
+    countries.join(", "),
+    episodes.length ? `${episodes.length} Tập` : formatDuration(movie?.duration),
+    movie?.quality,
+  ].filter(Boolean);
+}
+
+function getEpisodePlaybackSource(episode) {
+  return episode?.hls_url || episode?.video_url || "";
+}
+
+function getEpisodePoster(episode, movie) {
+  return episode?.thumbnail_url || movie?.bg_url || movie?.poster_url || "";
+}
+
 function EpisodeShelf({ open, movie, episodes, selectedEpisode, onClose, onSelectEpisode }) {
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [open]);
+
   if (!open) return null;
 
+  const activeEpisodeNumber = Number(selectedEpisode);
+  const seasonLabel = movie?.is_series || episodes.length > 1 ? "Phần 1" : "Limited Series";
+
   return (
-    <div className="absolute inset-0 z-[95] flex items-end bg-black/60 backdrop-blur-[2px]">
+    <div className="fixed inset-0 z-[95] text-white">
       <button
         type="button"
-        className="absolute inset-0 cursor-default"
+        className="absolute inset-0 cursor-default bg-black/20 backdrop-blur-[1px]"
         aria-label="Đóng danh sách tập"
         onClick={onClose}
       />
-      <section className="relative z-10 w-full border-t border-white/10 bg-[#050505]/96 px-4 pb-6 pt-5 shadow-[0_-30px_80px_rgba(0,0,0,0.65)] md:px-8 md:pb-8">
-        <div className="mx-auto max-w-7xl">
-          <div className="mb-5 flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-[#e50914]">Episodes</p>
-              <h2 className="truncate text-2xl font-black text-white md:text-4xl">{movie?.title}</h2>
-              <p className="mt-1 text-sm font-semibold text-white/45">{episodes.length} tập đang có sẵn</p>
-            </div>
+
+      <section className="pointer-events-auto absolute bottom-20 left-3 right-3 z-10 max-h-[72vh] overflow-hidden rounded-sm border border-white/10 bg-[#111111]/95 shadow-[0_28px_90px_rgba(0,0,0,0.8)] backdrop-blur-md md:left-10 md:right-auto md:w-[660px] lg:bottom-24">
+        <div className="flex h-16 items-center justify-between border-b border-white/10 bg-[#0b0b0b] px-5 md:px-6">
+          <button
+            type="button"
+            className="flex min-w-0 items-center gap-3 text-left text-lg font-black text-white md:text-xl"
+          >
+            <span className="truncate">{seasonLabel}</span>
+            <FaChevronRight className="rotate-90 text-white/75" size={18} />
+          </button>
+          <div className="flex items-center gap-3">
+            <span className="hidden text-sm font-bold text-white/45 sm:inline">{episodes.length} tập</span>
             <button
               type="button"
               onClick={onClose}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
               aria-label="Đóng"
             >
-              <FaTimes />
+              <FaTimes size={16} />
             </button>
           </div>
+        </div>
 
+        <div className="max-h-[calc(72vh-4rem)] overflow-y-auto [scrollbar-color:#555_transparent] [scrollbar-width:thin]">
           {episodes.length === 0 ? (
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-8 text-center text-white/55">
+            <div className="px-5 py-8 text-center text-white/55">
               Chưa có tập phim.
             </div>
           ) : (
-            <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-3 md:mx-0 md:px-0">
+            <div className="divide-y divide-white/10">
               {episodes.map((episode) => {
-                const active = Number(selectedEpisode) === Number(episode.episode_number);
+                const active = Number(episode.episode_number) === activeEpisodeNumber;
+                const title = formatEpisodeTitle(episode);
+                const thumb = getEpisodePoster(episode, movie);
+                const description = episode.description || movie?.description || "Nội dung tập đang được cập nhật.";
+
                 return (
                   <button
                     key={episode.id}
                     onClick={() => onSelectEpisode(episode)}
-                    className={`group/episode w-[210px] shrink-0 overflow-hidden rounded-xl border text-left transition-colors ${
-                      active
-                        ? "border-[#e50914] bg-[#e50914]/15"
-                        : "border-white/10 bg-white/[0.05] hover:border-white/25 hover:bg-white/[0.09]"
-                    }`}
+                    className={`group/episode block w-full text-left transition-colors ${active ? "bg-[#303030]" : "hover:bg-white/[0.06]"}`}
                     type="button"
                   >
-                    <div className="relative aspect-video overflow-hidden bg-[#171717]">
-                      <img
-                        src={movie?.poster_url}
-                        alt=""
-                        className="h-full w-full object-cover opacity-55 transition-transform duration-300 group-hover/episode:scale-105"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
-                      <div className={`absolute left-3 top-3 rounded-md px-2 py-1 text-xs font-black ${active ? "bg-[#e50914] text-white" : "bg-black/70 text-white"}`}>
-                        Tập {episode.episode_number}
+                    <div className={`relative px-5 py-4 md:px-6 ${active ? "ring-2 ring-inset ring-white" : ""}`}>
+                      <div className="grid grid-cols-[2.2rem_minmax(0,1fr)_8rem] items-center gap-3 md:grid-cols-[2.6rem_minmax(0,1fr)_10rem]">
+                        <span className="text-center text-xl font-black text-white/90">{episode.episode_number}</span>
+                        <h3 className="line-clamp-1 text-lg font-black text-white md:text-xl">{title}</h3>
+                        <span className="relative h-1 rounded-full bg-white/35">
+                          <span className={`absolute bottom-0 left-0 top-0 rounded-full ${active ? "w-2/3 bg-[#e50914]" : "w-0 bg-[#e50914]"}`} />
+                        </span>
                       </div>
+
                       {active && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-black shadow-2xl">
-                            <PlayArrowIcon />
-                          </span>
+                        <div className="mt-5 grid gap-5 md:grid-cols-[minmax(190px,0.95fr)_1.4fr] md:items-center">
+                          <div className="relative aspect-video overflow-hidden bg-black">
+                            {thumb && (
+                              <img
+                                src={thumb}
+                                alt=""
+                                className="h-full w-full object-cover opacity-90"
+                                referrerPolicy="no-referrer"
+                              />
+                            )}
+                            <span className="absolute inset-0 flex items-center justify-center">
+                              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-black shadow-2xl">
+                                <PlayArrowIcon />
+                              </span>
+                            </span>
+                          </div>
+                          <p className="line-clamp-4 text-base font-semibold leading-6 text-white/85 md:text-lg md:leading-7">
+                            {description}
+                          </p>
                         </div>
                       )}
-                    </div>
-                    <div className="p-3">
-                      <h3 className="line-clamp-1 text-sm font-black text-white">{formatEpisodeTitle(episode)}</h3>
-                      <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-white/45">
-                        {active ? "Đang xem" : "Chọn để phát tập này"}
-                      </p>
                     </div>
                   </button>
                 );
@@ -158,6 +240,269 @@ function EpisodeShelf({ open, movie, episodes, selectedEpisode, onClose, onSelec
         </div>
       </section>
     </div>
+  );
+}
+
+function WatchAction({ icon, label, detail, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex min-w-0 flex-col items-center gap-2 text-center text-white/75 transition-colors hover:text-white"
+    >
+      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-2xl transition-colors group-hover:bg-white/20">
+        {icon}
+      </span>
+      <span className="text-sm font-bold">{label}</span>
+      {detail && <span className="-mt-1 text-xs font-semibold text-white/45">{detail}</span>}
+    </button>
+  );
+}
+
+function DetailLine({ label, value }) {
+  if (!value) return null;
+
+  return (
+    <p className="text-sm leading-relaxed text-white/60">
+      <span className="font-bold text-white/45">{label}: </span>
+      <span className="font-bold text-white/90">{value}</span>
+    </p>
+  );
+}
+
+function WatchInfoSection({
+  movie,
+  episodes,
+  selectedEpisode,
+  currentEpisode,
+  metaItems,
+  genres,
+  actors,
+  directors,
+  suggestedMovies,
+  viewLabel,
+  ratingLabel,
+  shareCopied,
+  onSelectEpisode,
+  onOpenEpisodeList,
+  onOpenMovie,
+  onGoDetail,
+  onShare,
+}) {
+  const description = movie?.description || "Nội dung phim đang được cập nhật.";
+  const activeEpisodeNumber = Number(selectedEpisode);
+  const relatedMovies = Array.isArray(suggestedMovies) ? suggestedMovies : [];
+  const episodeRailRef = useRef(null);
+  const [episodeRailState, setEpisodeRailState] = useState({
+    hasOverflow: false,
+    canScrollLeft: false,
+    canScrollRight: false,
+  });
+
+  const updateEpisodeRailState = useCallback(() => {
+    const rail = episodeRailRef.current;
+    if (!rail) return;
+
+    const maxScrollLeft = Math.max(rail.scrollWidth - rail.clientWidth, 0);
+    setEpisodeRailState({
+      hasOverflow: maxScrollLeft > 2,
+      canScrollLeft: rail.scrollLeft > 2,
+      canScrollRight: rail.scrollLeft < maxScrollLeft - 2,
+    });
+  }, []);
+
+  const scrollEpisodes = useCallback((direction) => {
+    const rail = episodeRailRef.current;
+    if (!rail) return;
+
+    rail.scrollBy({
+      left: direction * Math.max(rail.clientWidth * 0.82, 300),
+      behavior: "smooth",
+    });
+  }, []);
+
+  useEffect(() => {
+    updateEpisodeRailState();
+    const frameId = window.requestAnimationFrame(updateEpisodeRailState);
+    const rail = episodeRailRef.current;
+
+    window.addEventListener("resize", updateEpisodeRailState);
+    const resizeObserver = typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateEpisodeRailState) : null;
+    if (rail) resizeObserver?.observe(rail);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.removeEventListener("resize", updateEpisodeRailState);
+      resizeObserver?.disconnect();
+    };
+  }, [episodes.length, updateEpisodeRailState]);
+
+  return (
+    <section className="bg-[#111111] px-4 py-8 text-white md:px-8 lg:px-12">
+      <div className="mx-auto max-w-[1500px]">
+        <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="min-w-0">
+            <h2 className="text-2xl font-black leading-tight md:text-3xl">{movie?.title}</h2>
+            {movie?.original_title && movie.original_title !== movie.title && (
+              <p className="mt-3 text-base font-bold text-white/70">{movie.original_title}</p>
+            )}
+
+            <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-bold text-white/80 md:text-base">
+              {viewLabel && <span>{viewLabel}</span>}
+              {ratingLabel && (
+                <span className="inline-flex items-center gap-2">
+                  {ratingLabel}
+                  <span className="inline-flex gap-0.5 text-[#e3a61a]">
+                    {Array.from({ length: 5 }).map((_, index) => (
+                      <FaStar key={index} />
+                    ))}
+                  </span>
+                </span>
+              )}
+            </div>
+
+            {metaItems.length > 0 && (
+              <div className="mt-5 flex flex-wrap items-center gap-3 text-base font-black text-white/90">
+                {metaItems.map((item, index) => (
+                  <React.Fragment key={`${item}-${index}`}>
+                    {index > 0 && <span className="h-5 w-px bg-white/25" />}
+                    <span>{item}</span>
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
+
+            {currentEpisode && (
+              <h3 className="mt-6 text-xl font-black">{formatEpisodeTitle(currentEpisode)}</h3>
+            )}
+
+            <p className="mt-4 max-w-5xl text-base font-semibold leading-7 text-white/80">
+              {description}
+            </p>
+
+            {episodes.length > 0 && (
+              <div className="mt-9 xl:w-[calc(100%_+_392px)]">
+                <div className="mb-5 flex flex-wrap items-end gap-4">
+                  <h2 className="text-3xl font-black">Danh sách tập</h2>
+                  <span className="pb-1 text-sm font-black text-white/70">{episodes.length}/{episodes.length} tập</span>
+                  <button
+                    type="button"
+                    onClick={onOpenEpisodeList}
+                    className="ml-auto rounded-md border border-white/30 px-4 py-2 text-sm font-black text-white transition-colors hover:bg-white/10"
+                  >
+                    Tất cả tập
+                  </button>
+                </div>
+
+                <div className="relative">
+                  {episodeRailState.hasOverflow && episodeRailState.canScrollLeft && (
+                    <button
+                      type="button"
+                      aria-label="Scroll episodes left"
+                      onClick={() => scrollEpisodes(-1)}
+                      className="absolute left-0 top-[38%] z-20 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/75 text-white shadow-2xl backdrop-blur transition-colors hover:bg-black/90 md:flex"
+                    >
+                      <FaChevronLeft size={24} />
+                    </button>
+                  )}
+
+                  <div
+                    ref={episodeRailRef}
+                    onScroll={updateEpisodeRailState}
+                    className="-mx-4 flex scroll-smooth gap-4 overflow-x-auto px-4 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mx-0 md:px-0"
+                  >
+                    {episodes.map((episode) => {
+                      const active = Number(episode.episode_number) === activeEpisodeNumber;
+                      return (
+                        <button
+                          key={episode.id}
+                          type="button"
+                          onClick={() => onSelectEpisode(episode)}
+                          className="group w-[240px] shrink-0 text-left"
+                        >
+                          <div className={`relative aspect-video overflow-hidden rounded-sm bg-[#1c1c1c] ring-2 transition ${active ? "ring-[#e50914]" : "ring-transparent group-hover:ring-white/30"}`}>
+                            <img
+                            src={getEpisodePoster(episode, movie)}
+                              alt=""
+                              className="h-full w-full object-cover opacity-90 transition-transform duration-300 group-hover:scale-105"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
+                            {active && (
+                              <span className="absolute left-3 top-3 rounded bg-[#e50914] px-2 py-1 text-xs font-black text-white">
+                                Đang xem
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="mt-3 line-clamp-1 text-base font-black text-white">{formatEpisodeTitle(episode)}</h3>
+                          <p className="mt-1 text-sm font-bold text-white/55">
+                            {movie?.age_limit ? `${formatAgeLimit(movie.age_limit)} | ` : ""}{movie?.quality || "Full HD"}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {episodeRailState.hasOverflow && episodeRailState.canScrollRight && (
+                    <button
+                      type="button"
+                      aria-label="Scroll episodes right"
+                      onClick={() => scrollEpisodes(1)}
+                      className="absolute right-0 top-[38%] z-20 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/75 text-white shadow-2xl backdrop-blur transition-colors hover:bg-black/90 md:flex"
+                    >
+                      <FaChevronRight size={24} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {relatedMovies.length > 0 && (
+              <div className="mt-9">
+                <h2 className="mb-5 text-3xl font-black">Video liên quan</h2>
+                <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-4 md:mx-0 md:px-0">
+                  {relatedMovies.map((item) => {
+                    const itemId = item.id || item.movie_id;
+                    return (
+                      <button
+                        key={itemId}
+                        type="button"
+                        onClick={() => itemId && onOpenMovie(itemId)}
+                        className="group w-[190px] shrink-0 text-left"
+                      >
+                        <div className="aspect-[2/3] overflow-hidden rounded-sm bg-[#1c1c1c]">
+                          <img
+                            src={item.poster_url || item.bg_url}
+                            alt=""
+                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                        <h3 className="mt-3 line-clamp-2 text-sm font-black text-white">{item.title}</h3>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <aside className="space-y-7 xl:pt-1">
+            <div className="grid grid-cols-3 gap-3">
+              <WatchAction icon={<FaRegHeart />} label="Yêu thích" onClick={onGoDetail} />
+              <WatchAction icon={<FaRegCommentDots />} label="Bình luận" onClick={onGoDetail} />
+              <WatchAction icon={<FaShareAlt />} label="Chia sẻ" detail={shareCopied ? "Đã sao chép" : ""} onClick={onShare} />
+            </div>
+
+            <div className="space-y-4">
+              <DetailLine label="Diễn viên" value={actors.join(", ")} />
+              <DetailLine label="Đạo diễn" value={directors.join(", ")} />
+              <DetailLine label="Thể loại" value={genres.join(", ")} />
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -183,6 +528,7 @@ const WatchMovie = () => {
   const [reportReason, setReportReason] = useState(REPORT_REASONS[0]);
   const [reportDescription, setReportDescription] = useState("");
   const [reportStatus, setReportStatus] = useState({ type: "", message: "" });
+  const [shareCopied, setShareCopied] = useState(false);
 
   const videoRef = useRef(null);
   const movie = data?.movie || null;
@@ -197,17 +543,14 @@ const WatchMovie = () => {
   );
   const hasNextEpisode = currentEpisodeIndex >= 0 && currentEpisodeIndex < episodes.length - 1;
   const currentSubtitleTracks = useMemo(() => normalizeSubtitleTracks(currentEpisode), [currentEpisode]);
-
-  useEffect(() => {
-    const previousBodyOverflow = document.body.style.overflow;
-    const previousHtmlOverflow = document.documentElement.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousBodyOverflow;
-      document.documentElement.style.overflow = previousHtmlOverflow;
-    };
-  }, []);
+  const genres = useMemo(() => normalizeNameList(data?.genres?.length ? data.genres : movie?.genres), [data?.genres, movie?.genres]);
+  const countries = useMemo(() => normalizeNameList(data?.countries?.length ? data.countries : movie?.countries), [data?.countries, movie?.countries]);
+  const actors = useMemo(() => normalizeNameList(data?.actors?.length ? data.actors : movie?.actors), [data?.actors, movie?.actors]);
+  const directors = useMemo(() => normalizeNameList(data?.directors?.length ? data.directors : movie?.directors), [data?.directors, movie?.directors]);
+  const suggestedMovies = useMemo(() => data?.suggested || movie?.suggested || [], [data?.suggested, movie?.suggested]);
+  const metaItems = useMemo(() => buildMetaItems(movie, episodes, countries), [countries, episodes, movie]);
+  const viewLabel = useMemo(() => formatViewCount(movie?.views), [movie?.views]);
+  const ratingLabel = useMemo(() => formatRating(movie?.imdb_rating), [movie?.imdb_rating]);
 
   useEffect(() => {
     const closeOverlay = (event) => {
@@ -374,6 +717,31 @@ const WatchMovie = () => {
     navigate(-1);
   };
 
+  const handleGoDetail = useCallback(() => {
+    navigate(`/movies/${id}`);
+  }, [id, navigate]);
+
+  const handleOpenMovie = useCallback((movieId) => {
+    navigate(`/movies/${movieId}`);
+  }, [navigate]);
+
+  const handleShare = useCallback(async () => {
+    const shareUrl = window.location.href;
+    setShareCopied(false);
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: movie?.title || document.title, url: shareUrl });
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(shareUrl);
+      }
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 1800);
+    } catch {
+      setShareCopied(false);
+    }
+  }, [movie?.title]);
+
   const handleSelectEpisode = useCallback((episode) => {
     setSelectedEpisode(episode.episode_number);
     setResumeAt(0);
@@ -445,13 +813,14 @@ const WatchMovie = () => {
   }
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-black text-white">
-      <div className="absolute inset-0 z-0">
+    <div className="min-h-screen overflow-x-hidden bg-[#111111] text-white">
+      <section className="relative h-[100dvh] min-h-[520px] overflow-hidden bg-black">
+        <div className="absolute inset-0 z-0">
         {currentEpisode ? (
           <VideoPlayer
             ref={videoRef}
-            src={currentEpisode.video_url}
-            poster={movie.poster_url}
+            src={getEpisodePlaybackSource(currentEpisode)}
+            poster={getEpisodePoster(currentEpisode, movie)}
             resumeAt={resumeAt}
             onSnapshot={(snapshot) => saveProgress(snapshot)}
             onEnded={handleEnded}
@@ -495,13 +864,35 @@ const WatchMovie = () => {
           </div>
           <button
             type="button"
-            onClick={() => navigate(`/movies/${id}`)}
+            onClick={handleGoDetail}
             className="pointer-events-auto ml-auto hidden rounded-full border border-white/12 bg-black/35 px-4 py-2 text-sm font-black text-white backdrop-blur-md transition-colors hover:bg-white/16 md:inline-flex"
           >
             Chi tiết
           </button>
         </div>
       </div>
+
+      </section>
+
+      <WatchInfoSection
+        movie={movie}
+        episodes={episodes}
+        selectedEpisode={selectedEpisode}
+        currentEpisode={currentEpisode}
+        metaItems={metaItems}
+        genres={genres}
+        actors={actors}
+        directors={directors}
+        suggestedMovies={suggestedMovies}
+        viewLabel={viewLabel}
+        ratingLabel={ratingLabel}
+        shareCopied={shareCopied}
+        onSelectEpisode={handleSelectEpisode}
+        onOpenEpisodeList={() => setEpisodeShelfOpen(true)}
+        onOpenMovie={handleOpenMovie}
+        onGoDetail={handleGoDetail}
+        onShare={handleShare}
+      />
 
       <EpisodeShelf
         open={episodeShelfOpen}

@@ -9,6 +9,7 @@
     "build": "npm --prefix frontend run build",
     "preview": "npm --prefix frontend run preview",
     "lint": "npm --prefix frontend run lint",
+    "encode:hls": "npm --prefix backend run encode:hls",
     "import:kkphim": "npm --prefix backend run import:kkphim",
     "seed:views": "npm --prefix backend run seed:views"
   },
