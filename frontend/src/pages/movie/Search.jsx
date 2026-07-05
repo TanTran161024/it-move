@@ -219,15 +219,15 @@ export default function Search() {
     <div className="min-h-screen bg-background text-white pt-24 pb-16 px-4 md:px-8">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
-          <form onSubmit={handleSearchSubmit} className="relative max-w-2xl mx-auto mb-4">
+          <form onSubmit={handleSearchSubmit} className="relative max-w-2xl mx-auto mb-6">
             <input
               type="text"
               value={localSearchTerm}
               onChange={(event) => setLocalSearchTerm(event.target.value)}
-              placeholder="Tìm phim bằng tên hoặc mô tả tự nhiên..."
-              className="w-full bg-white/10 border border-white/20 rounded-full py-4 pl-14 pr-6 text-white text-lg focus:outline-none focus:border-primary focus:bg-white/15 transition-all shadow-lg backdrop-blur-md"
+              placeholder="Nhập tên phim, diễn viên hoặc đạo diễn..."
+              className="w-full bg-white/5 border border-white/10 rounded-full py-4 pl-14 pr-6 text-white text-lg focus:outline-none focus:border-primary focus:bg-white/10 transition-all shadow-xl backdrop-blur-md placeholder:text-white/30"
             />
-            <button type="submit" className="absolute left-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors">
+            <button type="submit" className="absolute left-5 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors">
               <SearchIcon fontSize="large" />
             </button>
           </form>
@@ -246,9 +246,9 @@ export default function Search() {
           </div>
 
           {searchTerm && (
-            <div className="mb-6">
-              <h1 className="text-2xl md:text-3xl font-bold">
-                Kết quả tìm kiếm cho <span className="text-primary">"{searchTerm}"</span>
+            <div className="mb-6 animate-in fade-in slide-in-from-bottom-2">
+              <h1 className="text-2xl md:text-3xl font-black">
+                Kết quả cho <span className="text-primary">"{searchTerm}"</span>
               </h1>
               {smartFilterLabels.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-4">
@@ -308,13 +308,13 @@ export default function Search() {
         )}
 
         {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
             {Array.from({ length: 12 }).map((_, index) => (
               <MovieCardSkeleton key={index} />
             ))}
           </div>
         ) : pagedMovies.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6 animate-in fade-in duration-500">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6 animate-in fade-in duration-500">
             {pagedMovies.map((movie) => (
               <MovieCard
                 key={movie.id}
@@ -326,11 +326,11 @@ export default function Search() {
             ))}
           </div>
         ) : (
-          <div className="text-center py-20 bg-surface/50 rounded-2xl border border-white/5">
-            <SearchIcon className="text-6xl text-white/10 mb-4" />
-            <h2 className="text-2xl font-black text-white">Chưa có phim khớp tiêu chí</h2>
+          <div className="text-center py-24 bg-white/[0.02] rounded-3xl border border-white/5 animate-in fade-in zoom-in-95">
+            <SearchIcon className="text-6xl text-white/20 mb-4" />
+            <h2 className="text-2xl font-black text-white">Chưa có kết quả khớp</h2>
             <p className="mx-auto mt-3 max-w-xl text-text-secondary text-base">
-              Thử bỏ bớt quốc gia, đổi thể loại hoặc mô tả ngắn hơn để hệ thống tìm gần hơn.
+              Thử bỏ bớt bộ lọc, đổi thể loại hoặc dùng từ khóa ngắn hơn.
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-2">
               {SEARCH_EMPTY_SUGGESTIONS.map((term) => (
@@ -353,7 +353,7 @@ export default function Search() {
               <button
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
                 disabled={page === 1}
-                className="w-10 h-10 rounded-full flex items-center justify-center bg-surface border border-white/10 text-white hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 border border-white/10 text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 &lt;
               </button>
@@ -361,14 +361,18 @@ export default function Search() {
               {Array.from({ length: totalPages }).map((_, index) => {
                 const pageNum = index + 1;
                 if (totalPages > 5 && pageNum !== 1 && pageNum !== totalPages && Math.abs(pageNum - page) > 1) {
-                  if (pageNum === 2 || pageNum === totalPages - 1) return <span key={pageNum} className="text-white/50 px-2">...</span>;
+                  if (pageNum === 2 || pageNum === totalPages - 1) return <span key={pageNum} className="text-white/30 px-1">...</span>;
                   return null;
                 }
                 return (
                   <button
                     key={pageNum}
                     onClick={() => setPage(pageNum)}
-                    className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${page === pageNum ? 'bg-primary text-white shadow-lg' : 'bg-surface border border-white/10 text-white hover:bg-white/10'}`}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+                      page === pageNum 
+                        ? 'bg-primary text-white shadow-lg shadow-primary/25 scale-105' 
+                        : 'bg-white/5 border border-white/10 text-white hover:bg-white/10'
+                    }`}
                   >
                     {pageNum}
                   </button>
@@ -378,7 +382,7 @@ export default function Search() {
               <button
                 onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
                 disabled={page === totalPages}
-                className="w-10 h-10 rounded-full flex items-center justify-center bg-surface border border-white/10 text-white hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 border border-white/10 text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 &gt;
               </button>

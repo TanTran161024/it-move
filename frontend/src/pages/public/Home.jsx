@@ -13,10 +13,24 @@ async function getJson(url) {
   return Array.isArray(data) ? data : [];
 }
 
-function SectionSkeleton({ className = 'h-[300px]' }) {
+function SectionSkeleton() {
   return (
-    <div className={`${className} w-full relative bg-[#1A1A1A] overflow-hidden rounded-xl`}>
-      <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite_linear] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+    <div className="w-full mt-4 min-h-[390px] md:min-h-[430px]">
+      <div className="flex items-center justify-between mb-4 px-2 md:px-0">
+        <div className="h-8 w-48 bg-surface/50 rounded-lg animate-pulse" />
+        <div className="h-6 w-24 bg-surface/50 rounded-full animate-pulse" />
+      </div>
+      <div className="flex gap-4 overflow-hidden">
+        {[...Array(10)].map((_, i) => (
+          <div key={i} className="flex-shrink-0 w-[160px]">
+            <div className="w-full aspect-[2/3] bg-surface/50 rounded-xl animate-pulse" />
+            <div className="mt-3 px-1 space-y-2">
+              <div className="h-4 w-3/4 bg-surface/50 rounded animate-pulse" />
+              <div className="h-3 w-1/2 bg-surface/50 rounded animate-pulse" />
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -140,9 +154,9 @@ export default function Home() {
       <h1 className="sr-only">Nền tảng phim trực tuyến cao cấp IT Move</h1>
       <Banner />
 
-      <div className="w-full px-[16px] md:px-[32px] lg:px-[48px] xl:px-[72px] relative z-20 -mt-20 md:-mt-32 space-y-10 md:space-y-16">
+      <div className="relative z-20 w-full space-y-10 px-[16px] pt-8 md:space-y-16 md:px-[32px] md:pt-10 lg:px-[48px] xl:px-[72px]">
         {hasStoredUser && (
-          <Suspense fallback={<SectionSkeleton className="h-[200px]" />}>
+          <Suspense fallback={<SectionSkeleton />}>
             <ContinueWatchingSection />
           </Suspense>
         )}

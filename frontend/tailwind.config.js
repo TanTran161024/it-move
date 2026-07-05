@@ -7,24 +7,36 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#080808',
-        section: '#0F0F10',
-        surface: '#171717',
-        card: '#171717',
-        cardHover: '#232323',
-        primary: '#4F46E5', /* Indigo premium */
-        secondary: '#2C2C2C',
-        accent: '#4F46E5',
+        background: '#060606',
+        section: '#0A0A0A',
+        surface: '#121212',
+        card: '#121212',
+        cardHover: '#1A1A1A',
+        primary: '#E50914',
+        primaryHover: '#B80710',
+        'primary-hover': '#B80710',
+        secondary: '#27272A',
+        accent: '#E50914',
         text: {
-          primary: '#FFFFFF',
-          secondary: '#B5B5B5',
+          primary: '#F8F8F8',
+          secondary: '#A1A1AA',
         },
-        border: 'rgba(255,255,255,0.05)',
-        divider: 'rgba(255,255,255,0.05)',
+        border: 'rgba(255,255,255,0.08)',
+        divider: 'rgba(255,255,255,0.08)',
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
-        heading: ['Plus Jakarta Sans', 'Inter', 'sans-serif'],
+        heading: ['Outfit', 'sans-serif'],
+      },
+      boxShadow: {
+        'premium': '0 10px 30px -10px rgba(0, 0, 0, 0.8)',
+        'glow': '0 0 20px -5px rgba(229, 9, 20, 0.4)',
+      },
+      dropShadow: {
+        'glow': '0 0 18px rgba(229, 9, 20, 0.55)',
+      },
+      transitionTimingFunction: {
+        'cinematic': 'cubic-bezier(0.25, 1, 0.5, 1)',
       },
       spacing: {
         'page-desktop': '72px',

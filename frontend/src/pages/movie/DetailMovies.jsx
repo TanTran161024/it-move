@@ -119,6 +119,75 @@ const normalizePeople = (people) => {
     .filter((person) => getPersonName(person));
 };
 
+const getLookupName = (item) => {
+  if (typeof item === 'string') return item.trim();
+  return String(item?.name || item?.title || '').trim();
+};
+
+const normalizeNameList = (items) => {
+  if (!Array.isArray(items)) return [];
+  return items.map(getLookupName).filter(Boolean);
+};
+
+const normalizeLookupRows = (items) => {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item, index) => {
+      if (typeof item === 'string') return { id: item || index, name: item };
+      const name = getLookupName(item);
+      return name ? { ...item, id: item?.id ?? name ?? index, name } : null;
+    })
+    .filter(Boolean);
+};
+
+async function fetchMovieDetailPayload(movieId, signal) {
+  const primaryError = new Error('Không thể tải dữ liệu phim.');
+
+  try {
+    const response = await fetch(`${API}/movie/${movieId}`, { signal });
+    if (response.ok) return response.json();
+  } catch (error) {
+    if (error.name === 'AbortError') throw error;
+  }
+
+  try {
+    const [moviesResponse, episodesResponse] = await Promise.all([
+      fetch(`${API}/movies`, { signal }),
+      fetch(`${API}/movies/${movieId}/episodes`, { signal }),
+    ]);
+
+    if (!moviesResponse.ok) throw primaryError;
+
+    const [movies, episodes] = await Promise.all([
+      moviesResponse.json(),
+      episodesResponse.ok ? episodesResponse.json() : Promise.resolve([]),
+    ]);
+
+    const movie = (Array.isArray(movies) ? movies : [])
+      .find((item) => Number(item.id) === Number(movieId));
+
+    if (!movie) throw primaryError;
+
+    const genres = normalizeNameList(movie.genres);
+    const countries = normalizeNameList(movie.countries);
+
+    return {
+      ...movie,
+      bg_url: movie.bg_url || movie.backdrop_url || movie.poster_url,
+      genres,
+      countries,
+      directors: normalizeLookupRows(movie.directors),
+      producers: normalizeLookupRows(movie.producers),
+      actors: normalizeLookupRows(movie.actors),
+      episodes: Array.isArray(episodes) ? episodes : [],
+      suggested: [],
+    };
+  } catch (fallbackError) {
+    if (fallbackError.name === 'AbortError') throw fallbackError;
+    throw primaryError;
+  }
+}
+
 const getInitials = (name) => {
   const words = String(name || '').trim().split(/\s+/).filter(Boolean);
   if (!words.length) return '?';
@@ -401,11 +470,7 @@ const DetailMovies = () => {
     setContinueProgress(null);
     setActiveTab('overview');
 
-    fetch(`${API}/movie/${id}`, { signal: controller.signal })
-      .then((res) => {
-        if (!res.ok) throw new Error('Không thể tải dữ liệu phim.');
-        return res.json();
-      })
+    fetchMovieDetailPayload(id, controller.signal)
       .then((json) => {
         setData(json);
         if (json.episodes?.length) setSelectedEpisode(json.episodes[0].episode_number);
@@ -904,30 +969,29 @@ const DetailMovies = () => {
   return (
     <>
       <div className="relative min-h-screen overflow-hidden bg-background text-white pb-20">
-        <div className="absolute inset-x-0 top-0 h-[760px]">
+        <div className="absolute inset-x-0 top-0 h-[85vh] min-h-[600px] max-h-[1000px]">
           <img
             src={bgImage}
             alt=""
             referrerPolicy="no-referrer"
-            className="h-full w-full object-cover opacity-55"
+            className="h-full w-full object-cover opacity-30 mix-blend-luminosity"
             onError={(event) => {
               event.currentTarget.src = data.poster_url || FALLBACK_POSTER;
             }}
           />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-background/70 to-background" />
-          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/70 to-background/20" />
-          <div className="absolute inset-0 backdrop-blur-[1px]" />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/50 to-transparent" />
         </div>
 
         <div className="relative z-10 mx-auto max-w-7xl px-4 pt-24 md:px-8 md:pt-32">
-          <section className="grid gap-8 lg:grid-cols-[300px_minmax(0,1fr)] lg:gap-12">
-            <div className="mx-auto w-full max-w-[280px] lg:mx-0">
-              <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-[0_30px_90px_rgba(0,0,0,0.55)]">
+          <section className="grid gap-8 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-14">
+            <div className="mx-auto w-full max-w-[240px] lg:mx-0 lg:max-w-full">
+              <div className="overflow-hidden rounded-xl border border-white/10 bg-white/5 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
                 <img
                   src={data.poster_url || FALLBACK_POSTER}
                   alt={data.title}
                   referrerPolicy="no-referrer"
-                  className="aspect-[2/3] w-full object-cover"
+                  className="aspect-[2/3] w-full object-cover transition-transform duration-500 hover:scale-105"
                   onError={(event) => {
                     event.currentTarget.src = FALLBACK_POSTER;
                   }}
@@ -1007,16 +1071,16 @@ const DetailMovies = () => {
                     <button
                       type="button"
                       onClick={() => navigate(getWatchUrl(continueEpisode, continueSeconds))}
-                      className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-base font-black text-black transition-colors hover:bg-white/85"
+                      className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-primary px-8 py-3 text-base font-black text-white shadow-[0_0_20px_rgba(229,9,20,0.4)] transition-all hover:scale-105 hover:bg-primary-hover hover:shadow-[0_0_30px_rgba(229,9,20,0.6)]"
                     >
-                      <PlayArrowIcon />
+                      <PlayArrowIcon className="text-2xl" />
                       {continueProgress ? 'Tiếp tục xem' : 'Xem ngay'}
                     </button>
                     <button
                       type="button"
                       onClick={() => trailerUrl && setTrailerOpen(true)}
                       disabled={!trailerUrl}
-                      className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full border border-white/15 bg-white/10 px-6 py-3 text-base font-black text-white transition-colors hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-45"
+                      className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-white/10 px-6 py-3 text-base font-black text-white backdrop-blur-md transition-colors hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-45"
                     >
                       <OndemandVideoIcon />
                       Trailer
@@ -1158,15 +1222,15 @@ const DetailMovies = () => {
                             type="button"
                             onClick={() => navigate(getWatchUrl(episode.episode_number, isResumeEpisode ? continueSeconds : 0))}
                             onMouseEnter={() => setSelectedEpisode(episode.episode_number)}
-                            className={`group/episode flex min-h-[92px] items-center gap-4 rounded-2xl border p-4 text-left transition-colors ${
-                              active ? 'border-primary/60 bg-primary/15' : 'border-white/10 bg-white/[0.04] hover:border-white/25 hover:bg-white/[0.08]'
+                            className={`group/episode flex min-h-[92px] items-center gap-4 rounded-xl border p-4 text-left transition-all hover:scale-[1.02] ${
+                              active ? 'border-primary bg-primary/10 shadow-[0_0_15px_rgba(229,9,20,0.2)]' : 'border-white/10 bg-white/[0.04] hover:border-white/25 hover:bg-white/[0.08]'
                             }`}
                           >
-                            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-black/30 text-white">
+                            <span className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-lg text-white transition-colors ${active ? 'bg-primary' : 'bg-black/30 group-hover/episode:bg-primary/80'}`}>
                               <PlayArrowIcon className="transition-transform group-hover/episode:scale-110" />
                             </span>
                             <span className="min-w-0">
-                              <span className="block text-sm font-black text-primary">Tập {episode.episode_number}</span>
+                              <span className={`block text-sm font-black ${active ? 'text-primary' : 'text-white/60 group-hover/episode:text-primary/80'}`}>Tập {episode.episode_number}</span>
                               <span className="mt-1 block truncate text-base font-black text-white">{getEpisodeLabel(episode)}</span>
                               {isResumeEpisode && <span className="mt-1 block text-xs font-bold text-white/50">Đang xem: {formatWatchTime(continueSeconds)}</span>}
                             </span>

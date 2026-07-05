@@ -118,15 +118,15 @@ export default function MovieTable({
                       
                       {/* Quality & Year Badges */}
                       <Box sx={{ position: 'absolute', right: 10, top: 10, zIndex: 3, display: 'flex', gap: 0.5, flexDirection: 'column', alignItems: 'flex-end' }}>
-                        {movie.quality && <span className="admin-badge info" style={{ background: 'rgba(15,23,42,0.68)', backdropFilter: 'blur(8px)' }}>{movie.quality}</span>}
-                        {movie.release_year && <span className="admin-badge warning" style={{ background: 'rgba(15,23,42,0.68)', backdropFilter: 'blur(8px)' }}>{movie.release_year}</span>}
-                        {movie.tmdb_id && <span className="admin-badge success" style={{ background: 'rgba(15,23,42,0.68)', backdropFilter: 'blur(8px)' }}>TMDb</span>}
+                        {movie.quality && <span className="admin-badge info" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>{movie.quality}</span>}
+                        {movie.release_year && <span className="admin-badge warning" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>{movie.release_year}</span>}
+                        {movie.tmdb_id && <span className="admin-badge success" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>TMDb</span>}
                       </Box>
                       
                       {/* IMDb Badge */}
                       {movie.imdb_rating > 0 && (
                         <Box sx={{ position: 'absolute', left: 10, bottom: 10, zIndex: 3 }}>
-                          <span className="admin-badge warning" style={{ background: 'rgba(15,23,42,0.68)', backdropFilter: 'blur(8px)' }}>
+                          <span className="admin-badge warning" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
                             <span style={{ color: 'var(--admin-warning)' }}>★</span> {formatRating(movie.imdb_rating)}
                           </span>
                         </Box>

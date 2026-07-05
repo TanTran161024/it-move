@@ -141,7 +141,7 @@ export default function Register() {
                   id="reg-username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full bg-white/5 border border-white/20 rounded-xl px-4 pt-6 pb-2 text-white focus:outline-none focus:border-white focus:bg-white/10 transition-all peer"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 pt-6 pb-2 text-white focus:outline-none focus:border-primary focus:bg-white/10 transition-all peer"
                   placeholder=" "
                   autoComplete="username"
                   disabled={isLoading}
@@ -160,7 +160,7 @@ export default function Register() {
                   id="reg-email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-white/5 border border-white/20 rounded-xl px-4 pt-6 pb-2 text-white focus:outline-none focus:border-white focus:bg-white/10 transition-all peer"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 pt-6 pb-2 text-white focus:outline-none focus:border-primary focus:bg-white/10 transition-all peer"
                   placeholder=" "
                   autoComplete="email"
                   disabled={isLoading}
@@ -252,7 +252,7 @@ export default function Register() {
                   id="reg-otp"
                   value={otp}
                   onChange={(e) => setOtp(e.target.value)}
-                  className="w-full bg-white/5 border border-white/20 rounded-xl px-4 pt-6 pb-2 text-white focus:outline-none focus:border-white focus:bg-white/10 transition-all peer text-center tracking-[0.5em] font-bold text-xl"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 pt-6 pb-2 text-white focus:outline-none focus:border-primary focus:bg-white/10 transition-all peer text-center tracking-[0.5em] font-bold text-xl"
                   placeholder=" "
                   maxLength={6}
                   disabled={isLoading}

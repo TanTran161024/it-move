@@ -42,8 +42,8 @@ const Top10Card = React.memo(function Top10Card({ movie, rank, onClick, shouldLo
       </div>
 
       {/* Movie Poster */}
-      <div className="absolute right-0 md:right-4 bottom-4 md:bottom-6 z-10 w-[55%] md:w-[52%] aspect-[2/3] overflow-hidden rounded-xl bg-surface shadow-[0_8px_24px_rgba(0,0,0,0.5)] ring-1 ring-white/10 transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] group-hover/card:-translate-y-4 group-hover/card:scale-[1.05] group-hover/card:shadow-[0_20px_40px_rgba(0,0,0,0.8)]">
-        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-500 z-10 pointer-events-none mix-blend-overlay" />
+      <div className="absolute right-0 md:right-4 bottom-4 md:bottom-6 z-10 w-[55%] md:w-[52%] aspect-[2/3] overflow-hidden rounded-xl bg-surface shadow-[0_8px_24px_rgba(0,0,0,0.5)] ring-1 ring-white/10 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] group-hover/card:-translate-y-2 group-hover/card:scale-[1.02] group-hover/card:shadow-[0_20px_40px_rgba(229,9,20,0.3)] group-hover/card:ring-primary/60">
+        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 z-10 pointer-events-none mix-blend-overlay" />
         
         <div className="absolute inset-0 z-0 flex flex-col justify-end bg-gradient-to-br from-white/10 via-white/[0.03] to-black px-3 py-4">
           <div className="text-xs font-black uppercase tracking-[0.18em] text-white/30">Top {rank}</div>

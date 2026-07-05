@@ -75,11 +75,9 @@ function App() {
       <ToastProvider>
         <MiniPlayerProvider>
           <div className="flex flex-col min-h-screen w-full bg-transparent text-white selection:bg-primary/30 selection:text-white relative">
-            {/* Ambient Glowing Background */}
-            <div className="fixed inset-0 overflow-hidden pointer-events-none z-[-1] bg-[#050505]">
-              <div className="absolute top-[-20%] left-[-10%] w-[70vw] h-[70vh] bg-purple-900/30 blur-[120px] rounded-full mix-blend-screen animate-pulse" style={{ animationDuration: '8s' }}></div>
-              <div className="absolute top-[10%] right-[-10%] w-[50vw] h-[80vh] bg-pink-900/20 blur-[120px] rounded-full mix-blend-screen animate-pulse" style={{ animationDuration: '12s' }}></div>
-              <div className="absolute bottom-[-20%] left-[20%] w-[60vw] h-[60vh] bg-blue-900/20 blur-[120px] rounded-full mix-blend-screen animate-pulse" style={{ animationDuration: '10s' }}></div>
+            {/* Ambient Background */}
+            <div className="fixed inset-0 overflow-hidden pointer-events-none z-[-1] bg-background">
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[100vw] h-[50vh] bg-primary/5 blur-[120px] rounded-full mix-blend-screen pointer-events-none"></div>
             </div>
 
             {showAmbientTools && <Header />}

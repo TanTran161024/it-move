@@ -102,9 +102,9 @@ export default function AdminOperationalQueue() {
                   </IconButton>
                 </Tooltip>
               )}
-              {item.movie_id && item.episode_id && (
+              {item.movie_id && item.episode_number && (
                 <Tooltip title="Test Link / Mở tập">
-                  <IconButton size="small" component="a" href={`/watch/${item.movie_id}?ep=${item.episode_id}`} target="_blank" sx={{ color: 'var(--admin-accent)' }}>
+                  <IconButton size="small" component="a" href={`/watch/${item.movie_id}?ep=${item.episode_number}`} target="_blank" sx={{ color: 'var(--admin-accent)' }}>
                     <PlayCircleOutlineIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>

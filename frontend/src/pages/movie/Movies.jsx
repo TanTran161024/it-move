@@ -147,7 +147,7 @@ export default function Movies() {
         .then(categoryMovies => {
           let filtered = [...categoryMovies];
           if (filters.type && filters.type !== 'Tất cả') {
-            const isSeries = filters.type === 'PHIM BỘ';
+            const isSeries = filters.type === 'Phim bộ';
             filtered = filtered.filter(m => !!m.is_series === isSeries);
           }
           if (filters.genre && Array.isArray(filters.genre) && filters.genre.length > 0) {
@@ -249,7 +249,7 @@ export default function Movies() {
 
         {/* Results */}
         {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
             {Array.from({ length: 12 }).map((_, i) => (
               <MovieCardSkeleton key={i} />
             ))}
@@ -268,13 +268,13 @@ export default function Movies() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-20 bg-surface/50 rounded-2xl border border-white/5">
+            <div className="text-center py-24 bg-white/[0.02] rounded-3xl border border-white/5">
               <p className="text-text-secondary text-lg">Không có diễn viên nào để hiển thị.</p>
             </div>
           )
         ) : (
           pagedMovies.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6 animate-in fade-in duration-500">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6 animate-in fade-in duration-500">
               {pagedMovies.map((movie, idx) => (
                 <MovieCard
                   key={movie.id ? `movie-${movie.id}` : `idx-${idx}`}
@@ -285,8 +285,9 @@ export default function Movies() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-20 bg-surface/50 rounded-2xl border border-white/5">
-              <p className="text-text-secondary text-lg">Không có phim nào để hiển thị.</p>
+            <div className="text-center py-24 bg-white/[0.02] rounded-3xl border border-white/5">
+              <h2 className="text-2xl font-black text-white mb-2">Không tìm thấy phim</h2>
+              <p className="text-text-secondary text-base">Thử thay đổi bộ lọc để xem nhiều kết quả hơn.</p>
             </div>
           )
         )}
@@ -298,23 +299,26 @@ export default function Movies() {
               <button 
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="w-10 h-10 rounded-full flex items-center justify-center bg-surface border border-white/10 text-white hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 border border-white/10 text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 &lt;
               </button>
               
               {Array.from({ length: totalPages }).map((_, i) => {
                 const pageNum = i + 1;
-                // Simple pagination logic for demonstration
                 if (totalPages > 5 && pageNum !== 1 && pageNum !== totalPages && Math.abs(pageNum - page) > 1) {
-                  if (pageNum === 2 || pageNum === totalPages - 1) return <span key={pageNum} className="text-white/50 px-2">...</span>;
+                  if (pageNum === 2 || pageNum === totalPages - 1) return <span key={pageNum} className="text-white/30 px-1">...</span>;
                   return null;
                 }
                 return (
                   <button
                     key={pageNum}
                     onClick={() => setPage(pageNum)}
-                    className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${page === pageNum ? 'bg-primary text-white shadow-lg' : 'bg-surface border border-white/10 text-white hover:bg-white/10'}`}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+                      page === pageNum 
+                        ? 'bg-primary text-white shadow-lg shadow-primary/25 scale-105' 
+                        : 'bg-white/5 border border-white/10 text-white hover:bg-white/10'
+                    }`}
                   >
                     {pageNum}
                   </button>
@@ -324,7 +328,7 @@ export default function Movies() {
               <button 
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                className="w-10 h-10 rounded-full flex items-center justify-center bg-surface border border-white/10 text-white hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 border border-white/10 text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 &gt;
               </button>
@@ -335,4 +339,4 @@ export default function Movies() {
       </div>
     </div>
   );
-} 
+}

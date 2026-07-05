@@ -1,8 +1,3 @@
-import { Box, Typography, Stack, Button, TextField, Divider } from '@mui/material';
-import InputAdornment from '@mui/material/InputAdornment';
-import SearchIcon from '@mui/icons-material/Search';
-import PropTypes from 'prop-types';
-import './FilterBox.css';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API_BASE_URL as API } from '../../config/api';
@@ -18,85 +13,32 @@ export default function FilterBox({
   onClose,
   onFilter
 }) {
-  // Xử lý chọn nhiều thể loại
-  const handleGenreClick = (g) => {
-    if (g === 'Tất cả') {
-      setGenre(['Tất cả']);
-      return;
-    }
-    setGenre(prev => {
-      let newGenres = Array.isArray(prev) ? [...prev] : (prev && prev !== 'Tất cả' ? [prev] : []);
-      if (newGenres.includes(g)) {
-        if (newGenres.length === 1) {
-          return ['Tất cả'];
-        }
-        return newGenres.filter(item => item !== g);
-      } else {
-        newGenres = newGenres.filter(item => item !== 'Tất cả');
-        newGenres.push(g);
-        return newGenres;
-      }
+  const [countryOptions, setCountryOptions] = useState(["Tất cả"]);
+  const [genreOptions, setGenreOptions] = useState(["Tất cả"]);
+
+  useEffect(() => {
+    axios.get(`${API}/api/countries`).then(res => {
+      setCountryOptions(["Tất cả", ...res.data.map(c => c.name)]);
     });
-  };
-
-  // Xử lý chọn nhiều quốc gia
-  const handleCountryClick = (c) => {
-    if (c === 'Tất cả') {
-      setCountry(['Tất cả']);
-      return;
-    }
-    let newCountries = Array.isArray(country) ? [...country] : (country && country !== 'Tất cả' ? [country] : []);
-    if (newCountries.includes(c)) {
-      if (newCountries.length === 1) {
-        setCountry(['Tất cả']);
-        return;
-      }
-      newCountries = newCountries.filter(item => item !== c);
-    } else {
-      newCountries = newCountries.filter(item => item !== 'Tất cả');
-      newCountries.push(c);
-    }
-    setCountry(newCountries);
-  };
-
-  // Xử lý chọn nhiều xếp hạng
-  const handleRatingClick = (r) => {
-    if (r === 'Tất cả') {
-      setRating(['Tất cả']);
-      return;
-    }
-    setRating(prev => {
-      let newRatings = Array.isArray(prev) ? [...prev] : (prev && prev !== 'Tất cả' ? [prev] : []);
-      if (newRatings.includes(r)) {
-        if (newRatings.length === 1) {
-          return ['Tất cả'];
-        }
-        return newRatings.filter(item => item !== r);
-      } else {
-        newRatings = newRatings.filter(item => item !== 'Tất cả');
-        newRatings.push(r);
-        return newRatings;
-      }
+    axios.get(`${API}/api/genres`).then(res => {
+      setGenreOptions(["Tất cả", ...res.data.map(g => g.name)]);
     });
-  };
+  }, []);
 
-  // Xử lý chọn nhiều năm
-  const handleYearClick = (y) => {
-    if (y === 'Tất cả') {
-      setYear(['Tất cả']);
+  const handleMultiSelect = (item, currentSelection, setFn) => {
+    if (item === 'Tất cả') {
+      setFn(['Tất cả']);
       return;
     }
-    setYear(prev => {
-      let newYears = Array.isArray(prev) ? [...prev] : (prev && prev !== 'Tất cả' ? [prev] : []);
-      if (newYears.includes(y)) {
-        if (newYears.length === 1) {
-          return ['Tất cả'];
-        }
-        return newYears.filter(item => item !== y);
+    setFn(prev => {
+      let newSelection = Array.isArray(prev) ? [...prev] : (prev && prev !== 'Tất cả' ? [prev] : []);
+      if (newSelection.includes(item)) {
+        if (newSelection.length === 1) return ['Tất cả'];
+        return newSelection.filter(i => i !== item);
       } else {
-        newYears = newYears.filter(item => item !== 'Tất cả');
-        newYears.push(y);
-        return newYears;
+        newSelection = newSelection.filter(i => i !== 'Tất cả');
+        newSelection.push(item);
+        return newSelection;
       }
     });
   };
@@ -116,161 +58,128 @@ export default function FilterBox({
     });
   };
 
+  const isSelected = (item, currentSelection) => {
+    if (Array.isArray(currentSelection)) {
+      if (currentSelection.length === 1 && currentSelection[0] === 'Tất cả') return item === 'Tất cả';
+      return currentSelection.includes(item);
+    }
+    return currentSelection === item;
+  };
+
   const ratingOptions = [
     { label: "Tất cả", value: "Tất cả" },
-    { label: "P (Mọi lứa tuổi)", value: "P" },
-    { label: "K (Dưới 13 tuổi)", value: "K" },
-    { label: "T13 (13 tuổi trở lên)", value: "T13" },
-    { label: "T16 (16 tuổi trở lên)", value: "T16" },
-    { label: "T18 (18 tuổi trở lên)", value: "T18" }
+    { label: "P (Mọi lứa)", value: "P" },
+    { label: "K (Dưới 13)", value: "K" },
+    { label: "T13 (13+)", value: "T13" },
+    { label: "T16 (16+)", value: "T16" },
+    { label: "T18 (18+)", value: "T18" }
   ];
 
-  const [countryOptions, setCountryOptions] = useState(["Tất cả"]);
-  const [genreOptions, setGenreOptions] = useState(["Tất cả"]);
+  const yearOptions = ["Tất cả", 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010];
 
-  useEffect(() => {
-    axios.get(`${API}/api/countries`).then(res => {
-      setCountryOptions(["Tất cả", ...res.data.map(c => c.name)]);
-    });
-    axios.get(`${API}/api/genres`).then(res => {
-      setGenreOptions(["Tất cả", ...res.data.map(g => g.name)]);
-    });
-  }, []);
+  const Pill = ({ active, onClick, children }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-colors border ${
+        active 
+        ? 'bg-primary border-primary text-white' 
+        : 'bg-white/5 border-white/10 text-text-secondary hover:bg-white/10 hover:text-white'
+      }`}
+    >
+      {children}
+    </button>
+  );
+
+  const FilterRow = ({ label, children }) => (
+    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+      <span className="text-white font-bold text-sm min-w-[100px] flex-shrink-0">{label}</span>
+      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2 sm:pb-0 w-full mask-edges">
+        {children}
+      </div>
+    </div>
+  );
 
   return (
-    <Box className="filter-box">
-      {/* Quốc gia */}
-      <Stack direction="row" alignItems="center" spacing={2} mb={2} flexWrap="wrap" className="filter-row">
-        <Typography className="filter-label">Quốc gia:</Typography>
-        <div className="filter-btn-group">
-          {countryOptions.map(c => (
-            <Button key={c} size="small"
-              variant={Array.isArray(country) ? country.includes(c) : country === c ? 'contained' : 'text'}
-              className={`filter-btn${(Array.isArray(country) && country.length === 1 && country[0] === 'Tất cả') ? (c === 'Tất cả' ? ' active' : '') : (Array.isArray(country) && country.includes(c) ? ' active' : '')}`}
-              onClick={() => handleCountryClick(c)}
-            >{c}</Button>
-          ))}
-        </div>
-      </Stack>
-      <Divider className="filter-divider" />
-      {/* Loại phim */}
-      <Stack direction="row" alignItems="center" spacing={2} mb={2} flexWrap="wrap" className="filter-row">
-        <Typography className="filter-label">Loại phim:</Typography>
-        <div className="filter-btn-group">
-          {["Tất cả", "Phim lẻ", "Phim bộ"].map(t => (
-            <Button key={t} size="small" variant={type === t ? 'contained' : 'text'}
-              className={`filter-btn${type === t ? ' active' : ''}`}
-              onClick={() => setType(t)}
-            >{t}</Button>
-          ))}
-        </div>
-      </Stack>
-      <Divider className="filter-divider" />
-      {/* Xếp hạng */}
-      <Stack direction="row" alignItems="center" spacing={2} mb={2} flexWrap="wrap" className="filter-row">
-        <Typography className="filter-label">Xếp hạng:</Typography>
-        <div className="filter-btn-group">
-          {ratingOptions.map(r => (
-            <Button key={r.value} size="small"
-              variant={Array.isArray(rating) ? rating.includes(r.value) : rating === r.value ? 'contained' : 'text'}
-              className={`filter-btn${(Array.isArray(rating) && rating.length === 1 && rating[0] === 'Tất cả') ? (r.value === 'Tất cả' ? ' active' : '') : (Array.isArray(rating) && rating.includes(r.value) ? ' active' : '')}`}
-              onClick={() => handleRatingClick(r.value)}
-            >{r.label}</Button>
-          ))}
-        </div>
-      </Stack>
-      <Divider className="filter-divider" />
-      {/* Thể loại */}
-      <Stack direction="row" alignItems="center" spacing={2} mb={2} flexWrap="wrap" className="filter-row">
-        <Typography className="filter-label">Thể loại:</Typography>
-        <div className="filter-btn-group">
-          {genreOptions.map(g => (
-            <Button key={g} size="small"
-              variant={Array.isArray(genre) ? genre.includes(g) : genre === g ? 'contained' : 'text'}
-              className={`filter-btn${(Array.isArray(genre) && genre.length === 1 && genre[0] === 'Tất cả') ? (g === 'Tất cả' ? ' active' : '') : (Array.isArray(genre) && genre.includes(g) ? ' active' : '')}`}
-              onClick={() => handleGenreClick(g)}
-            >{g}</Button>
-          ))}
-        </div>
-      </Stack>
-      <Divider className="filter-divider" />
-      {/* Năm sản xuất */}
-      <Stack direction="row" alignItems="center" spacing={2} mb={2} flexWrap="wrap" className="filter-row">
-        <Typography className="filter-label">Năm sản xuất:</Typography>
-        <div className="filter-btn-group">
-          {["Tất cả", 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010].map(y => (
-            <Button key={y} size="small"
-              variant={Array.isArray(year) ? year.includes(y) : year === y ? 'contained' : 'text'}
-              className={`filter-btn${(Array.isArray(year) && year.length === 1 && year[0] === 'Tất cả') ? (y === 'Tất cả' ? ' active' : '') : (Array.isArray(year) && year.includes(y) ? ' active' : '')}`}
-              onClick={() => handleYearClick(y)}
-            >{y}</Button>
-          ))}
-          <TextField
-            size="small"
-            placeholder="Nhập năm"
+    <div className="w-full space-y-4 sm:space-y-6">
+      <FilterRow label="Sắp xếp theo">
+        {["Mới nhất", "Mới cập nhật", "Điểm IMDb", "Lượt xem"].map(s => (
+          <Pill key={s} active={sort === s} onClick={() => setSort(s)}>{s}</Pill>
+        ))}
+      </FilterRow>
+
+      <FilterRow label="Định dạng">
+        {["Tất cả", "Phim lẻ", "Phim bộ"].map(t => (
+          <Pill key={t} active={type === t} onClick={() => setType(t)}>{t}</Pill>
+        ))}
+      </FilterRow>
+
+      <FilterRow label="Thể loại">
+        {genreOptions.map(g => (
+          <Pill key={g} active={isSelected(g, genre)} onClick={() => handleMultiSelect(g, genre, setGenre)}>{g}</Pill>
+        ))}
+      </FilterRow>
+
+      <FilterRow label="Quốc gia">
+        {countryOptions.map(c => (
+          <Pill key={c} active={isSelected(c, country)} onClick={() => handleMultiSelect(c, country, setCountry)}>{c}</Pill>
+        ))}
+      </FilterRow>
+
+      <FilterRow label="Năm phát hành">
+        {yearOptions.map(y => (
+          <Pill key={y} active={isSelected(y, year)} onClick={() => handleMultiSelect(y, year, setYear)}>{y}</Pill>
+        ))}
+        <div className="flex-shrink-0 relative">
+          <input
+            type="number"
+            placeholder="Năm khác..."
             value={inputYear}
             onChange={e => setInputYear(e.target.value)}
-            className="filter-year-input"
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-              disableUnderline: true
-            }}
+            className="w-28 bg-white/5 border border-white/10 rounded-full px-4 py-1.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary transition-colors"
           />
         </div>
-      </Stack>
-      <Divider className="filter-divider" />
-      {/* Sắp xếp */}
-      <Stack direction="row" alignItems="center" spacing={2} mb={3} flexWrap="wrap" className="filter-row">
-        <Typography className="filter-label">Sắp xếp:</Typography>
-        <div className="filter-btn-group">
-          {["Mới nhất", "Mới cập nhật", "Điểm IMDb", "Lượt xem"].map(s => (
-            <Button key={s} size="small" variant={sort === s ? 'contained' : 'text'}
-              className={`filter-btn${sort === s ? ' active' : ''}`}
-              onClick={() => setSort(s)}
-            >{s}</Button>
-          ))}
-        </div>
-      </Stack>
-      {/* Nút lọc và đóng */}
-      <Stack direction="row" spacing={2} mt={2} className="filter-actions">
-        <Button
-          variant="contained"
-          className="filter-apply"
+      </FilterRow>
+
+      <FilterRow label="Độ tuổi">
+        {ratingOptions.map(r => (
+          <Pill key={r.value} active={isSelected(r.value, rating)} onClick={() => handleMultiSelect(r.value, rating, setRating)}>
+            {r.label}
+          </Pill>
+        ))}
+      </FilterRow>
+
+      <div className="flex items-center gap-3 pt-4 border-t border-white/10">
+        <button
           onClick={handleFilter}
+          className="bg-primary hover:bg-red-600 text-white font-bold py-2.5 px-6 rounded-full transition-colors shadow-lg shadow-primary/25"
         >
-          Lọc kết quả
-        </Button>
-        <Button
-          variant="outlined"
-          className="filter-close"
+          Áp dụng bộ lọc
+        </button>
+        <button
           onClick={onClose}
+          className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold py-2.5 px-6 rounded-full transition-colors"
         >
           Đóng
-        </Button>
-      </Stack>
-    </Box>
+        </button>
+      </div>
+
+      <style>{`
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .no-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        @media (max-width: 640px) {
+          .mask-edges {
+            mask-image: linear-gradient(to right, black 85%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+            padding-right: 32px;
+          }
+        }
+      `}</style>
+    </div>
   );
 }
-
-FilterBox.propTypes = {
-  country: PropTypes.oneOfType([PropTypes.string, PropTypes.arrayOf(PropTypes.string)]).isRequired,
-  setCountry: PropTypes.func.isRequired,
-  type: PropTypes.string.isRequired,
-  setType: PropTypes.func.isRequired,
-  rating: PropTypes.oneOfType([PropTypes.string, PropTypes.arrayOf(PropTypes.string)]).isRequired,
-  setRating: PropTypes.func.isRequired,
-  genre: PropTypes.oneOfType([PropTypes.string, PropTypes.arrayOf(PropTypes.string)]).isRequired,
-  setGenre: PropTypes.func.isRequired,
-  year: PropTypes.oneOfType([PropTypes.string, PropTypes.arrayOf(PropTypes.string)]).isRequired,
-  setYear: PropTypes.func.isRequired,
-  inputYear: PropTypes.string.isRequired,
-  setInputYear: PropTypes.func.isRequired,
-  sort: PropTypes.string.isRequired,
-  setSort: PropTypes.func.isRequired,
-  onClose: PropTypes.func.isRequired,
-  onFilter: PropTypes.func
-}; 

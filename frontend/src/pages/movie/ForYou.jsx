@@ -112,7 +112,7 @@ export default function ForYou() {
         )}
 
         {loading ? (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 md:gap-6">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 sm:gap-6">
             {Array.from({ length: 18 }).map((_, index) => (
               <MovieCardSkeleton key={index} />
             ))}
@@ -125,7 +125,7 @@ export default function ForYou() {
               </h1>
               <span className="text-sm text-text-secondary">{movies.length} phim</span>
             </div>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 md:gap-6">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 sm:gap-6 animate-in fade-in duration-500">
               {movies.map((movie) => (
                 <div key={movie.id} className="space-y-2">
                   <MovieCard
@@ -142,15 +142,15 @@ export default function ForYou() {
             </div>
           </div>
         ) : (
-          <div className="rounded-3xl border border-white/10 bg-white/[0.03] px-6 py-16 text-center">
+          <div className="rounded-3xl border border-white/5 bg-white/[0.02] px-6 py-24 text-center animate-in fade-in zoom-in-95">
             <h1 className="text-2xl font-black">Chưa có gợi ý phù hợp</h1>
-            <p className="mx-auto mt-3 max-w-xl text-text-secondary">
-              Hãy xem vài phim, thêm vào yêu thích hoặc danh sách để hệ thống chọn phim sát gu hơn.
+            <p className="mx-auto mt-3 max-w-xl text-text-secondary text-base">
+              Hãy xem vài phim, thêm vào yêu thích hoặc danh sách để hệ thống hiểu gu của bạn hơn.
             </p>
             <button
               type="button"
               onClick={() => navigate('/movies')}
-              className="mt-6 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-red-600"
+              className="mt-6 rounded-full bg-primary px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-red-600 shadow-lg shadow-primary/25"
             >
               Khám phá kho phim
             </button>

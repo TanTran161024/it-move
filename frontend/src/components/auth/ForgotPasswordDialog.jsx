@@ -1,11 +1,11 @@
-import { Alert, Button, Dialog, IconButton, InputAdornment, TextField } from '@mui/material';
+import { Alert, Dialog, IconButton, InputAdornment } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { useState } from 'react';
 import axios from 'axios';
 import { API_BASE_URL as API } from '../../config/api';
-import './AuthStyles.css';
 
 export default function ForgotPasswordDialog({ open, onClose, onLogin }) {
   const [email, setEmail] = useState('');
@@ -81,189 +81,220 @@ export default function ForgotPasswordDialog({ open, onClose, onLogin }) {
   };
 
   const stepIndex = step === 'email' ? 0 : step === 'reset' ? 1 : 2;
-  const stepLabels = ['Nhập email', 'Đặt mật khẩu mới', 'Hoàn tất'];
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth={false} PaperProps={{ className: 'auth-dialog-paper' }}>
-      <div className="auth-dialog-shell compact">
-        <section className="auth-dialog-visual">
-          <div className="auth-brand">
-            <span className="auth-brand-mark">▶</span>
-            <span>IT Move</span>
+    <Dialog 
+      open={open} 
+      onClose={handleClose} 
+      maxWidth="xs" 
+      fullWidth
+      PaperProps={{ 
+        sx: { 
+          background: 'transparent', 
+          boxShadow: 'none',
+          overflow: 'visible',
+          m: 2
+        } 
+      }}
+    >
+      <div className="bg-[#141414]/95 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden text-white">
+        {/* Background glow */}
+        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+        <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary/20 rounded-full blur-[60px] pointer-events-none" />
+
+        <IconButton 
+          onClick={handleClose} 
+          className="!absolute !top-4 !right-4 !text-white/50 hover:!text-white hover:!bg-white/10 transition-colors"
+          size="small"
+        >
+          <CloseIcon fontSize="small" />
+        </IconButton>
+
+        <div className="flex flex-col items-center mb-6">
+          <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center shadow-[0_0_20px_rgba(229,9,20,0.4)] mb-4">
+            <PlayArrowIcon className="text-white" />
           </div>
-          <h2 className="auth-visual-title">Lấy lại quyền truy cập tài khoản</h2>
-          <p className="auth-visual-text">Nhận mã OTP qua email và đặt mật khẩu mới chỉ trong vài bước.</p>
-        </section>
+          <h2 className="text-2xl font-black text-white tracking-wide">Quên mật khẩu</h2>
+          <p className="text-text-secondary text-sm mt-2 text-center">Lấy lại quyền truy cập tài khoản</p>
+        </div>
 
-        <main className="auth-dialog-panel">
-          <IconButton onClick={handleClose} className="auth-close" aria-label="Đóng">
-            <CloseIcon />
-          </IconButton>
-          <div className="auth-eyebrow">Bảo mật</div>
-          <h2 className="auth-title">Quên mật khẩu</h2>
-          <p className="auth-switch">
-            Đã nhớ mật khẩu?{' '}
-            <button type="button" className="auth-link" onClick={onLogin}>Đăng nhập</button>
-          </p>
-
-          {/* Step Indicator */}
-          <div className="auth-steps">
-            {[0, 1, 2].map((i) => (
+        {/* Step Indicator */}
+        <div className="flex items-center justify-center gap-2 mb-8">
+          {[0, 1, 2].map((i) => (
+            <div className="flex items-center gap-2" key={i}>
               <div
-                key={i}
-                className={`auth-step-dot ${i === stepIndex ? 'active' : ''} ${i < stepIndex ? 'done' : ''}`}
+                className={`w-2.5 h-2.5 rounded-full transition-all ${
+                  i === stepIndex 
+                    ? 'bg-primary ring-4 ring-primary/20' 
+                    : i < stepIndex 
+                      ? 'bg-primary/50' 
+                      : 'bg-white/10'
+                }`}
               />
-            ))}
-            <span className="auth-step-label">{stepLabels[stepIndex]}</span>
+              {i < 2 && <div className={`w-8 h-[2px] rounded-full transition-all ${i < stepIndex ? 'bg-primary/50' : 'bg-white/10'}`} />}
+            </div>
+          ))}
+        </div>
+
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-xl mb-6 text-sm font-medium">
+            {error}
           </div>
+        )}
+        {message && (
+          <div className="bg-green-500/10 border border-green-500/50 text-green-400 px-4 py-3 rounded-xl mb-6 text-sm font-medium">
+            {message}
+          </div>
+        )}
 
-          {error && <Alert severity="error" className="auth-alert" style={{ marginBottom: 16 }}>{error}</Alert>}
-          {message && <Alert severity="success" className="auth-alert" style={{ marginBottom: 16 }}>{message}</Alert>}
-
-          {step === 'email' && (
-            <form className="auth-form auth-fade-in" onSubmit={handleForgot}>
-              <TextField
-                className="auth-field"
-                label="Email đăng ký"
+        {step === 'email' && (
+          <form onSubmit={handleForgot} className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4">
+            <div className="relative group">
+              <input
                 type="email"
-                fullWidth
-                variant="filled"
+                id="dialog-forgot-email"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 pt-6 pb-2 text-white focus:outline-none focus:border-primary focus:bg-white/10 transition-all peer"
+                placeholder=" "
                 autoComplete="email"
                 disabled={submitting}
               />
-              <Button
+              <label
+                htmlFor="dialog-forgot-email"
+                className="absolute left-4 top-4 text-text-secondary text-sm transition-all peer-focus:text-[11px] peer-focus:top-2 peer-focus:text-white/70 peer-[:not(:placeholder-shown)]:text-[11px] peer-[:not(:placeholder-shown)]:top-2 pointer-events-none"
+              >
+                Email đăng ký
+              </label>
+            </div>
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full bg-primary hover:bg-primary/90 text-white font-bold py-3.5 rounded-xl transition-all shadow-[0_4px_14px_rgba(229,9,20,0.3)] hover:shadow-[0_6px_20px_rgba(229,9,20,0.4)] disabled:opacity-50 mt-2 flex items-center justify-center gap-2"
+            >
+              {submitting && <span className="inline-block w-4 h-4 border-2 border-white/25 border-t-white rounded-full animate-spin" />}
+              {submitting ? 'Đang gửi...' : 'Gửi mã OTP'}
+            </button>
+          </form>
+        )}
+
+        {step === 'reset' && (
+          <form onSubmit={handleResetPassword} className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4">
+            <div className="relative group">
+              <input
+                type="text"
+                id="dialog-forgot-otp"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 pt-6 pb-2 text-white focus:outline-none focus:border-primary focus:bg-white/10 transition-all peer tracking-[0.2em] font-bold"
+                placeholder=" "
+                maxLength={6}
+                disabled={submitting}
+              />
+              <label
+                htmlFor="dialog-forgot-otp"
+                className="absolute left-4 top-4 text-text-secondary text-sm transition-all peer-focus:text-[11px] peer-focus:top-2 peer-focus:text-white/70 peer-[:not(:placeholder-shown)]:text-[11px] peer-[:not(:placeholder-shown)]:top-2 pointer-events-none"
+              >
+                Mã OTP (6 chữ số)
+              </label>
+            </div>
+
+            <div className="relative group">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                id="dialog-forgot-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 pt-6 pb-2 pr-12 text-white focus:outline-none focus:border-primary focus:bg-white/10 transition-all peer"
+                placeholder=" "
+                autoComplete="new-password"
+                disabled={submitting}
+              />
+              <label
+                htmlFor="dialog-forgot-password"
+                className="absolute left-4 top-4 text-text-secondary text-sm transition-all peer-focus:text-[11px] peer-focus:top-2 peer-focus:text-white/70 peer-[:not(:placeholder-shown)]:text-[11px] peer-[:not(:placeholder-shown)]:top-2 pointer-events-none"
+              >
+                Mật khẩu mới (Tối thiểu 6 ký tự)
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors p-1"
+                tabIndex={-1}
+              >
+                {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+              </button>
+            </div>
+
+            <div className="relative group">
+              <input
+                type={showConfirm ? 'text' : 'password'}
+                id="dialog-forgot-confirm"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 pt-6 pb-2 pr-12 text-white focus:outline-none focus:border-primary focus:bg-white/10 transition-all peer"
+                placeholder=" "
+                autoComplete="new-password"
+                disabled={submitting}
+              />
+              <label
+                htmlFor="dialog-forgot-confirm"
+                className="absolute left-4 top-4 text-text-secondary text-sm transition-all peer-focus:text-[11px] peer-focus:top-2 peer-focus:text-white/70 peer-[:not(:placeholder-shown)]:text-[11px] peer-[:not(:placeholder-shown)]:top-2 pointer-events-none"
+              >
+                Nhập lại mật khẩu mới
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowConfirm((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors p-1"
+                tabIndex={-1}
+              >
+                {showConfirm ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+              </button>
+            </div>
+
+            <div className="flex gap-2 mt-2">
+              <button
                 type="submit"
                 disabled={submitting}
-                className="auth-primary-btn"
-                variant="contained"
-                fullWidth
+                className="flex-[2] bg-primary hover:bg-primary/90 text-white font-bold py-3.5 rounded-xl transition-all shadow-[0_4px_14px_rgba(229,9,20,0.3)] hover:shadow-[0_6px_20px_rgba(229,9,20,0.4)] disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {submitting && <span className="auth-loading-spinner" />}
-                {submitting ? 'Đang gửi...' : 'Gửi mã OTP'}
-              </Button>
-            </form>
-          )}
-
-          {step === 'reset' && (
-            <form className="auth-form auth-fade-in" onSubmit={handleResetPassword}>
-              <TextField
-                className="auth-field"
-                label="Email"
-                fullWidth
-                variant="filled"
-                value={email}
-                disabled
-              />
-              <TextField
-                className="auth-field auth-otp-input"
-                label="Mã OTP"
-                fullWidth
-                variant="filled"
-                value={otp}
-                onChange={(event) => setOtp(event.target.value)}
+                {submitting && <span className="inline-block w-4 h-4 border-2 border-white/25 border-t-white rounded-full animate-spin" />}
+                {submitting ? 'Đang lưu...' : 'Đặt lại mật khẩu'}
+              </button>
+              <button
+                type="button"
+                onClick={handleForgot}
                 disabled={submitting}
-                inputProps={{ maxLength: 6 }}
-              />
-              <TextField
-                className="auth-field"
-                label="Mật khẩu mới"
-                type={showPassword ? 'text' : 'password'}
-                fullWidth
-                variant="filled"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete="new-password"
-                disabled={submitting}
-                helperText="Tối thiểu 6 ký tự"
-                slotProps={{
-                  input: {
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          onClick={() => setShowPassword((prev) => !prev)}
-                          edge="end"
-                          aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-                          tabIndex={-1}
-                        >
-                          {showPassword ? <VisibilityOff /> : <Visibility />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  },
-                  formHelperText: {
-                    sx: { color: 'rgba(255,255,255,0.35)', ml: 0.5 },
-                  },
-                }}
-              />
-              <TextField
-                className="auth-field"
-                label="Nhập lại mật khẩu mới"
-                type={showConfirm ? 'text' : 'password'}
-                fullWidth
-                variant="filled"
-                value={confirmPassword}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                autoComplete="new-password"
-                disabled={submitting}
-                slotProps={{
-                  input: {
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          onClick={() => setShowConfirm((prev) => !prev)}
-                          edge="end"
-                          aria-label={showConfirm ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-                          tabIndex={-1}
-                        >
-                          {showConfirm ? <VisibilityOff /> : <Visibility />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-              />
-              <div className="auth-actions-row">
-                <Button
-                  type="submit"
-                  disabled={submitting}
-                  className="auth-primary-btn"
-                  variant="contained"
-                  fullWidth
-                >
-                  {submitting && <span className="auth-loading-spinner" />}
-                  {submitting ? 'Đang lưu...' : 'Đặt lại mật khẩu'}
-                </Button>
-                <Button
-                  type="button"
-                  disabled={submitting}
-                  className="auth-secondary-btn"
-                  variant="outlined"
-                  onClick={handleForgot}
-                >
-                  Gửi lại OTP
-                </Button>
-              </div>
-            </form>
-          )}
-
-          {step === 'done' && (
-            <div className="auth-form auth-fade-in">
-              <Alert severity="success" className="auth-alert">
-                Mật khẩu đã được đặt lại thành công. Bạn có thể đăng nhập với mật khẩu mới.
-              </Alert>
-              <Button
-                className="auth-primary-btn"
-                variant="contained"
-                fullWidth
-                onClick={onLogin}
+                className="flex-1 bg-transparent hover:bg-white/5 text-white/70 hover:text-white font-semibold py-3.5 rounded-xl transition-all border border-white/15 disabled:opacity-50 text-sm"
               >
-                Đăng nhập ngay
-              </Button>
+                Gửi lại OTP
+              </button>
             </div>
-          )}
-        </main>
+          </form>
+        )}
+
+        {step === 'done' && (
+          <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4">
+            <button
+              type="button"
+              onClick={onLogin}
+              className="w-full bg-primary hover:bg-primary/90 text-white font-bold py-3.5 rounded-xl transition-all shadow-[0_4px_14px_rgba(229,9,20,0.3)] hover:shadow-[0_6px_20px_rgba(229,9,20,0.4)] mt-2"
+            >
+              Đăng nhập ngay
+            </button>
+          </div>
+        )}
+
+        {step === 'email' && (
+          <p className="mt-6 text-center text-text-secondary text-sm">
+            Đã nhớ mật khẩu?{' '}
+            <button type="button" onClick={onLogin} className="text-white hover:text-primary font-bold transition-colors">
+              Đăng nhập
+            </button>
+          </p>
+        )}
       </div>
     </Dialog>
   );

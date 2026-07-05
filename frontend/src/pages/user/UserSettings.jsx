@@ -82,9 +82,9 @@ function SectionCard({ icon, title, description, children, accent = 'rgba(229,9,
   const IconComponent = icon;
 
   return (
-    <section className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.045] shadow-[0_24px_70px_rgba(0,0,0,0.30)] backdrop-blur-xl">
-      <div className="relative border-b border-white/[0.07] px-4 py-5 sm:px-6">
-        <div className="absolute -right-12 -top-14 h-32 w-32 rounded-full blur-3xl" style={{ background: accent, opacity: 0.22 }} />
+    <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-xl backdrop-blur-xl">
+      <div className="relative border-b border-white/10 px-4 py-5 sm:px-6">
+        <div className="absolute -right-12 -top-14 h-32 w-32 rounded-full blur-3xl" style={{ background: accent, opacity: 0.15 }} />
         <div className="relative flex items-start gap-4">
           <span className="grid h-12 w-12 flex-shrink-0 place-items-center rounded-2xl border border-white/10 bg-black/35 text-white">
             <IconComponent sx={{ fontSize: 23 }} />
@@ -147,9 +147,9 @@ function ProfileHero({ activeProfile, user, playerSettings }) {
   const avatarColor = activeProfile.avatar_color || '#E50914';
 
   return (
-    <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(135deg,rgba(229,9,20,0.20),rgba(255,255,255,0.045)_42%,rgba(45,212,143,0.12))] p-5 shadow-[0_30px_80px_rgba(0,0,0,0.36)] md:p-7">
+    <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl md:p-7">
       <div className="absolute -left-20 -top-24 h-56 w-56 rounded-full bg-primary/25 blur-3xl" />
-      <div className="absolute -bottom-20 right-0 h-52 w-52 rounded-full bg-emerald-400/15 blur-3xl" />
+      <div className="absolute -bottom-20 right-0 h-52 w-52 rounded-full bg-primary/10 blur-3xl" />
       <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-4 md:gap-5">
           {avatar ? (
@@ -323,7 +323,7 @@ export default function UserSettings() {
   }, [status]);
 
   return (
-    <div className="min-h-screen bg-background pb-12 pt-24">
+    <div className="min-h-screen bg-black pb-12 pt-24 text-white">
       <div className="container mx-auto flex max-w-7xl flex-col gap-8 px-4 md:px-8 lg:flex-row">
         <ProfileSidebar user={user} />
 

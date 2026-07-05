@@ -5,35 +5,35 @@
 
 :root,
 html[data-admin-theme='dark'] {
-  --admin-bg: #11141a;
-  --admin-bg-soft: #171b23;
-  --admin-sidebar: #151922;
-  --admin-surface: #1b2029;
-  --admin-card: #202631;
-  --admin-card-hover: #252c38;
-  --admin-input-bg: #171c25;
-  --admin-border: rgba(226, 232, 240, 0.12);
-  --admin-border-strong: rgba(226, 232, 240, 0.22);
-  --admin-text: #d8dee9;
-  --admin-text-strong: #f4f6f9;
-  --admin-text-muted: #9aa4b2;
-  --admin-text-soft: #bcc5d1;
-  --admin-accent: #4f6f9f;
-  --admin-accent-hover: #5f7fad;
-  --admin-accent-soft: rgba(79, 111, 159, 0.18);
-  --admin-danger: #c85b5b;
-  --admin-danger-soft: rgba(200, 91, 91, 0.13);
-  --admin-success: #5f9b7a;
-  --admin-success-soft: rgba(95, 155, 122, 0.13);
-  --admin-warning: #b38952;
-  --admin-warning-soft: rgba(179, 137, 82, 0.14);
-  --admin-info: #668aa8;
-  --admin-info-soft: rgba(102, 138, 168, 0.14);
-  --admin-shadow: 0 16px 32px rgba(0, 0, 0, 0.18);
-  --admin-shadow-soft: 0 8px 18px rgba(0, 0, 0, 0.12);
-  --admin-sidebar-w: 280px;
-  --admin-mini-w: 68px;
-  --admin-radius: 12px;
+  --admin-bg: #000000;
+  --admin-bg-soft: #0a0a0a;
+  --admin-sidebar: rgba(10, 10, 10, 0.95);
+  --admin-surface: rgba(255, 255, 255, 0.03);
+  --admin-card: rgba(255, 255, 255, 0.04);
+  --admin-card-hover: rgba(255, 255, 255, 0.08);
+  --admin-input-bg: rgba(255, 255, 255, 0.05);
+  --admin-border: rgba(255, 255, 255, 0.1);
+  --admin-border-strong: rgba(255, 255, 255, 0.2);
+  --admin-text: #e5e5e5;
+  --admin-text-strong: #ffffff;
+  --admin-text-muted: #999999;
+  --admin-text-soft: #b3b3b3;
+  --admin-accent: #e50914;
+  --admin-accent-hover: #f40612;
+  --admin-accent-soft: rgba(229, 9, 20, 0.15);
+  --admin-danger: #ef4444;
+  --admin-danger-soft: rgba(239, 68, 68, 0.15);
+  --admin-success: #22c55e;
+  --admin-success-soft: rgba(34, 197, 94, 0.15);
+  --admin-warning: #f59e0b;
+  --admin-warning-soft: rgba(245, 158, 11, 0.15);
+  --admin-info: #3b82f6;
+  --admin-info-soft: rgba(59, 130, 246, 0.15);
+  --admin-shadow: 0 16px 32px rgba(0, 0, 0, 0.6);
+  --admin-shadow-soft: 0 8px 18px rgba(0, 0, 0, 0.4);
+  --admin-sidebar-w: 260px;
+  --admin-mini-w: 72px;
+  --admin-radius: 16px;
   --admin-radius-sm: 8px;
 }
 
@@ -51,9 +51,9 @@ html[data-admin-theme='light'] {
   --admin-text-strong: #020617;
   --admin-text-muted: #64748b;
   --admin-text-soft: #334155;
-  --admin-accent: #3f5f8b;
-  --admin-accent-hover: #304d76;
-  --admin-accent-soft: rgba(63, 95, 139, 0.12);
+  --admin-accent: #e50914;
+  --admin-accent-hover: #f40612;
+  --admin-accent-soft: rgba(229, 9, 20, 0.12);
   --admin-danger: #b54747;
   --admin-danger-soft: rgba(181, 71, 71, 0.1);
   --admin-success: #407b5b;
@@ -408,6 +408,8 @@ html[data-admin-theme='light'] {
   padding: 22px;
   margin-bottom: 22px;
   box-shadow: var(--admin-shadow-soft);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 .admin-panel-title {
@@ -752,6 +754,8 @@ html[data-admin-theme='light'] {
   border: 1px solid var(--admin-border);
   border-radius: 18px !important;
   box-shadow: var(--admin-shadow) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
 }
 
 .admin-dialog .MuiDialogTitle-root,

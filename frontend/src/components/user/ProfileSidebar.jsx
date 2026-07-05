@@ -41,7 +41,7 @@ export default function ProfileSidebar({ user = {}, profile = {} }) {
 
   return (
     <aside className="w-full flex-shrink-0 lg:w-72">
-      <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.35)] backdrop-blur-xl lg:sticky lg:top-24 lg:p-6">
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-xl backdrop-blur-lg lg:sticky lg:top-24 lg:p-6">
         <div className="mb-4 text-lg font-bold text-white lg:mb-6">Quản lý tài khoản</div>
         <div className="mb-5 flex items-center gap-4 lg:mb-8 lg:flex-col lg:gap-0">
           {avatar ? (
@@ -68,9 +68,9 @@ export default function ProfileSidebar({ user = {}, profile = {} }) {
               <button
                 type="button"
                 key={item.path}
-                className={`flex min-h-11 items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm font-bold transition-colors lg:gap-3 lg:px-4 lg:py-3 lg:text-base ${
+                className={`flex min-h-11 items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm font-bold transition-all duration-300 lg:gap-3 lg:px-4 lg:py-3 lg:text-base ${
                   isActive
-                    ? 'border-white/10 bg-white/10 text-white shadow-lg'
+                    ? 'border-primary/50 bg-primary/10 text-primary shadow-[0_0_15px_rgba(229,9,20,0.15)]'
                     : 'border-transparent text-text-secondary hover:bg-white/5 hover:text-white'
                 }`}
                 onClick={() => navigate(item.path)}

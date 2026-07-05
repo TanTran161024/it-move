@@ -1,26 +1,128 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import InlineIcon from '../common/InlineIcon';
 import { FALLBACK_POSTER, safePosterUrl } from '../../utils/imageFallbacks';
 import { MovieRatingBadge } from './MovieCard';
+import { API_BASE_URL as API } from '../../config/api';
 
-const MAX_VISIBLE = 8;
-const POSTER_WIDTH = 200 + 24; // 200px width + 24px gap
+const MAX_VISIBLE = 10;
+const POSTER_WIDTH = 160 + 16; // 160px width + 16px gap
 
 function resizeTmdbImage(url, size) {
   const safeUrl = safePosterUrl(url);
   return safeUrl.replace('/t/p/original/', `/t/p/${size}/`);
 }
 
+function getTrailerUrl(movie) {
+  return String(movie?.trailer_url || movie?.trailerUrl || movie?.trailer || '').trim();
+}
+
+function getYoutubeVideoId(url) {
+  const value = String(url || '').trim();
+  if (!value) return '';
+
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.replace(/^www\./, '');
+    const parts = parsed.pathname.split('/').filter(Boolean);
+
+    if (host === 'youtu.be') return parts[0] || '';
+    if (host.endsWith('youtube.com')) {
+      if (parsed.searchParams.get('v')) return parsed.searchParams.get('v');
+      if (parts[0] === 'embed' || parts[0] === 'shorts') return parts[1] || '';
+    }
+  } catch {
+    const watchMatch = value.match(/[?&]v=([^?&/]+)/i);
+    const shortMatch = value.match(/youtu\.be\/([^?&/]+)/i);
+    const embedMatch = value.match(/youtube\.com\/(?:embed|shorts)\/([^?&/]+)/i);
+    return watchMatch?.[1] || shortMatch?.[1] || embedMatch?.[1] || '';
+  }
+
+  return '';
+}
+
+function isDirectVideoUrl(url) {
+  return /\.(mp4|webm|ogg)(\?.*)?$/i.test(String(url || ''));
+}
+
+function getTrailerEmbedUrl(url, muted) {
+  const value = String(url || '').trim();
+  if (!value) return '';
+
+  const youtubeId = getYoutubeVideoId(value);
+  if (youtubeId) {
+    const params = new URLSearchParams({
+      autoplay: '1',
+      controls: '0',
+      modestbranding: '1',
+      playsinline: '1',
+      rel: '0',
+      mute: muted ? '1' : '0',
+    });
+    return `https://www.youtube.com/embed/${youtubeId}?${params.toString()}`;
+  }
+
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.replace(/^www\./, '');
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    if (host.endsWith('vimeo.com') && parts[0]) {
+      return `https://player.vimeo.com/video/${parts[0]}?autoplay=1&muted=${muted ? 1 : 0}&controls=0`;
+    }
+  } catch {
+    // Non-URL values fall through to direct video detection.
+  }
+
+  return isDirectVideoUrl(value) ? value : '';
+}
+
+function getEpisodePreviewUrl(movie) {
+  const episode = Array.isArray(movie?.episodes) ? movie.episodes[0] : null;
+  return String(
+    movie?.preview_video_url
+      || movie?.previewVideoUrl
+      || movie?.video_url
+      || movie?.videoUrl
+      || episode?.video_url
+      || episode?.videoUrl
+      || ''
+  ).trim();
+}
+
+function getPreviewSource(movie, muted) {
+  const trailerUrl = getTrailerUrl(movie);
+  const trailerEmbedUrl = getTrailerEmbedUrl(trailerUrl, muted);
+
+  if (trailerEmbedUrl) {
+    return {
+      type: isDirectVideoUrl(trailerEmbedUrl) ? 'video' : 'iframe',
+      url: trailerEmbedUrl,
+    };
+  }
+
+  const episodeUrl = getEpisodePreviewUrl(movie);
+  if (!episodeUrl) return null;
+
+  return {
+    type: isDirectVideoUrl(episodeUrl) ? 'video' : 'iframe',
+    url: episodeUrl,
+  };
+}
+
 export default function MovieSlider({ movies, title, categoryId, categoryName }) {
   const [startIndex, setStartIndex] = useState(0);
   const [hovered, setHovered] = useState(null);
   const [popupPos, setPopupPos] = useState(null);
-  const [popupOpen, setPopupOpen] = useState(false);
+  const [pinnedPreview, setPinnedPreview] = useState(false);
+  const [previewExtras, setPreviewExtras] = useState({});
+  const [previewLoadingId, setPreviewLoadingId] = useState(null);
   const [isMuted, setIsMuted] = useState(true);
   const hoverTimeout = useRef();
   const sliderRef = useRef();
+  const popupRef = useRef(null);
   const posterRefs = useRef([]);
+  const didDragRef = useRef(false);
+  const previewRequestIds = useRef(new Set());
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartX, setDragStartX] = useState(0);
   const [dragDelta, setDragDelta] = useState(0);
@@ -29,7 +131,7 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
   const [visibleCount, setVisibleCount] = useState(MAX_VISIBLE);
   const navigate = useNavigate();
 
-  const MAX_POSTERS = 8;
+  const MAX_POSTERS = 12;
   const displayMovies = movies.slice(-MAX_POSTERS);
 
   const handlePrev = () => setStartIndex(i => Math.max(0, i - 1));
@@ -45,35 +147,78 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
     }
   };
 
+  const closePreview = useCallback(() => {
+    clearTimeout(hoverTimeout.current);
+    setPinnedPreview(false);
+    setHovered(null);
+    setPopupPos(null);
+  }, []);
+
+  const updatePopupPosition = (idx) => {
+    if (!posterRefs.current[idx] || !sliderRef.current) return;
+
+    const posterRect = posterRefs.current[idx].getBoundingClientRect();
+    const sliderRect = sliderRef.current.getBoundingClientRect();
+    const popupWidth = 350;
+    let left = posterRect.left - sliderRect.left + posterRect.width / 2 - popupWidth / 2;
+    left = Math.max(0, Math.min(left, sliderRect.width - popupWidth));
+    const top = posterRect.top - sliderRect.top - 100;
+    setPopupPos({ left, top });
+  };
+
+  const loadPreviewFallback = (movie) => {
+    const movieId = movie?.id;
+    if (!movieId || getTrailerUrl(movie) || previewRequestIds.current.has(movieId)) return;
+
+    previewRequestIds.current.add(movieId);
+    setPreviewLoadingId(movieId);
+
+    fetch(`${API}/api/movies/${movieId}/episodes`)
+      .then((response) => (response.ok ? response.json() : []))
+      .then((episodes) => {
+        setPreviewExtras((current) => ({
+          ...current,
+          [movieId]: {
+            episodes: Array.isArray(episodes) ? episodes : [],
+          },
+        }));
+      })
+      .catch(() => {})
+      .finally(() => {
+        setPreviewLoadingId((current) => (current === movieId ? null : current));
+      });
+  };
+
+  const openPreview = (idx, pinned = false) => {
+    clearTimeout(hoverTimeout.current);
+    const movie = displayMovies[idx];
+    if (!movie) return;
+
+    setHovered(idx);
+    setPinnedPreview(pinned);
+    updatePopupPosition(idx);
+    loadPreviewFallback(movie);
+  };
+
   const handleMouseEnter = (idx) => {
     hoverTimeout.current = setTimeout(() => {
-      setHovered(idx);
-      setPopupOpen(true);
-      if (posterRefs.current[idx] && sliderRef.current) {
-        const posterRect = posterRefs.current[idx].getBoundingClientRect();
-        const sliderRect = sliderRef.current.getBoundingClientRect();
-        const popupWidth = 350;
-        let left = posterRect.left - sliderRect.left + posterRect.width / 2 - popupWidth / 2;
-        left = Math.max(0, Math.min(left, sliderRect.width - popupWidth));
-        const top = posterRect.top - sliderRect.top - 100; // Float above
-        setPopupPos({ left, top });
-      }
-    }, 600); // Wait 600ms before popup
+      openPreview(idx, false);
+    }, 600);
   };
 
   const handleMouseLeave = () => {
+    if (pinnedPreview) return;
     clearTimeout(hoverTimeout.current);
-    setTimeout(() => {
-      if (!popupOpen) {
+    window.setTimeout(() => {
+      if (!popupRef.current?.matches(':hover')) {
         setHovered(null);
         setPopupPos(null);
       }
-    }, 100);
+    }, 120);
   };
 
-  const handlePopupEnter = () => setPopupOpen(true);
   const handlePopupLeave = () => {
-    setPopupOpen(false);
+    if (pinnedPreview) return;
     setHovered(null);
     setPopupPos(null);
   };
@@ -82,6 +227,7 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
     setIsDragging(true);
     setDragStartX(e.type === 'touchstart' ? e.touches[0].clientX : e.clientX);
     dragStartIndex.current = startIndex;
+    didDragRef.current = false;
     setDragDelta(0);
   };
 
@@ -89,6 +235,7 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
     if (!isDragging) return;
     const clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
     let dx = clientX - dragStartX;
+    if (Math.abs(dx) > 8) didDragRef.current = true;
     const maxLeft = 0;
     const maxRight = -((displayMovies.length - visibleCount) * POSTER_WIDTH);
     const currentOffset = -startIndex * POSTER_WIDTH + dx;
@@ -106,6 +253,9 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
     setStartIndex(newIndex);
     setIsDragging(false);
     setDragDelta(0);
+    window.setTimeout(() => {
+      didDragRef.current = false;
+    }, 0);
   };
 
   useEffect(() => {
@@ -125,7 +275,40 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
     }
   }, [visibleCount, displayMovies.length, startIndex]);
 
+  useEffect(() => {
+    if (!pinnedPreview) return undefined;
+
+    const handlePointerDown = (event) => {
+      const popupNode = popupRef.current;
+      const posterNode = hovered !== null ? posterRefs.current[hovered] : null;
+
+      if (popupNode?.contains(event.target) || posterNode?.contains(event.target)) return;
+      closePreview();
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') closePreview();
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [closePreview, hovered, pinnedPreview]);
+
   const canScroll = displayMovies.length > visibleCount;
+  const previewBaseMovie = hovered !== null ? displayMovies[hovered] : null;
+  const previewExtra = previewBaseMovie?.id ? previewExtras[previewBaseMovie.id] : null;
+  const previewMovie = previewBaseMovie ? {
+    ...previewBaseMovie,
+    ...previewExtra,
+    episodes: previewExtra?.episodes || previewBaseMovie.episodes,
+  } : null;
+  const previewSource = getPreviewSource(previewMovie, isMuted);
+  const previewIsLoading = Boolean(previewMovie?.id && previewLoadingId === previewMovie.id);
 
   return (
     <div
@@ -174,7 +357,7 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
         <div
           ref={sliderRef}
           className="overflow-hidden w-full relative touch-pan-y"
-          style={{ width: `${visibleCount * POSTER_WIDTH}px`, maxWidth: '100vw', cursor: isDragging && canScroll ? 'grabbing' : canScroll ? 'grab' : 'default' }}
+          style={{ cursor: isDragging && canScroll ? 'grabbing' : canScroll ? 'grab' : 'default' }}
           onMouseDown={canScroll ? handleDragStart : undefined}
           onMouseMove={canScroll ? handleDragMove : undefined}
           onMouseUp={canScroll ? handleDragEnd : undefined}
@@ -184,7 +367,7 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
           onTouchEnd={canScroll ? handleDragEnd : undefined}
         >
           <div
-            className="flex gap-6"
+            className="flex gap-4"
             style={{
               transition: isDragging ? 'transform 0.15s ease-out' : 'transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)',
               transform: `translateX(-${canScroll ? (startIndex * POSTER_WIDTH - dragDelta) : 0}px)`,
@@ -197,13 +380,20 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
               return (
               <div
                 key={movie.id || idx}
-                className="relative flex-shrink-0 group/card w-[200px]"
+                className="relative flex-shrink-0 group/card w-[160px]"
                 onMouseEnter={() => handleMouseEnter(idx)}
                 onMouseLeave={handleMouseLeave}
                 ref={el => posterRefs.current[idx] = el}
               >
-                <div className="relative overflow-hidden rounded-2xl aspect-[2/3] shadow-[0_4px_20px_rgba(0,0,0,0.3)] transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] group-hover/card:scale-[1.12] group-hover/card:shadow-[0_20px_40px_rgba(0,0,0,0.6)] group-hover/card:-translate-y-2 bg-surface ring-1 ring-white/5 group-hover/card:ring-white/20 cursor-pointer" onClick={() => navigate(`/watch/${movie.id}`)}>
-                  <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-500 z-10 pointer-events-none mix-blend-overlay" />
+                <div
+                  className="relative overflow-hidden rounded-xl aspect-[2/3] shadow-[0_4px_20px_rgba(0,0,0,0.3)] transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] group-hover/card:scale-[1.05] group-hover/card:shadow-[0_10px_30px_rgba(229,9,20,0.3)] bg-section ring-1 ring-white/5 group-hover/card:ring-primary/60 cursor-pointer"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (didDragRef.current) return;
+                    openPreview(idx, true);
+                  }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 z-10 pointer-events-none mix-blend-overlay" />
                   <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-br from-white/10 via-white/[0.03] to-black px-3 py-4 pointer-events-none">
                     <div className="line-clamp-2 text-sm font-bold text-white/70">{movie.title || 'Đang tải poster'}</div>
                     {movie.originalTitle && (
@@ -222,15 +412,15 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
                   />
                   <MovieRatingBadge rating={movie.imdb_rating} />
                   {/* Play Button Overlay */}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 flex items-center justify-center z-20">
-                    <div className="w-12 h-12 rounded-full border-2 border-primary bg-primary/20 flex items-center justify-center backdrop-blur-sm text-primary group-hover/card:scale-110 transition-transform shadow-[0_0_15px_rgba(79,70,229,0.5)]">
-                      <svg className="w-6 h-6 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 flex items-center justify-center z-20 backdrop-blur-[1px] pointer-events-none">
+                    <div className="w-12 h-12 rounded-full border-2 border-white bg-primary flex items-center justify-center text-white group-hover/card:scale-110 transition-all shadow-lg hover:bg-white hover:text-primary hover:border-primary">
+                      <svg className="w-6 h-6 ml-1 drop-shadow-md" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-3 text-center px-1">
-                  <h3 className="text-white font-medium text-sm line-clamp-1 group-hover/card:text-primary transition-colors cursor-pointer" onClick={() => navigate(`/movies/${movie.id}`)}>
+                <div className="mt-3 px-1">
+                  <h3 className="text-white font-bold text-sm line-clamp-1 group-hover/card:text-primary transition-colors cursor-pointer" onClick={() => navigate(`/movies/${movie.id}`)}>
                     {movie.title}
                   </h3>
                   <p className="text-text-secondary text-xs mt-0.5 line-clamp-1">
@@ -255,40 +445,71 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
           </button>
         )}
 
-        {/* Hover Popup */}
-        {hovered !== null && popupPos && displayMovies[hovered] && (
+        {/* Preview Popup */}
+        {hovered !== null && popupPos && previewMovie && (
           <div
-            className="absolute z-[100] w-[350px] bg-surface rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.8)] overflow-hidden border border-white/10 ring-1 ring-white/5 transition-opacity duration-200"
+            ref={popupRef}
+            className="absolute z-[100] w-[350px] overflow-hidden rounded-2xl border border-white/10 bg-surface shadow-[0_20px_60px_rgba(0,0,0,0.8)] ring-1 ring-white/5 transition-opacity duration-200"
             style={{ top: popupPos.top, left: popupPos.left }}
-            onMouseEnter={handlePopupEnter}
             onMouseLeave={handlePopupLeave}
           >
-            {/* Backdrop Image or Video */}
-            <div className="w-full aspect-video relative bg-black cursor-pointer group/popup-img overflow-hidden" onClick={() => navigate(`/watch/${displayMovies[hovered].id}`)}>
+            <div className="group/popup-img relative aspect-video w-full overflow-hidden bg-black">
               <img
-                src={resizeTmdbImage(displayMovies[hovered].backdrop || displayMovies[hovered].backdrop_url || displayMovies[hovered].poster_url || displayMovies[hovered].poster || FALLBACK_POSTER, 'w780')}
-                alt={displayMovies[hovered].title}
+                src={resizeTmdbImage(previewMovie.backdrop || previewMovie.backdrop_url || previewMovie.bg_url || previewMovie.poster_url || previewMovie.poster || FALLBACK_POSTER, 'w780')}
+                alt={previewMovie.title}
                 referrerPolicy="no-referrer"
                 onError={(e) => { e.currentTarget.src = FALLBACK_POSTER; }}
-                className={`w-full h-full object-cover transition-transform duration-700 group-hover/popup-img:scale-105 ${displayMovies[hovered].trailer_url ? 'opacity-0' : 'opacity-100'}`}
+                className={`h-full w-full object-cover transition-transform duration-700 group-hover/popup-img:scale-105 ${previewSource ? 'opacity-0' : 'opacity-100'}`}
               />
-              {displayMovies[hovered].trailer_url && (
+              {previewSource?.type === 'video' && (
                 <video
-                  src={displayMovies[hovered].trailer_url}
+                  key={previewSource.url}
+                  src={previewSource.url}
                   autoPlay
                   loop
                   muted={isMuted}
                   playsInline
-                  className="absolute inset-0 w-full h-full object-cover animate-fade-in"
+                  className="absolute inset-0 h-full w-full object-cover animate-fade-in"
                 />
               )}
-              <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-transparent to-transparent" />
-              
-              {/* Mute toggle */}
-              {displayMovies[hovered].trailer_url && (
+              {previewSource?.type === 'iframe' && (
+                <iframe
+                  key={previewSource.url}
+                  src={previewSource.url}
+                  title={`Preview ${previewMovie.title || ''}`}
+                  className="absolute inset-0 h-full w-full"
+                  allow="autoplay; encrypted-media; picture-in-picture; web-share"
+                  allowFullScreen
+                  referrerPolicy="strict-origin-when-cross-origin"
+                />
+              )}
+              {!previewSource && previewIsLoading && (
+                <div className="absolute inset-0 grid place-items-center bg-black/70">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/25 border-t-white" />
+                </div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-black/5 to-transparent pointer-events-none" />
+
+              {pinnedPreview && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); setIsMuted(!isMuted); }}
-                  className="absolute bottom-3 right-3 z-30 w-8 h-8 rounded-full bg-black/50 border border-white/20 text-white flex items-center justify-center hover:bg-black/80"
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    closePreview();
+                  }}
+                  className="absolute right-3 top-3 z-30 flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-black/55 text-white transition-colors hover:bg-black/80"
+                  aria-label="Dong preview"
+                >
+                  <span className="text-lg leading-none">×</span>
+                </button>
+              )}
+
+              {previewSource && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setIsMuted((value) => !value); }}
+                  className="absolute bottom-3 right-3 z-30 flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-black/50 text-white hover:bg-black/80"
+                  aria-label={isMuted ? 'Bat tieng preview' : 'Tat tieng preview'}
                 >
                   {isMuted ? (
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
@@ -299,54 +520,53 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
               )}
             </div>
 
-            {/* Content */}
             <div className="px-5 pb-5 pt-2 relative z-10">
-              <h3 className="text-lg font-bold text-white leading-tight mb-1">{displayMovies[hovered].title}</h3>
-              {/* Actions */}
+              <h3 className="text-lg font-bold text-white leading-tight mb-1">{previewMovie.title}</h3>
               <div className="flex gap-2.5 mb-4 mt-2">
                 <button 
-                  onClick={() => navigate(`/watch/${displayMovies[hovered].id}`)}
+                  type="button"
+                  onClick={() => navigate(`/watch/${previewMovie.id}`)}
                   className="w-10 h-10 bg-white hover:bg-white/80 text-black rounded-full flex items-center justify-center transition-transform hover:scale-110 shadow-md"
+                  aria-label="Xem phim"
                 >
                   <svg className="w-6 h-6 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                 </button>
-                <button className="w-10 h-10 rounded-full border-2 border-white/40 hover:border-white hover:bg-white/10 text-white flex items-center justify-center transition-all hover:scale-110">
+                <button type="button" className="w-10 h-10 rounded-full border-2 border-white/40 hover:border-white hover:bg-white/10 text-white flex items-center justify-center transition-all hover:scale-110" aria-label="Them vao danh sach">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
                 </button>
-                <button className="w-10 h-10 rounded-full border-2 border-white/40 hover:border-white hover:bg-white/10 text-white flex items-center justify-center transition-all hover:scale-110">
+                <button type="button" onClick={() => navigate(`/watch/${previewMovie.id}`)} className="w-10 h-10 rounded-full border-2 border-white/40 hover:border-white hover:bg-white/10 text-white flex items-center justify-center transition-all hover:scale-110" aria-label="Di toi phim">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
                 </button>
                 <div className="flex-1" />
-                <button onClick={() => navigate(`/movies/${displayMovies[hovered].id}`)} className="w-10 h-10 rounded-full border-2 border-white/40 hover:border-white hover:bg-white/10 text-white flex items-center justify-center transition-all hover:scale-110">
+                <button type="button" onClick={() => navigate(`/movies/${previewMovie.id}`)} className="w-10 h-10 rounded-full border-2 border-white/40 hover:border-white hover:bg-white/10 text-white flex items-center justify-center transition-all hover:scale-110" aria-label="Chi tiet phim">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
                 </button>
               </div>
 
               <div className="flex items-center gap-2 mb-3 text-xs font-semibold">
-                {displayMovies[hovered].imdb_rating && (
-                  <span className="text-green-400 font-bold">{Number(displayMovies[hovered].imdb_rating).toFixed(1)} Điểm</span>
+                {previewMovie.imdb_rating && (
+                  <span className="text-green-400 font-bold">{Number(previewMovie.imdb_rating).toFixed(1)} Điểm</span>
                 )}
-                {displayMovies[hovered].release_year && (
-                  <span className="text-white/70">{displayMovies[hovered].release_year}</span>
+                {previewMovie.release_year && (
+                  <span className="text-white/70">{previewMovie.release_year}</span>
                 )}
-                {displayMovies[hovered].age_limit && (
-                  <span className="px-1.5 border border-white/30 text-white/70 rounded">{displayMovies[hovered].age_limit}</span>
+                {previewMovie.age_limit && (
+                  <span className="px-1.5 border border-white/30 text-white/70 rounded">{previewMovie.age_limit}</span>
                 )}
-                {displayMovies[hovered].duration && (
-                  <span className="text-white/70">{displayMovies[hovered].duration}</span>
+                {previewMovie.duration && (
+                  <span className="text-white/70">{previewMovie.duration}</span>
                 )}
-                {displayMovies[hovered].quality && (
-                  <span className="border border-white/30 px-1 rounded text-white/90 uppercase text-[10px] tracking-wider">{displayMovies[hovered].quality}</span>
+                {previewMovie.quality && (
+                  <span className="border border-white/30 px-1 rounded text-white/90 uppercase text-[10px] tracking-wider">{previewMovie.quality}</span>
                 )}
               </div>
 
-              {/* Genres */}
-              {displayMovies[hovered].genres && displayMovies[hovered].genres.length > 0 && (
+              {previewMovie.genres && previewMovie.genres.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5 mt-3">
-                  {displayMovies[hovered].genres.slice(0, 3).map((tag, idx) => (
+                  {previewMovie.genres.slice(0, 3).map((tag, idx) => (
                     <React.Fragment key={tag.name || tag}>
                       <span className="text-[13px] text-white/90 font-medium hover:text-white cursor-pointer" onClick={() => navigate(`/movies?genre=${encodeURIComponent(tag.name || tag)}`)}>{tag.name || tag}</span>
-                      {idx < Math.min(displayMovies[hovered].genres.length, 3) - 1 && <span className="text-white/30 text-[10px] mx-0.5">•</span>}
+                      {idx < Math.min(previewMovie.genres.length, 3) - 1 && <span className="text-white/30 text-[10px] mx-0.5">•</span>}
                     </React.Fragment>
                   ))}
                 </div>

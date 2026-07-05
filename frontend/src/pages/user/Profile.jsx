@@ -399,16 +399,12 @@ export default function Profile() {
 
   return (
     <>
-      <div className="min-h-screen bg-[#050505] pb-12 pt-24 text-white">
-        <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_18%_12%,rgba(229,9,20,0.18),transparent_30%),radial-gradient(circle_at_78%_0%,rgba(99,102,241,0.16),transparent_28%),linear-gradient(180deg,#070707_0%,#050505_48%,#000_100%)]" />
+      <div className="min-h-screen bg-black pb-12 pt-24 text-white">
         <div className="container mx-auto flex max-w-7xl flex-col gap-8 px-4 md:px-8 lg:flex-row">
           <ProfileSidebar user={user} profile={{ ...profile, username: displayName }} />
 
           <main className="min-w-0 flex-1 space-y-6">
-            <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(145deg,rgba(255,255,255,0.13),rgba(255,255,255,0.035)_45%,rgba(255,255,255,0.02))] p-5 shadow-[0_30px_90px_rgba(0,0,0,0.45)] backdrop-blur-xl md:p-7">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_12%_20%,rgba(229,9,20,0.24),transparent_34%),radial-gradient(circle_at_78%_18%,rgba(79,70,229,0.22),transparent_32%)]" />
-              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/35 to-transparent" />
-
+            <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl backdrop-blur-xl md:p-7">
               <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
                 <div className="flex min-h-[330px] flex-col justify-between">
                   <div>
@@ -462,7 +458,7 @@ export default function Profile() {
 
             <section className="grid grid-cols-1 gap-6 xl:grid-cols-5">
               <div className="xl:col-span-3">
-                <form className="overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-5 shadow-[0_22px_70px_rgba(0,0,0,0.3)] backdrop-blur-xl md:p-7" onSubmit={handleUpdate}>
+                <form className="overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-5 shadow-2xl backdrop-blur-xl md:p-7" onSubmit={handleUpdate}>
                   <div className="mb-6 flex flex-col gap-3 border-b border-white/10 pb-5 md:flex-row md:items-end md:justify-between">
                     <div>
                       <div className="text-xs font-black uppercase tracking-[0.22em] text-primary">Account</div>
@@ -488,7 +484,7 @@ export default function Profile() {
                           type="text"
                           value={profile.username}
                           onChange={(event) => handleProfileChange('username', event.target.value)}
-                          className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-white outline-none transition-colors placeholder:text-white/25 focus:border-white/30 focus:bg-white/[0.07]"
+                          className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-white outline-none transition-colors placeholder:text-white/25 focus:border-primary focus:bg-white/[0.07]"
                         />
                       </label>
                       <label className="block">
@@ -497,7 +493,7 @@ export default function Profile() {
                           type="tel"
                           value={profile.phone}
                           onChange={(event) => handleProfileChange('phone', event.target.value)}
-                          className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-white outline-none transition-colors placeholder:text-white/25 focus:border-white/30 focus:bg-white/[0.07]"
+                          className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-white outline-none transition-colors placeholder:text-white/25 focus:border-primary focus:bg-white/[0.07]"
                           placeholder="Nhập số điện thoại"
                         />
                       </label>
@@ -507,7 +503,7 @@ export default function Profile() {
                           type="date"
                           value={profile.birth_date}
                           onChange={(event) => handleProfileChange('birth_date', event.target.value)}
-                          className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-white outline-none transition-colors focus:border-white/30 focus:bg-white/[0.07] [color-scheme:dark]"
+                          className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-white outline-none transition-colors focus:border-primary focus:bg-white/[0.07] [color-scheme:dark]"
                         />
                       </label>
                       <div className="md:col-span-2">
@@ -545,7 +541,7 @@ export default function Profile() {
                           type="url"
                           value={profile.avatar_url}
                           onChange={(event) => handleProfileChange('avatar_url', event.target.value)}
-                          className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-white outline-none transition-colors placeholder:text-white/25 focus:border-white/30 focus:bg-white/[0.07]"
+                          className="w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-white outline-none transition-colors placeholder:text-white/25 focus:border-primary focus:bg-white/[0.07]"
                           placeholder="https://..."
                         />
                       </label>

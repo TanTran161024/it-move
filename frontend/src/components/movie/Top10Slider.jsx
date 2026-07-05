@@ -84,8 +84,8 @@ export default function Top10Slider({ movies, title }) {
       {/* Header */}
       <div className="flex items-center justify-between mb-8 px-2 md:px-0">
         <h2 className="text-xl md:text-2xl font-bold font-heading tracking-wide flex items-center gap-2">
-          <span className="w-1.5 h-6 bg-gradient-to-b from-purple-500 to-pink-500 rounded-full shadow-[0_0_10px_rgba(236,72,153,0.5)]"></span>
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-pink-300 drop-shadow-[0_0_15px_rgba(236,72,153,0.3)]">{title}</span>
+          <span className="w-1.5 h-6 bg-primary rounded-full shadow-[0_0_10px_rgba(229,9,20,0.5)]"></span>
+          <span className="text-white drop-shadow-[0_0_15px_rgba(229,9,20,0.3)]">{title}</span>
         </h2>
       </div>
 
@@ -97,9 +97,9 @@ export default function Top10Slider({ movies, title }) {
             type="button"
             onClick={handlePrev} 
             aria-label="Cuộn Top 10 về trước"
-            className="absolute left-0 md:-left-4 z-20 w-12 md:w-16 h-[80%] bg-gradient-to-r from-black/90 to-transparent hover:from-black text-white opacity-0 group-hover/slider:opacity-100 transition-all flex items-center justify-center hover:text-purple-400 group/btn"
+            className="absolute left-0 md:-left-4 z-20 w-12 md:w-16 h-[80%] bg-gradient-to-r from-black/90 to-transparent hover:from-black text-white opacity-0 group-hover/slider:opacity-100 transition-all flex items-center justify-center hover:text-primary group/btn"
           >
-            <InlineIcon name="chevronLeft" size={40} className="drop-shadow-lg group-hover/btn:drop-shadow-[0_0_15px_rgba(168,85,247,0.8)] group-hover/btn:scale-110 transition-transform" />
+            <InlineIcon name="chevronLeft" size={40} className="drop-shadow-lg group-hover/btn:drop-shadow-[0_0_15px_rgba(229,9,20,0.6)] group-hover/btn:scale-110 transition-transform" />
           </button>
         )}
 
@@ -107,7 +107,7 @@ export default function Top10Slider({ movies, title }) {
         <div
           ref={sliderRef}
           className="overflow-hidden w-full relative touch-pan-y py-4 pl-4 md:pl-8"
-          style={{ width: `${visibleCount * posterWidth}px`, maxWidth: '100vw', cursor: isDragging && canScroll ? 'grabbing' : canScroll ? 'grab' : 'default' }}
+          style={{ cursor: isDragging && canScroll ? 'grabbing' : canScroll ? 'grab' : 'default' }}
           onMouseDown={canScroll ? handleDragStart : undefined}
           onMouseMove={canScroll ? handleDragMove : undefined}
           onMouseUp={canScroll ? handleDragEnd : undefined}
@@ -143,9 +143,9 @@ export default function Top10Slider({ movies, title }) {
             type="button"
             onClick={handleNext}
             aria-label="Cuộn Top 10 kế tiếp"
-            className="absolute right-0 md:-right-4 z-20 w-12 md:w-16 h-[80%] bg-gradient-to-l from-black/90 to-transparent hover:from-black text-white opacity-0 group-hover/slider:opacity-100 transition-all flex items-center justify-center hover:text-purple-400 group/btn"
+            className="absolute right-0 md:-right-4 z-20 w-12 md:w-16 h-[80%] bg-gradient-to-l from-black/90 to-transparent hover:from-black text-white opacity-0 group-hover/slider:opacity-100 transition-all flex items-center justify-center hover:text-primary group/btn"
           >
-            <InlineIcon name="chevronRight" size={40} className="drop-shadow-lg group-hover/btn:drop-shadow-[0_0_15px_rgba(168,85,247,0.8)] group-hover/btn:scale-110 transition-transform" />
+            <InlineIcon name="chevronRight" size={40} className="drop-shadow-lg group-hover/btn:drop-shadow-[0_0_15px_rgba(229,9,20,0.6)] group-hover/btn:scale-110 transition-transform" />
           </button>
         )}
       </div>

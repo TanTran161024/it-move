@@ -87,6 +87,17 @@ function normalizeNameList(items) {
   return items.map(getItemName).filter(Boolean);
 }
 
+function normalizeLookupRows(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((item, index) => {
+      if (typeof item === "string") return { id: item || index, name: item };
+      const name = getItemName(item);
+      return name ? { ...item, id: item?.id || name || index, name } : null;
+    })
+    .filter(Boolean);
+}
+
 function formatViewCount(value) {
   const number = Number(value);
   if (!Number.isFinite(number) || number <= 0) return "";
@@ -130,6 +141,58 @@ function getEpisodePlaybackSource(episode) {
 
 function getEpisodePoster(episode, movie) {
   return episode?.thumbnail_url || movie?.bg_url || movie?.poster_url || "";
+}
+
+async function fetchWatchPayload(movieId, signal) {
+  const primaryError = new Error("Không thể tải phim.");
+
+  try {
+    const response = await fetch(`${API}/watch/${movieId}`, { signal });
+    if (response.ok) return response.json();
+  } catch (error) {
+    if (error.name === "AbortError") throw error;
+  }
+
+  try {
+    const [moviesResponse, episodesResponse] = await Promise.all([
+      fetch(`${API}/movies`, { signal }),
+      fetch(`${API}/movies/${movieId}/episodes`, { signal }),
+    ]);
+
+    if (!moviesResponse.ok) throw primaryError;
+
+    const [movies, episodes] = await Promise.all([
+      moviesResponse.json(),
+      episodesResponse.ok ? episodesResponse.json() : Promise.resolve([]),
+    ]);
+
+    const movie = (Array.isArray(movies) ? movies : [])
+      .find((item) => Number(item.id) === Number(movieId));
+
+    if (!movie) throw primaryError;
+
+    const genreRows = normalizeLookupRows(movie.genres);
+    const countryRows = normalizeNameList(movie.countries);
+
+    return {
+      movie: {
+        ...movie,
+        genres: genreRows.map((genre) => genre.name),
+        countries: countryRows,
+        directors: normalizeLookupRows(movie.directors),
+        actors: normalizeLookupRows(movie.actors),
+      },
+      genres: genreRows,
+      countries: countryRows,
+      directors: normalizeLookupRows(movie.directors),
+      actors: normalizeLookupRows(movie.actors),
+      suggested: [],
+      episodes: Array.isArray(episodes) ? episodes : [],
+    };
+  } catch (fallbackError) {
+    if (fallbackError.name === "AbortError") throw fallbackError;
+    throw primaryError;
+  }
 }
 
 function EpisodeShelf({ open, movie, episodes, selectedEpisode, onClose, onSelectEpisode }) {
@@ -338,7 +401,7 @@ function WatchInfoSection({
   }, [episodes.length, updateEpisodeRailState]);
 
   return (
-    <section className="bg-[#111111] px-4 py-8 text-white md:px-8 lg:px-12">
+    <section className="bg-black px-4 py-8 text-white md:px-8 lg:px-12">
       <div className="mx-auto max-w-[1500px]">
         <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="min-w-0">
@@ -420,21 +483,21 @@ function WatchInfoSection({
                           onClick={() => onSelectEpisode(episode)}
                           className="group w-[240px] shrink-0 text-left"
                         >
-                          <div className={`relative aspect-video overflow-hidden rounded-sm bg-[#1c1c1c] ring-2 transition ${active ? "ring-[#e50914]" : "ring-transparent group-hover:ring-white/30"}`}>
+                          <div className={`relative aspect-video overflow-hidden rounded-xl bg-white/5 ring-2 transition-all duration-300 ${active ? "ring-primary shadow-[0_0_20px_rgba(229,9,20,0.3)]" : "ring-transparent group-hover:ring-white/30"}`}>
                             <img
                             src={getEpisodePoster(episode, movie)}
                               alt=""
-                              className="h-full w-full object-cover opacity-90 transition-transform duration-300 group-hover:scale-105"
+                              className="h-full w-full object-cover opacity-90 transition-transform duration-500 group-hover:scale-110"
                               referrerPolicy="no-referrer"
                             />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
                             {active && (
-                              <span className="absolute left-3 top-3 rounded bg-[#e50914] px-2 py-1 text-xs font-black text-white">
+                              <span className="absolute left-3 top-3 rounded bg-primary px-2 py-1 text-xs font-black text-white shadow-lg">
                                 Đang xem
                               </span>
                             )}
                           </div>
-                          <h3 className="mt-3 line-clamp-1 text-base font-black text-white">{formatEpisodeTitle(episode)}</h3>
+                          <h3 className={`mt-3 line-clamp-1 text-base font-black transition-colors ${active ? "text-primary" : "text-white group-hover:text-primary/80"}`}>{formatEpisodeTitle(episode)}</h3>
                           <p className="mt-1 text-sm font-bold text-white/55">
                             {movie?.age_limit ? `${formatAgeLimit(movie.age_limit)} | ` : ""}{movie?.quality || "Full HD"}
                           </p>
@@ -595,11 +658,7 @@ const WatchMovie = () => {
     setLoading(true);
     setError("");
 
-    fetch(`${API}/watch/${id}`, { signal: controller.signal })
-      .then((res) => {
-        if (!res.ok) throw new Error("Không thể tải phim.");
-        return res.json();
-      })
+    fetchWatchPayload(id, controller.signal)
       .then((payload) => {
         setData(payload);
         const availableEpisodes = payload.episodes || [];
@@ -813,7 +872,7 @@ const WatchMovie = () => {
   }
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#111111] text-white">
+    <div className="min-h-screen overflow-x-hidden bg-black text-white">
       <section className="relative h-[100dvh] min-h-[520px] overflow-hidden bg-black">
         <div className="absolute inset-0 z-0">
         {currentEpisode ? (

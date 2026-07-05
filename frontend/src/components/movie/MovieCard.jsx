@@ -84,22 +84,22 @@ const MovieCard = memo(function MovieCard({
         }
       }}
     >
-      <div className="relative overflow-hidden rounded-2xl aspect-[2/3] shadow-[0_4px_20px_rgba(0,0,0,0.3)] transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] group-hover/card:scale-[1.08] group-hover/card:shadow-[0_15px_40px_rgba(168,85,247,0.4)] group-hover/card:-translate-y-3 bg-[#141414] ring-1 ring-white/5 group-hover/card:ring-2 group-hover/card:ring-purple-500/60">
-        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-500 z-10 pointer-events-none mix-blend-overlay" />
+      <div className="relative overflow-hidden rounded-xl aspect-[2/3] shadow-[0_4px_20px_rgba(0,0,0,0.3)] transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] group-hover/card:scale-[1.05] group-hover/card:shadow-[0_10px_30px_rgba(229,9,20,0.3)] bg-section ring-1 ring-white/5 group-hover/card:ring-2 group-hover/card:ring-primary/60">
+        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 z-10 pointer-events-none mix-blend-overlay" />
         <ImageLoader
           src={posterSrc}
           alt={movie?.title || 'Movie poster'}
-          className="absolute inset-0 w-full h-full"
+          className="absolute inset-0 w-full h-full object-cover"
         />
 
         {showScore && score > 0 && (
-          <div className="absolute top-2 left-2 bg-gradient-to-r from-purple-600 to-pink-600 backdrop-blur-md px-2 py-1 rounded-md text-[11px] font-bold text-white shadow-[0_0_10px_rgba(236,72,153,0.5)] z-20">
-            {Math.round(score)}
+          <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-md px-2 py-1 rounded border border-white/10 text-[11px] font-bold text-white z-20">
+            {Math.round(score)}%
           </div>
         )}
 
         {!showScore && movie?.badge && (
-          <div className="absolute top-2 left-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold px-2 py-0.5 rounded-md shadow-[0_0_10px_rgba(236,72,153,0.5)] z-20">
+          <div className="absolute top-2 left-2 bg-primary text-white text-xs font-bold px-2 py-0.5 rounded shadow-lg z-20">
             {movie.badge}
           </div>
         )}
@@ -113,28 +113,28 @@ const MovieCard = memo(function MovieCard({
         )}
 
         {showPlay && (
-          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 flex items-center justify-center backdrop-blur-[2px] z-10">
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 flex items-center justify-center z-10 backdrop-blur-[1px]">
             <button
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
                 onPlay?.(event);
               }}
-              className="w-14 h-14 rounded-full bg-gradient-to-tr from-purple-600 to-pink-600 flex items-center justify-center text-white shadow-[0_0_20px_rgba(236,72,153,0.6)] group-hover/card:scale-110 transition-transform duration-300"
+              className="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-white shadow-lg border-2 border-white group-hover/card:scale-110 transition-all duration-300 hover:bg-white hover:text-primary hover:border-primary"
               aria-label="Xem phim"
             >
-              <InlineIcon name="play" size={28} className="ml-1 drop-shadow-md" />
+              <InlineIcon name="play" size={24} className="ml-1 drop-shadow-md" />
             </button>
           </div>
         )}
       </div>
 
-      <div className="mt-3 text-center px-1 transition-transform duration-300 group-hover/card:-translate-y-1">
-        <h3 className={`text-white font-bold text-sm line-clamp-1 group-hover/card:text-transparent group-hover/card:bg-clip-text group-hover/card:bg-gradient-to-r group-hover/card:from-purple-300 group-hover/card:to-pink-300 transition-all ${titleClassName}`}>
+      <div className="mt-3 px-1">
+        <h3 className={`text-white font-bold text-sm line-clamp-1 group-hover/card:text-primary transition-colors ${titleClassName}`}>
           {movie?.title || 'Chưa có tên phim'}
         </h3>
         {subtitle && (
-          <p className={`text-text-secondary text-xs mt-0.5 line-clamp-1 transition-colors group-hover/card:text-white/80 ${subtitleClassName}`}>
+          <p className={`text-text-secondary text-xs mt-0.5 line-clamp-1 ${subtitleClassName}`}>
             {subtitle}
           </p>
         )}
