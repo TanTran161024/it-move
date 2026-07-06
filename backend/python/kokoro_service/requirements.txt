@@ -1,0 +1,4 @@
+fastapi>=0.115,<1
+uvicorn[standard]>=0.34,<1
+soundfile>=0.12,<1
+kokoro-vietnamese @ git+https://github.com/iamdinhthuan/Kokoro-Vietnamese.git

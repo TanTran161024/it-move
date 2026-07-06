@@ -358,23 +358,35 @@ function QualityMenu({ open }) {
 
 function AudioSubtitleMenu({
   open,
+  audioTracks,
+  selectedAudioId,
   subtitleTracks,
   selectedSubtitleId,
   playerSettings,
   onPlayerSettingChange,
   onSelectSubtitleTrack,
   onSelectSubtitleStyle,
+  onSelectAudioTrack,
 }) {
   const currentStyle = playerSettings.subtitleStyle || "default";
   const hasSubtitleTracks = subtitleTracks.length > 0;
 
   return (
     <PlayerMenu open={open} title="Âm thanh & Phụ đề" menuId="audio">
-      <div className="mb-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3">
-        <div className="flex items-center gap-2 text-sm font-bold text-white/85">
-          <MdAudiotrack size={20} />
-          Âm thanh gốc
-        </div>
+      <div className="px-3 pb-1 pt-2 text-xs font-black uppercase tracking-[0.18em] text-white/35">
+        Âm thanh
+      </div>
+      {audioTracks.map((track) => (
+        <MenuOption
+          key={track.id}
+          label={track.label}
+          detail={track.detail}
+          active={selectedAudioId === track.id}
+          icon={<MdAudiotrack size={22} />}
+          onClick={() => onSelectAudioTrack?.(track.id)}
+        />
+      ))}
+      <div className="mb-2 px-3">
         {!hasSubtitleTracks && (
         <div className="mt-2 flex items-center gap-2 text-sm text-white/60">
           <MdSubtitles size={20} />
@@ -488,6 +500,9 @@ const VideoPlayer = forwardRef(({
   onPlayerSettingChange,
   onReport,
   subtitles = [],
+  audioTracks = [{ id: "original", label: "Âm thanh gốc" }],
+  selectedAudioId = "original",
+  onSelectAudioTrack,
   autoPlay = true,
 }, ref) => {
   const videoRef = useRef(null);
@@ -1290,12 +1305,15 @@ const VideoPlayer = forwardRef(({
       <QualityMenu open={menu === "quality"} />
       <AudioSubtitleMenu
         open={menu === "audio" && !iframeSource}
+        audioTracks={audioTracks}
+        selectedAudioId={selectedAudioId}
         subtitleTracks={subtitleTracks}
         selectedSubtitleId={selectedSubtitleId}
         playerSettings={mergedSettings}
         onPlayerSettingChange={onPlayerSettingChange}
         onSelectSubtitleTrack={handleSelectSubtitleTrack}
         onSelectSubtitleStyle={handleSelectSubtitleStyle}
+        onSelectAudioTrack={onSelectAudioTrack}
       />
     </div>
   );

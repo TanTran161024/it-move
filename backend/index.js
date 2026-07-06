@@ -2,7 +2,9 @@ require('dotenv').config({ quiet: true });
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2/promise');
+const path = require('path');
 const routes = require('./routes');
+const { resumeDubbingJobs } = require('./services/dubbingService');
 
 const app = express();
 const configuredOrigins = (process.env.CORS_ORIGINS || '')
@@ -11,7 +13,7 @@ const configuredOrigins = (process.env.CORS_ORIGINS || '')
   .filter(Boolean);
 
 function isLocalDevelopmentOrigin(origin) {
-  return /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+  return /^http:\/\/localhost:\d+$/.test(origin);
 }
 
 app.use(cors({
@@ -36,6 +38,7 @@ const db = mysql.createPool({
 });
 
 app.locals.db = db;
+app.use('/media/dubbing', express.static(path.join(__dirname, 'storage', 'dubbing')));
 app.use('/api', routes);
 
 app.get('/', (req, res) => {
@@ -43,6 +46,10 @@ app.get('/', (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+const HOST = process.env.HOST || 'localhost';
+app.listen(PORT, HOST, () => {
+  console.log(`Server is running at http://${HOST}:${PORT}`);
+  resumeDubbingJobs(db).catch((error) => {
+    console.error(`Cannot resume dubbing jobs: ${error.message}`);
+  });
 }); 

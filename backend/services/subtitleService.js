@@ -157,7 +157,7 @@ function normalizeSubtitleLanguage(value) {
 async function fetchSubtitleText(subtitleUrl) {
   const safeUrl = normalizeSubtitleUrl(subtitleUrl);
   if (!safeUrl) {
-    const error = new Error('Subtitle not configured');
+    const error = new Error('Tập phim chưa có phụ đề. Hãy thêm phụ đề có timestamp trước khi lồng tiếng.');
     error.statusCode = 404;
     throw error;
   }
@@ -235,7 +235,7 @@ async function loadEpisodeSubtitleAsVtt(db, episodeId) {
 
   const subtitleUrl = normalizeSubtitleUrl(rows[0].subtitle_url);
   if (!subtitleUrl) {
-    const error = new Error('Subtitle not configured');
+    const error = new Error('Tập phim chưa có phụ đề. Hãy thêm phụ đề có timestamp trước khi lồng tiếng.');
     error.statusCode = 404;
     throw error;
   }

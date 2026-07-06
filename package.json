@@ -10,6 +10,8 @@
     "preview": "npm --prefix frontend run preview",
     "lint": "npm --prefix frontend run lint",
     "encode:hls": "npm --prefix backend run encode:hls",
+    "tts:setup": "npm --prefix backend run tts:setup",
+    "tts:service": "npm --prefix backend run tts:service",
     "import:kkphim": "npm --prefix backend run import:kkphim",
     "seed:views": "npm --prefix backend run seed:views"
   },

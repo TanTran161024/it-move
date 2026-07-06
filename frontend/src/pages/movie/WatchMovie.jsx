@@ -139,6 +139,12 @@ function getEpisodePlaybackSource(episode) {
   return episode?.hls_url || episode?.video_url || "";
 }
 
+function getDubbedPlaybackSource(episode) {
+  const source = String(episode?.dubbed_video_url || "").trim();
+  if (!source) return "";
+  return source.startsWith("http") ? source : `${API_BASE_URL}${source}`;
+}
+
 function getEpisodePoster(episode, movie) {
   return episode?.thumbnail_url || movie?.bg_url || movie?.poster_url || "";
 }
@@ -606,6 +612,19 @@ const WatchMovie = () => {
   );
   const hasNextEpisode = currentEpisodeIndex >= 0 && currentEpisodeIndex < episodes.length - 1;
   const currentSubtitleTracks = useMemo(() => normalizeSubtitleTracks(currentEpisode), [currentEpisode]);
+  const currentAudioTracks = useMemo(() => {
+    const tracks = [{ id: "original", label: "Âm thanh gốc", detail: "Original" }];
+    if (currentEpisode?.dubbed_video_url) {
+      tracks.push({ id: "vi-dub", label: "Lồng tiếng Việt", detail: "Kokoro" });
+    }
+    return tracks;
+  }, [currentEpisode]);
+  const selectedAudioId = currentEpisode?.dubbed_video_url && playerSettings.audioTrack === "vi-dub"
+    ? "vi-dub"
+    : "original";
+  const currentPlaybackSource = selectedAudioId === "vi-dub"
+    ? getDubbedPlaybackSource(currentEpisode)
+    : getEpisodePlaybackSource(currentEpisode);
   const genres = useMemo(() => normalizeNameList(data?.genres?.length ? data.genres : movie?.genres), [data?.genres, movie?.genres]);
   const countries = useMemo(() => normalizeNameList(data?.countries?.length ? data.countries : movie?.countries), [data?.countries, movie?.countries]);
   const actors = useMemo(() => normalizeNameList(data?.actors?.length ? data.actors : movie?.actors), [data?.actors, movie?.actors]);
@@ -878,7 +897,7 @@ const WatchMovie = () => {
         {currentEpisode ? (
           <VideoPlayer
             ref={videoRef}
-            src={getEpisodePlaybackSource(currentEpisode)}
+            src={currentPlaybackSource}
             poster={getEpisodePoster(currentEpisode, movie)}
             resumeAt={resumeAt}
             onSnapshot={(snapshot) => saveProgress(snapshot)}
@@ -889,6 +908,9 @@ const WatchMovie = () => {
             playerSettings={playerSettings}
             onPlayerSettingChange={handlePlayerSettingChange}
             subtitles={currentSubtitleTracks}
+            audioTracks={currentAudioTracks}
+            selectedAudioId={selectedAudioId}
+            onSelectAudioTrack={(trackId) => handlePlayerSettingChange("audioTrack", trackId)}
             autoPlay
             onReport={() => {
               setReportOpen(true);

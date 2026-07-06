@@ -25,6 +25,16 @@ import HomeIcon from '@mui/icons-material/Home';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { API_BASE_URL as API } from '../../config/api';
 
+function normalizeDubbingJob(job) {
+  if (!job) return null;
+  return {
+    ...job,
+    playback_url: job.output_url
+      ? (job.output_url.startsWith('http') ? job.output_url : `${API}${job.output_url}`)
+      : '',
+  };
+}
+
 export default function Admin() {
   const [movies, setMovies] = useState([]);
   const [open, setOpen] = useState(false);
@@ -58,6 +68,8 @@ export default function Admin() {
   const [episodeDialogOpen, setEpisodeDialogOpen] = useState(false);
   const [episodeMovie, setEpisodeMovie] = useState(null);
   const [episodes, setEpisodes] = useState([]);
+  const [dubbingVoices, setDubbingVoices] = useState([]);
+  const [dubbingService, setDubbingService] = useState({ available: false });
 
   // State cho quản lý danh mục
   const [selectedTab, setSelectedTab] = useState(0);
@@ -173,9 +185,19 @@ export default function Admin() {
     const res = await axios.get(`${API}/api/movies/${movieId}/episodes`);
     setEpisodes(res.data);
   };
+  const fetchDubbingVoices = async () => {
+    try {
+      const res = await axios.get(`${API}/api/admin/dubbing/voices`);
+      setDubbingVoices(res.data.voices || []);
+      setDubbingService(res.data.service || { available: false });
+    } catch {
+      setDubbingVoices([]);
+      setDubbingService({ available: false });
+    }
+  };
   const handleManageEpisodes = async (movie) => {
     setEpisodeMovie(movie);
-    await fetchEpisodes(movie.id);
+    await Promise.all([fetchEpisodes(movie.id), fetchDubbingVoices()]);
     setEpisodeDialogOpen(true);
   };
   const handleCloseEpisodes = () => {
@@ -195,6 +217,49 @@ export default function Admin() {
     if (!window.confirm('Xóa tập này?')) return;
     await axios.delete(`${API}/api/episodes/${id}`);
     await fetchEpisodes(episodeMovie.id);
+  };
+  const handleGenerateDubbingPreview = async (episodeId, payload) => {
+    const res = await axios.post(`${API}/api/admin/episodes/${episodeId}/dubbing/preview`, payload);
+    return {
+      ...res.data,
+      audio_url: `${API}${res.data.audio_url}`,
+    };
+  };
+  const handleLoadDubbingData = async (episodeId) => {
+    const [subtitles, jobs] = await Promise.all([
+      axios.get(`${API}/api/subtitles/episodes/${episodeId}/manage`),
+      axios.get(`${API}/api/admin/dubbing/jobs`, { params: { episode_id: episodeId } }),
+    ]);
+    return {
+      subtitles: subtitles.data.subtitles || [],
+      jobs: (jobs.data || []).map(normalizeDubbingJob),
+    };
+  };
+  const handleCreateDubbingJob = async (episodeId, payload) => {
+    const res = await axios.post(`${API}/api/admin/episodes/${episodeId}/dubbing/jobs`, payload);
+    return normalizeDubbingJob(res.data);
+  };
+  const handleGetDubbingJob = async (jobId) => {
+    const res = await axios.get(`${API}/api/admin/dubbing/jobs/${jobId}`);
+    return normalizeDubbingJob(res.data);
+  };
+  const handleCancelDubbingJob = async (jobId) => {
+    const res = await axios.post(`${API}/api/admin/dubbing/jobs/${jobId}/cancel`);
+    return normalizeDubbingJob(res.data);
+  };
+  const handleDeleteDubbing = async (episodeId) => {
+    await axios.delete(`${API}/api/admin/episodes/${episodeId}/dubbing`);
+    await fetchEpisodes(episodeMovie.id);
+  };
+  const handleSaveDubbingSubtitle = async (episodeId, content) => {
+    const res = await axios.post(`${API}/api/subtitles/episodes/${episodeId}`, {
+      content,
+      format: 'auto',
+      label: 'Tiếng Việt',
+      srclang: 'vi',
+      is_default: true,
+    });
+    return res.data.subtitle;
   };
 
   // Fetch data cho từng tab
@@ -684,6 +749,16 @@ export default function Admin() {
               onAdd={handleAddEpisode}
               onEdit={handleEditEpisode}
               onDelete={handleDeleteEpisode}
+              dubbingVoices={dubbingVoices}
+              dubbingService={dubbingService}
+              onGenerateDubbingPreview={handleGenerateDubbingPreview}
+              onLoadDubbingData={handleLoadDubbingData}
+              onCreateDubbingJob={handleCreateDubbingJob}
+              onGetDubbingJob={handleGetDubbingJob}
+              onCancelDubbingJob={handleCancelDubbingJob}
+              onDeleteDubbing={handleDeleteDubbing}
+              onSaveDubbingSubtitle={handleSaveDubbingSubtitle}
+              onDubbingCompleted={() => fetchEpisodes(episodeMovie.id)}
             />
           </Box>
         )}

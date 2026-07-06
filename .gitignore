@@ -21,6 +21,10 @@ backend/.env.*
 # Logs
 *.log
 logs/
+backend/storage/dubbing/
+backend/python/kokoro_service/.venv/
+__pycache__/
+*.pyc
 
 # Editor/system files
 .vscode/

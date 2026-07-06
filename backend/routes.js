@@ -29,6 +29,18 @@ const {
   searchOnlineSubtitles,
   updateSubtitleProvider,
 } = require('./services/subtitleProviderService');
+const {
+  KOKORO_VOICES,
+  getKokoroStatus,
+  synthesizeEpisodePreview,
+} = require('./services/kokoroTtsService');
+const {
+  cancelJob: cancelDubbingJob,
+  createJob: createDubbingJob,
+  getJob: getDubbingJob,
+  listJobs: listDubbingJobs,
+  removeEpisodeDubbing,
+} = require('./services/dubbingService');
 
 const OTP_EXPIRATION_MINUTES = 10;
 const TEST_VIEW_MIN = Number(process.env.TEST_VIEW_MIN || 1000);
@@ -1556,7 +1568,7 @@ router.get('/movie/:id', async (req, res) => {
 
     // 7. Episodes
     const [episodeRows] = await db.execute(
-      `SELECT id, episode_number, title, video_url, hls_url, thumbnail_url, preview_url, duration_seconds, description, subtitle_url FROM episodes WHERE movie_id = ? ORDER BY episode_number ASC`, [movieId]
+      `SELECT id, episode_number, title, video_url, hls_url, thumbnail_url, preview_url, duration_seconds, description, subtitle_url, dubbed_video_url FROM episodes WHERE movie_id = ? ORDER BY episode_number ASC`, [movieId]
     );
     const subtitleTracksByEpisode = await getEpisodeSubtitleTracks(db, episodeRows.map((episode) => episode.id));
     const episodes = attachSubtitleTracks(episodeRows, subtitleTracksByEpisode);
@@ -1633,7 +1645,7 @@ router.get('/watch/:id', async (req, res) => {
 
     // 3. Danh sÃ¡ch táº­p
     const [episodeRows] = await db.execute(
-      `SELECT id, episode_number, title, video_url, hls_url, thumbnail_url, preview_url, duration_seconds, description, subtitle_url FROM episodes WHERE movie_id = ? ORDER BY episode_number ASC`, [movieId]
+      `SELECT id, episode_number, title, video_url, hls_url, thumbnail_url, preview_url, duration_seconds, description, subtitle_url, dubbed_video_url FROM episodes WHERE movie_id = ? ORDER BY episode_number ASC`, [movieId]
     );
     const subtitleTracksByEpisode = await getEpisodeSubtitleTracks(db, episodeRows.map((episode) => episode.id));
     const episodes = attachSubtitleTracks(episodeRows, subtitleTracksByEpisode);
@@ -1873,6 +1885,81 @@ router.delete('/episodes/:id', requireAdminMiddleware, async (req, res) => {
     const db = getDb(req);
     await db.execute('DELETE FROM episodes WHERE id=?', [req.params.id]);
     res.json({ message: 'Episode deleted' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.get('/admin/dubbing/voices', requireAdminMiddleware, async (req, res) => {
+  const status = await getKokoroStatus();
+  res.json({ voices: KOKORO_VOICES, service: status });
+});
+
+router.post('/admin/episodes/:id/dubbing/preview', requireAdminMiddleware, async (req, res) => {
+  try {
+    const db = getDb(req);
+    const [episodes] = await db.execute('SELECT id FROM episodes WHERE id = ? LIMIT 1', [req.params.id]);
+    if (!episodes.length) return res.status(404).json({ message: 'Tập phim không tồn tại.' });
+
+    const result = await synthesizeEpisodePreview({
+      episodeId: req.params.id,
+      text: req.body?.text,
+      voice: req.body?.voice,
+    });
+    res.status(201).json(result);
+  } catch (err) {
+    res.status(err.statusCode || 502).json({ message: err.message });
+  }
+});
+
+router.get('/admin/dubbing/jobs', requireAdminMiddleware, async (req, res) => {
+  try {
+    const jobs = await listDubbingJobs(getDb(req), toPositiveInt(req.query.episode_id));
+    res.json(jobs);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.get('/admin/dubbing/jobs/:id', requireAdminMiddleware, async (req, res) => {
+  try {
+    const job = await getDubbingJob(getDb(req), req.params.id);
+    if (!job) return res.status(404).json({ message: 'Job lồng tiếng không tồn tại.' });
+    res.json(job);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.post('/admin/episodes/:id/dubbing/jobs', requireAdminMiddleware, async (req, res) => {
+  try {
+    const job = await createDubbingJob(getDb(req), {
+      episodeId: req.params.id,
+      subtitleId: toPositiveInt(req.body?.subtitle_id),
+      voice: req.body?.voice || 'diem_trinh',
+      originalAudioVolume: req.body?.original_audio_volume,
+      requestedBy: req.admin.userId,
+    });
+    res.status(201).json(job);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.post('/admin/dubbing/jobs/:id/cancel', requireAdminMiddleware, async (req, res) => {
+  try {
+    const job = await cancelDubbingJob(getDb(req), req.params.id);
+    if (!job) return res.status(404).json({ message: 'Job lồng tiếng không tồn tại.' });
+    res.json(job);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.delete('/admin/episodes/:id/dubbing', requireAdminMiddleware, async (req, res) => {
+  try {
+    await removeEpisodeDubbing(getDb(req), req.params.id);
+    res.json({ message: 'Đã xóa bản lồng tiếng của tập phim.' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

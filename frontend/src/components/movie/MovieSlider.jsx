@@ -45,6 +45,28 @@ function isDirectVideoUrl(url) {
   return /\.(mp4|webm|ogg)(\?.*)?$/i.test(String(url || ''));
 }
 
+function isHlsUrl(url) {
+  return /\.m3u8(\?.*)?$/i.test(String(url || ''));
+}
+
+function extractCleanVideoUrl(url) {
+  const value = String(url || '').trim();
+  if (!value) return '';
+
+  try {
+    const parsed = new URL(value);
+    const nestedUrl = parsed.searchParams.get('url') || parsed.searchParams.get('file') || parsed.searchParams.get('src');
+    if (nestedUrl) return nestedUrl.trim();
+  } catch {
+    // Raw URLs and embedded player snippets fall through to pattern extraction.
+  }
+
+  const hlsMatch = value.match(/https?:\/\/[^"' <>\n]+\.m3u8(?:\?[^"' <>\n]*)?/i);
+  if (hlsMatch) return hlsMatch[0];
+
+  return isDirectVideoUrl(value) || isHlsUrl(value) ? value : '';
+}
+
 function getTrailerEmbedUrl(url, muted) {
   const value = String(url || '').trim();
   if (!value) return '';
@@ -89,8 +111,26 @@ function getEpisodePreviewUrl(movie) {
   ).trim();
 }
 
-function getPreviewSource(movie, muted) {
+function getPreviewSource(movie, muted, allowEmbeddedFallback = true) {
+  const cleanEpisodeUrl = extractCleanVideoUrl(getEpisodePreviewUrl(movie));
+  if (cleanEpisodeUrl) {
+    return {
+      type: 'clean-video',
+      url: cleanEpisodeUrl,
+    };
+  }
+
   const trailerUrl = getTrailerUrl(movie);
+  const cleanTrailerUrl = extractCleanVideoUrl(trailerUrl);
+  if (cleanTrailerUrl) {
+    return {
+      type: 'clean-video',
+      url: cleanTrailerUrl,
+    };
+  }
+
+  if (!allowEmbeddedFallback) return null;
+
   const trailerEmbedUrl = getTrailerEmbedUrl(trailerUrl, muted);
 
   if (trailerEmbedUrl) {
@@ -107,6 +147,89 @@ function getPreviewSource(movie, muted) {
     type: isDirectVideoUrl(episodeUrl) ? 'video' : 'iframe',
     url: episodeUrl,
   };
+}
+
+function CleanPreviewVideo({ src, muted, poster }) {
+  const videoRef = useRef(null);
+  const mutedRef = useRef(muted);
+
+  useEffect(() => {
+    mutedRef.current = muted;
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.muted = muted;
+    if (!muted) video.volume = 0.8;
+    video.play().catch(() => {});
+  }, [muted]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !src) return undefined;
+
+    let hls;
+    let cancelled = false;
+    const play = () => {
+      if (!cancelled) video.play().catch(() => {});
+    };
+    const attachDirectSource = () => {
+      video.src = src;
+      video.addEventListener('loadedmetadata', play);
+      video.load();
+    };
+    const attachHlsSource = (Hls) => {
+      if (cancelled) return;
+
+      if (Hls.isSupported()) {
+        hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: false,
+        });
+        hls.loadSource(src);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, play);
+        return;
+      }
+
+      attachDirectSource();
+    };
+
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    video.muted = mutedRef.current;
+
+    if (isHlsUrl(src)) {
+      import('hls.js')
+        .then(({ default: Hls }) => attachHlsSource(Hls))
+        .catch(() => attachDirectSource());
+    } else {
+      attachDirectSource();
+    }
+
+    return () => {
+      cancelled = true;
+      video.removeEventListener('loadedmetadata', play);
+      hls?.destroy();
+    };
+  }, [src]);
+
+  return (
+    <video
+      ref={videoRef}
+      poster={poster}
+      autoPlay
+      loop
+      muted={muted}
+      playsInline
+      controls={false}
+      disablePictureInPicture
+      controlsList="nodownload noplaybackrate noremoteplayback"
+      crossOrigin="anonymous"
+      onContextMenu={(event) => event.preventDefault()}
+      className="absolute inset-0 h-full w-full object-cover animate-fade-in"
+    />
+  );
 }
 
 export default function MovieSlider({ movies, title, categoryId, categoryName }) {
@@ -168,7 +291,7 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
 
   const loadPreviewFallback = (movie) => {
     const movieId = movie?.id;
-    if (!movieId || getTrailerUrl(movie) || previewRequestIds.current.has(movieId)) return;
+    if (!movieId || Array.isArray(movie?.episodes) || previewRequestIds.current.has(movieId)) return;
 
     previewRequestIds.current.add(movieId);
     setPreviewLoadingId(movieId);
@@ -180,10 +303,19 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
           ...current,
           [movieId]: {
             episodes: Array.isArray(episodes) ? episodes : [],
+            loaded: true,
           },
         }));
       })
-      .catch(() => {})
+      .catch(() => {
+        setPreviewExtras((current) => ({
+          ...current,
+          [movieId]: {
+            episodes: [],
+            loaded: true,
+          },
+        }));
+      })
       .finally(() => {
         setPreviewLoadingId((current) => (current === movieId ? null : current));
       });
@@ -307,8 +439,13 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
     ...previewExtra,
     episodes: previewExtra?.episodes || previewBaseMovie.episodes,
   } : null;
-  const previewSource = getPreviewSource(previewMovie, isMuted);
+  const previewHasInlineEpisode = Boolean(getEpisodePreviewUrl(previewBaseMovie));
+  const canUseEmbeddedFallback = Boolean(!previewMovie?.id || previewExtra?.loaded || previewHasInlineEpisode);
+  const previewSource = getPreviewSource(previewMovie, isMuted, canUseEmbeddedFallback);
   const previewIsLoading = Boolean(previewMovie?.id && previewLoadingId === previewMovie.id);
+  const previewPoster = previewMovie
+    ? resizeTmdbImage(previewMovie.backdrop || previewMovie.backdrop_url || previewMovie.bg_url || previewMovie.poster_url || previewMovie.poster || FALLBACK_POSTER, 'w780')
+    : FALLBACK_POSTER;
 
   return (
     <div
@@ -455,21 +592,18 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
           >
             <div className="group/popup-img relative aspect-video w-full overflow-hidden bg-black">
               <img
-                src={resizeTmdbImage(previewMovie.backdrop || previewMovie.backdrop_url || previewMovie.bg_url || previewMovie.poster_url || previewMovie.poster || FALLBACK_POSTER, 'w780')}
+                src={previewPoster}
                 alt={previewMovie.title}
                 referrerPolicy="no-referrer"
                 onError={(e) => { e.currentTarget.src = FALLBACK_POSTER; }}
                 className={`h-full w-full object-cover transition-transform duration-700 group-hover/popup-img:scale-105 ${previewSource ? 'opacity-0' : 'opacity-100'}`}
               />
-              {previewSource?.type === 'video' && (
-                <video
+              {(previewSource?.type === 'clean-video' || previewSource?.type === 'video') && (
+                <CleanPreviewVideo
                   key={previewSource.url}
                   src={previewSource.url}
-                  autoPlay
-                  loop
                   muted={isMuted}
-                  playsInline
-                  className="absolute inset-0 h-full w-full object-cover animate-fade-in"
+                  poster={previewPoster}
                 />
               )}
               {previewSource?.type === 'iframe' && (
@@ -489,20 +623,6 @@ export default function MovieSlider({ movies, title, categoryId, categoryName })
                 </div>
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-black/5 to-transparent pointer-events-none" />
-
-              {pinnedPreview && (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    closePreview();
-                  }}
-                  className="absolute right-3 top-3 z-30 flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-black/55 text-white transition-colors hover:bg-black/80"
-                  aria-label="Dong preview"
-                >
-                  <span className="text-lg leading-none">×</span>
-                </button>
-              )}
 
               {previewSource && (
                 <button

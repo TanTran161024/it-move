@@ -8,6 +8,7 @@
     "cors": "^2.8.5",
     "dotenv": "^17.0.0",
     "express": "^5.1.0",
+    "ffmpeg-static": "^5.2.0",
     "mysql2": "^3.14.1",
     "nodemailer": "^8.0.11"
   },
@@ -16,6 +17,8 @@
     "migrate": "node scripts/migrate.js",
     "import:kkphim": "node scripts/import-kkphim.js",
     "encode:hls": "node scripts/encode-hls.js",
+    "tts:setup": "powershell -ExecutionPolicy Bypass -File python/kokoro_service/setup.ps1",
+    "tts:service": "powershell -ExecutionPolicy Bypass -File python/kokoro_service/run.ps1",
     "enrich:tmdb": "node scripts/enrich-tmdb-missing.js",
     "seed:views": "node scripts/seed-random-views.js",
     "check:gemini": "node scripts/check-gemini.js",
