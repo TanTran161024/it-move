@@ -888,6 +888,307 @@ CREATE TABLE IF NOT EXISTS `movie_reports` (
   CONSTRAINT `movie_reports_ibfk_2` FOREIGN KEY (`movie_id`) REFERENCES `movies` (`id`) ON DELETE CASCADE,
   CONSTRAINT `movie_reports_ibfk_3` FOREIGN KEY (`episode_id`) REFERENCES `episodes` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+--
+-- Episode subtitles.
+--
+
+CREATE TABLE IF NOT EXISTS `episode_subtitles` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `episode_id` int(11) NOT NULL,
+  `label` varchar(100) NOT NULL DEFAULT 'Tiếng Việt',
+  `srclang` varchar(12) NOT NULL DEFAULT 'vi',
+  `format` varchar(20) NOT NULL DEFAULT 'vtt',
+  `content` mediumtext NOT NULL,
+  `is_default` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_episode_subtitle_lang` (`episode_id`, `srclang`),
+  KEY `idx_episode_subtitles_episode` (`episode_id`),
+  CONSTRAINT `fk_episode_subtitles_episode`
+    FOREIGN KEY (`episode_id`) REFERENCES `episodes` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+--
+-- User profiles and profile-scoped library data.
+--
+
+CREATE TABLE IF NOT EXISTS `user_profiles` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `name` varchar(60) NOT NULL,
+  `avatar_color` varchar(20) NOT NULL DEFAULT '#E50914',
+  `avatar_url` text DEFAULT NULL,
+  `is_kids` tinyint(1) NOT NULL DEFAULT 0,
+  `is_default` tinyint(1) NOT NULL DEFAULT 0,
+  `autoplay_next` tinyint(1) NOT NULL DEFAULT 1,
+  `subtitle_style` varchar(32) NOT NULL DEFAULT 'default',
+  `subtitle_track` varchar(64) NOT NULL DEFAULT 'auto',
+  `cinema_default` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_user_profiles_user` (`user_id`, `is_default`),
+  CONSTRAINT `user_profiles_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `user_profiles` (`user_id`, `name`, `avatar_color`, `is_kids`, `is_default`)
+SELECT u.id, COALESCE(NULLIF(u.username, ''), 'Profile'), '#E50914', 0, 1
+FROM `users` u
+WHERE NOT EXISTS (
+  SELECT 1 FROM `user_profiles` p WHERE p.user_id = u.id
+);
+
+ALTER TABLE `user_watch_history`
+  ADD COLUMN IF NOT EXISTS `profile_id` int(11) DEFAULT NULL AFTER `user_id`;
+
+UPDATE `user_watch_history` h
+JOIN `user_profiles` p ON p.user_id = h.user_id AND p.is_default = 1
+SET h.profile_id = p.id
+WHERE h.profile_id IS NULL;
+
+ALTER TABLE `user_watch_history`
+  DROP INDEX `uniq_user_movie_episode`,
+  ADD UNIQUE KEY `uniq_profile_movie_episode` (`profile_id`, `movie_id`, `episode_number`),
+  ADD KEY `idx_user_watch_history_profile` (`profile_id`, `last_watched_at`),
+  ADD CONSTRAINT `user_watch_history_profile_fk`
+    FOREIGN KEY (`profile_id`) REFERENCES `user_profiles` (`id`) ON DELETE CASCADE;
+
+ALTER TABLE `user_favorites`
+  ADD COLUMN IF NOT EXISTS `profile_id` int(11) DEFAULT NULL AFTER `user_id`;
+
+UPDATE `user_favorites` f
+JOIN `user_profiles` p ON p.user_id = f.user_id AND p.is_default = 1
+SET f.profile_id = p.id
+WHERE f.profile_id IS NULL;
+
+ALTER TABLE `user_favorites`
+  MODIFY `profile_id` int(11) NOT NULL,
+  DROP PRIMARY KEY,
+  ADD PRIMARY KEY (`profile_id`, `movie_id`),
+  ADD KEY `idx_user_favorites_user_profile` (`user_id`, `profile_id`),
+  ADD CONSTRAINT `user_favorites_profile_fk`
+    FOREIGN KEY (`profile_id`) REFERENCES `user_profiles` (`id`) ON DELETE CASCADE;
+
+ALTER TABLE `user_watchlist`
+  ADD COLUMN IF NOT EXISTS `profile_id` int(11) DEFAULT NULL AFTER `user_id`;
+
+UPDATE `user_watchlist` w
+JOIN `user_profiles` p ON p.user_id = w.user_id AND p.is_default = 1
+SET w.profile_id = p.id
+WHERE w.profile_id IS NULL;
+
+ALTER TABLE `user_watchlist`
+  MODIFY `profile_id` int(11) NOT NULL,
+  DROP PRIMARY KEY,
+  ADD PRIMARY KEY (`profile_id`, `movie_id`),
+  ADD KEY `idx_user_watchlist_user_profile` (`user_id`, `profile_id`),
+  ADD CONSTRAINT `user_watchlist_profile_fk`
+    FOREIGN KEY (`profile_id`) REFERENCES `user_profiles` (`id`) ON DELETE CASCADE;
+
+ALTER TABLE `movie_ratings`
+  ADD COLUMN IF NOT EXISTS `profile_id` int(11) DEFAULT NULL AFTER `user_id`;
+
+UPDATE `movie_ratings` r
+JOIN `user_profiles` p ON p.user_id = r.user_id AND p.is_default = 1
+SET r.profile_id = p.id
+WHERE r.profile_id IS NULL;
+
+ALTER TABLE `movie_ratings`
+  MODIFY `profile_id` int(11) NOT NULL,
+  DROP INDEX `uniq_movie_rating_user`,
+  ADD UNIQUE KEY `uniq_movie_rating_profile` (`profile_id`, `movie_id`),
+  ADD KEY `idx_movie_ratings_user_profile` (`user_id`, `profile_id`),
+  ADD CONSTRAINT `movie_ratings_profile_fk`
+    FOREIGN KEY (`profile_id`) REFERENCES `user_profiles` (`id`) ON DELETE CASCADE;
+
+-- --------------------------------------------------------
+--
+-- AI chat history.
+--
+
+CREATE TABLE IF NOT EXISTS `ai_chat_sessions` (
+  `id` varchar(64) NOT NULL,
+  `user_id` int(11) DEFAULT NULL,
+  `profile_id` int(11) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_ai_chat_sessions_user` (`user_id`),
+  KEY `idx_ai_chat_sessions_profile` (`profile_id`),
+  CONSTRAINT `fk_ai_chat_sessions_user`
+    FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_ai_chat_sessions_profile`
+    FOREIGN KEY (`profile_id`) REFERENCES `user_profiles` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `ai_chat_messages` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `session_id` varchar(64) NOT NULL,
+  `role` enum('user','assistant') NOT NULL,
+  `content` text NOT NULL,
+  `source` varchar(64) DEFAULT NULL,
+  `provider` varchar(64) DEFAULT NULL,
+  `recommendation_ids` json DEFAULT NULL,
+  `metadata` json DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_ai_chat_messages_session_created` (`session_id`, `created_at`),
+  CONSTRAINT `fk_ai_chat_messages_session`
+    FOREIGN KEY (`session_id`) REFERENCES `ai_chat_sessions` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+--
+-- TMDb metadata, HLS/CDN fields, comment workflow, reports, subtitle providers, and dubbing.
+--
+
+ALTER TABLE `movies`
+  ADD COLUMN IF NOT EXISTS `tmdb_id` int(11) DEFAULT NULL AFTER `trailer_url`,
+  ADD COLUMN IF NOT EXISTS `tmdb_type` varchar(20) DEFAULT NULL AFTER `tmdb_id`,
+  ADD COLUMN IF NOT EXISTS `tmdb_last_synced_at` datetime DEFAULT NULL AFTER `tmdb_type`;
+
+ALTER TABLE `episodes`
+  ADD COLUMN IF NOT EXISTS `thumbnail_url` text DEFAULT NULL AFTER `hls_url`,
+  ADD COLUMN IF NOT EXISTS `preview_url` text DEFAULT NULL AFTER `thumbnail_url`,
+  ADD COLUMN IF NOT EXISTS `duration_seconds` int(11) DEFAULT NULL AFTER `preview_url`,
+  ADD COLUMN IF NOT EXISTS `description` text DEFAULT NULL AFTER `duration_seconds`,
+  ADD COLUMN IF NOT EXISTS `dubbed_video_url` text DEFAULT NULL AFTER `subtitle_url`;
+
+ALTER TABLE `movie_comments`
+  ADD COLUMN IF NOT EXISTS `parent_id` int(11) DEFAULT NULL AFTER `movie_id`,
+  ADD COLUMN IF NOT EXISTS `is_spoiler` tinyint(1) NOT NULL DEFAULT 0 AFTER `content`,
+  ADD COLUMN IF NOT EXISTS `report_count` int(11) NOT NULL DEFAULT 0 AFTER `status`;
+
+ALTER TABLE `movie_comments`
+  MODIFY `status` enum('pending','visible','hidden','deleted') NOT NULL DEFAULT 'visible',
+  ADD KEY `idx_movie_comments_parent` (`parent_id`),
+  ADD CONSTRAINT `movie_comments_parent_fk`
+    FOREIGN KEY (`parent_id`) REFERENCES `movie_comments` (`id`) ON DELETE CASCADE;
+
+CREATE TABLE IF NOT EXISTS `movie_comment_likes` (
+  `comment_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`comment_id`, `user_id`),
+  KEY `idx_movie_comment_likes_user` (`user_id`),
+  CONSTRAINT `movie_comment_likes_comment_fk`
+    FOREIGN KEY (`comment_id`) REFERENCES `movie_comments` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `movie_comment_likes_user_fk`
+    FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `movie_comment_reports` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `comment_id` int(11) NOT NULL,
+  `user_id` int(11) DEFAULT NULL,
+  `reason` varchar(120) NOT NULL,
+  `description` text DEFAULT NULL,
+  `status` enum('open','resolved','rejected') NOT NULL DEFAULT 'open',
+  `admin_note` text DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_comment_reports_comment` (`comment_id`, `status`, `created_at`),
+  KEY `idx_comment_reports_user` (`user_id`),
+  CONSTRAINT `movie_comment_reports_comment_fk`
+    FOREIGN KEY (`comment_id`) REFERENCES `movie_comments` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `movie_comment_reports_user_fk`
+    FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+ALTER TABLE `movie_reports`
+  ADD COLUMN IF NOT EXISTS `report_type` varchar(80) DEFAULT NULL AFTER `reason`,
+  ADD COLUMN IF NOT EXISTS `resolved_at` datetime DEFAULT NULL AFTER `admin_note`,
+  ADD COLUMN IF NOT EXISTS `notified_at` datetime DEFAULT NULL AFTER `resolved_at`;
+
+ALTER TABLE `movie_reports`
+  MODIFY `status` enum('open','new','processing','resolved','rejected') NOT NULL DEFAULT 'new';
+
+UPDATE `movie_reports`
+SET `status` = 'new'
+WHERE `status` = 'open';
+
+UPDATE `movie_reports`
+SET `report_type` = CASE
+  WHEN LOWER(`reason`) LIKE '%link%' THEN 'dead_link'
+  WHEN LOWER(`reason`) LIKE '%sai%' THEN 'wrong_episode'
+  WHEN LOWER(`reason`) LIKE '%audio%' OR LOWER(`reason`) LIKE '%am thanh%' OR LOWER(`reason`) LIKE '%âm thanh%' THEN 'audio'
+  WHEN LOWER(`reason`) LIKE '%sub%' OR LOWER(`reason`) LIKE '%phu de%' OR LOWER(`reason`) LIKE '%phụ đề%' THEN 'subtitle'
+  WHEN LOWER(`reason`) LIKE '%khong phat%' OR LOWER(`reason`) LIKE '%không phát%' OR LOWER(`reason`) LIKE '%video%' THEN 'playback'
+  ELSE 'other'
+END
+WHERE `report_type` IS NULL OR `report_type` = '';
+
+ALTER TABLE `movie_reports`
+  MODIFY `report_type` varchar(80) NOT NULL DEFAULT 'other',
+  MODIFY `status` enum('new','processing','resolved','rejected') NOT NULL DEFAULT 'new',
+  ADD KEY `idx_movie_reports_type_status` (`report_type`, `status`, `created_at`);
+
+CREATE TABLE IF NOT EXISTS `user_notifications` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `type` varchar(60) NOT NULL DEFAULT 'system',
+  `title` varchar(180) NOT NULL,
+  `message` text DEFAULT NULL,
+  `link_url` varchar(500) DEFAULT NULL,
+  `is_read` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_user_notifications_user` (`user_id`, `is_read`, `created_at`),
+  CONSTRAINT `user_notifications_user_fk`
+    FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS `subtitle_providers` (
+  `id` varchar(40) NOT NULL,
+  `name` varchar(120) NOT NULL,
+  `enabled` tinyint(1) NOT NULL DEFAULT 1,
+  `priority` int(11) NOT NULL DEFAULT 100,
+  `website_url` varchar(255) DEFAULT NULL,
+  `notes` varchar(255) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `subtitle_providers` (`id`, `name`, `enabled`, `priority`, `website_url`, `notes`)
+VALUES
+  ('opensubtitles', 'OpenSubtitles.com', 1, 10, 'https://www.opensubtitles.com', 'Official OpenSubtitles.com API'),
+  ('subdl', 'SubDL', 1, 20, 'https://subdl.com', 'SubDL API, optional key')
+ON DUPLICATE KEY UPDATE
+  `name` = VALUES(`name`),
+  `website_url` = VALUES(`website_url`),
+  `notes` = VALUES(`notes`),
+  `updated_at` = current_timestamp();
+
+CREATE TABLE IF NOT EXISTS `dubbing_jobs` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `episode_id` int(11) NOT NULL,
+  `subtitle_id` int(11) DEFAULT NULL,
+  `voice` varchar(64) NOT NULL,
+  `status` enum('queued','running','succeeded','failed','cancelled') NOT NULL DEFAULT 'queued',
+  `progress` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `total_segments` int(10) unsigned NOT NULL DEFAULT 0,
+  `completed_segments` int(10) unsigned NOT NULL DEFAULT 0,
+  `original_audio_volume` decimal(4,3) NOT NULL DEFAULT 0.250,
+  `output_url` text DEFAULT NULL,
+  `error_message` text DEFAULT NULL,
+  `requested_by` int(11) DEFAULT NULL,
+  `started_at` datetime DEFAULT NULL,
+  `finished_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_dubbing_jobs_episode_created` (`episode_id`, `created_at`),
+  KEY `idx_dubbing_jobs_status` (`status`),
+  CONSTRAINT `fk_dubbing_jobs_episode` FOREIGN KEY (`episode_id`) REFERENCES `episodes` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_dubbing_jobs_subtitle` FOREIGN KEY (`subtitle_id`) REFERENCES `episode_subtitles` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_dubbing_jobs_user` FOREIGN KEY (`requested_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import AddIcon from '@mui/icons-material/Add';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CategoryIcon from '@mui/icons-material/Category';
@@ -110,6 +110,20 @@ const getTrailerEmbedUrl = (url) => {
 const getPersonName = (person) => {
   if (typeof person === 'string') return person.trim();
   return String(person?.name || '').trim();
+};
+
+const slugifyPersonName = (name) => String(name || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '');
+
+const getPersonPath = (pathBase, person) => {
+  const id = Number(person?.id);
+  if (!pathBase || !Number.isFinite(id) || id <= 0) return '';
+  const slug = slugifyPersonName(getPersonName(person));
+  return `${pathBase}/${id}${slug ? `-${slug}` : ''}`;
 };
 
 const normalizePeople = (people) => {
@@ -298,11 +312,12 @@ function TabButton({ tab, active, onClick }) {
   );
 }
 
-function PersonAvatar({ person, role }) {
+function PersonAvatar({ person, role, pathBase }) {
   const name = getPersonName(person);
   const image = person?.profile_pic_url;
+  const personPath = getPersonPath(pathBase, person);
 
-  return (
+  const content = (
     <article className="group/person w-[180px] shrink-0 rounded-2xl border border-white/10 bg-white/[0.05] p-4 transition-colors hover:border-white/25 hover:bg-white/[0.08]">
       <div className="mx-auto h-24 w-24 overflow-hidden rounded-full border border-white/15 bg-white/10">
         {image ? (
@@ -329,9 +344,17 @@ function PersonAvatar({ person, role }) {
       </div>
     </article>
   );
+
+  if (!personPath) return content;
+
+  return (
+    <Link to={personPath} className="block shrink-0 no-underline outline-none focus-visible:ring-2 focus-visible:ring-primary/70 rounded-2xl">
+      {content}
+    </Link>
+  );
 }
 
-function PeopleCarousel({ title, people, role, emptyText }) {
+function PeopleCarousel({ title, people, role, emptyText, pathBase }) {
   return (
     <section>
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -345,7 +368,7 @@ function PeopleCarousel({ title, people, role, emptyText }) {
       {people.length > 0 ? (
         <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-3 md:mx-0 md:px-0">
           {people.map((person) => (
-            <PersonAvatar key={person.id || getPersonName(person)} person={person} role={role} />
+            <PersonAvatar key={person.id || getPersonName(person)} person={person} role={role} pathBase={pathBase} />
           ))}
         </div>
       ) : (
@@ -1248,8 +1271,8 @@ const DetailMovies = () => {
 
               {activeTab === 'cast' && (
                 <div className="space-y-10">
-                  <PeopleCarousel title="Đạo diễn" people={directors} role="Đạo diễn" emptyText="Chưa có thông tin đạo diễn." />
-                  <PeopleCarousel title="Diễn viên" people={actors} role="Diễn viên" emptyText="Chưa có thông tin diễn viên." />
+                  <PeopleCarousel title="Đạo diễn" people={directors} role="Đạo diễn" emptyText="Chưa có thông tin đạo diễn." pathBase="/dao-dien" />
+                  <PeopleCarousel title="Diễn viên" people={actors} role="Diễn viên" emptyText="Chưa có thông tin diễn viên." pathBase="/dien-vien" />
                 </div>
               )}
 

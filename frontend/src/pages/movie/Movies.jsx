@@ -258,13 +258,18 @@ export default function Movies() {
           pagedActors.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 animate-in fade-in duration-500">
               {pagedActors.map((actor, idx) => (
-                <div key={`actor-${actor.id || idx}`} className="flex flex-col items-center group/actor cursor-pointer">
+                <button
+                  key={`actor-${actor.id || idx}`}
+                  type="button"
+                  onClick={() => actor.id && navigate(`/dien-vien/${actor.id}`)}
+                  className="flex flex-col items-center group/actor cursor-pointer text-left"
+                >
                   <div className="w-28 h-28 md:w-36 md:h-36 rounded-full overflow-hidden mb-3 border-4 border-transparent group-hover/actor:border-primary transition-all duration-300 shadow-xl relative">
                     <img src={actor.profile_pic_url || '/avatar-actor.svg'} alt={actor.name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.src = '/avatar-actor.svg'; }} />
                     <div className="absolute inset-0 bg-black/20 group-hover/actor:bg-transparent transition-colors" />
                   </div>
                   <h3 className="text-white font-bold text-center group-hover/actor:text-primary transition-colors">{actor.name}</h3>
-                </div>
+                </button>
               ))}
             </div>
           ) : (

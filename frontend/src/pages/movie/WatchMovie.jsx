@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FaArrowLeft, FaChevronLeft, FaChevronRight, FaRegCommentDots, FaRegHeart, FaShareAlt, FaStar, FaTimes } from "react-icons/fa";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import VideoPlayer from "../../components/player/VideoPlayer";
 import { API_BASE_URL, API_URL as API } from "../../config/api";
 import {
@@ -96,6 +96,20 @@ function normalizeLookupRows(items) {
       return name ? { ...item, id: item?.id || name || index, name } : null;
     })
     .filter(Boolean);
+}
+
+const slugifyPersonName = (name) => String(name || "")
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, "-")
+  .replace(/^-+|-+$/g, "");
+
+function getPersonPath(pathBase, person) {
+  const id = Number(person?.id);
+  if (!pathBase || !Number.isFinite(id) || id <= 0) return "";
+  const slug = slugifyPersonName(getItemName(person));
+  return `${pathBase}/${id}${slug ? `-${slug}` : ""}`;
 }
 
 function formatViewCount(value) {
@@ -339,6 +353,33 @@ function DetailLine({ label, value }) {
   );
 }
 
+function DetailPeopleLine({ label, people, pathBase }) {
+  const normalizedPeople = normalizeLookupRows(people);
+  if (!normalizedPeople.length) return null;
+
+  return (
+    <p className="text-sm leading-relaxed text-white/60">
+      <span className="font-bold text-white/45">{label}: </span>
+      <span className="font-bold text-white/90">
+        {normalizedPeople.map((person, index) => {
+          const path = getPersonPath(pathBase, person);
+          const name = getItemName(person);
+          const suffix = index < normalizedPeople.length - 1 ? ', ' : '';
+          if (!path) return <span key={`${name}-${index}`}>{name}{suffix}</span>;
+          return (
+            <span key={person.id || `${name}-${index}`}>
+              <Link to={path} className="text-white/90 no-underline transition-colors hover:text-primary">
+                {name}
+              </Link>
+              {suffix}
+            </span>
+          );
+        })}
+      </span>
+    </p>
+  );
+}
+
 function WatchInfoSection({
   movie,
   episodes,
@@ -527,9 +568,9 @@ function WatchInfoSection({
             )}
 
             {relatedMovies.length > 0 && (
-              <div className="mt-9">
+              <div className="mt-9 xl:w-[calc(100%_+_392px)]">
                 <h2 className="mb-5 text-3xl font-black">Video liên quan</h2>
-                <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-4 md:mx-0 md:px-0">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
                   {relatedMovies.map((item) => {
                     const itemId = item.id || item.movie_id;
                     return (
@@ -537,17 +578,23 @@ function WatchInfoSection({
                         key={itemId}
                         type="button"
                         onClick={() => itemId && onOpenMovie(itemId)}
-                        className="group w-[190px] shrink-0 text-left"
+                        className="group min-w-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/80"
                       >
-                        <div className="aspect-[2/3] overflow-hidden rounded-sm bg-[#1c1c1c]">
+                        <div className="relative aspect-[2/3] w-full overflow-hidden rounded-xl bg-[#1c1c1c] shadow-[0_12px_30px_rgba(0,0,0,0.28)]">
                           <img
                             src={item.poster_url || item.bg_url}
-                            alt=""
+                            alt={item.title || ""}
                             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                             referrerPolicy="no-referrer"
+                            loading="lazy"
                           />
+                          {item.quality && (
+                            <span className="absolute left-2 top-2 rounded bg-black/70 px-2 py-1 text-[10px] font-black uppercase text-white/90 backdrop-blur">
+                              {item.quality}
+                            </span>
+                          )}
                         </div>
-                        <h3 className="mt-3 line-clamp-2 text-sm font-black text-white">{item.title}</h3>
+                        <h3 className="mt-3 min-h-[40px] break-words line-clamp-2 text-sm font-black leading-5 text-white transition-colors group-hover:text-primary/90">{item.title}</h3>
                       </button>
                     );
                   })}
@@ -564,8 +611,8 @@ function WatchInfoSection({
             </div>
 
             <div className="space-y-4">
-              <DetailLine label="Diễn viên" value={actors.join(", ")} />
-              <DetailLine label="Đạo diễn" value={directors.join(", ")} />
+              <DetailPeopleLine label="Diễn viên" people={actors} pathBase="/dien-vien" />
+              <DetailPeopleLine label="Đạo diễn" people={directors} pathBase="/dao-dien" />
               <DetailLine label="Thể loại" value={genres.join(", ")} />
             </div>
           </aside>
@@ -627,8 +674,8 @@ const WatchMovie = () => {
     : getEpisodePlaybackSource(currentEpisode);
   const genres = useMemo(() => normalizeNameList(data?.genres?.length ? data.genres : movie?.genres), [data?.genres, movie?.genres]);
   const countries = useMemo(() => normalizeNameList(data?.countries?.length ? data.countries : movie?.countries), [data?.countries, movie?.countries]);
-  const actors = useMemo(() => normalizeNameList(data?.actors?.length ? data.actors : movie?.actors), [data?.actors, movie?.actors]);
-  const directors = useMemo(() => normalizeNameList(data?.directors?.length ? data.directors : movie?.directors), [data?.directors, movie?.directors]);
+  const actors = useMemo(() => normalizeLookupRows(data?.actors?.length ? data.actors : movie?.actors), [data?.actors, movie?.actors]);
+  const directors = useMemo(() => normalizeLookupRows(data?.directors?.length ? data.directors : movie?.directors), [data?.directors, movie?.directors]);
   const suggestedMovies = useMemo(() => data?.suggested || movie?.suggested || [], [data?.suggested, movie?.suggested]);
   const metaItems = useMemo(() => buildMetaItems(movie, episodes, countries), [countries, episodes, movie]);
   const viewLabel = useMemo(() => formatViewCount(movie?.views), [movie?.views]);

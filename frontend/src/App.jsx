@@ -14,8 +14,10 @@ const Login = lazy(() => import('./pages/auth/Login'));
 const Register = lazy(() => import('./pages/auth/Register'));
 const Admin = lazy(() => import('./pages/admin/AdminPage'));
 const Movies = lazy(() => import('./pages/movie/Movies'));
+const ActorList = lazy(() => import('./pages/movie/ActorList'));
 const DetailMovies = lazy(() => import('./pages/movie/DetailMovies'));
 const WatchMovie = lazy(() => import('./pages/movie/WatchMovie'));
+const PersonMovies = lazy(() => import('./pages/movie/PersonMovies'));
 const Search = lazy(() => import('./pages/movie/Search'));
 const ForYou = lazy(() => import('./pages/movie/ForYou'));
 const Profile = lazy(() => import('./pages/user/Profile'));
@@ -91,8 +93,11 @@ function App() {
                     <Route path="/register" element={<Register />} />
                     <Route path="/admin" element={<Admin />} />
                     <Route path="/movies" element={<Movies />} />
+                    <Route path="/dien-vien" element={<ActorList />} />
                     <Route path="/movies/:id" element={<DetailMovies />} />
                     <Route path="/watch/:id" element={<WatchMovie />} />
+                    <Route path="/dien-vien/:personKey" element={<PersonMovies type="actor" />} />
+                    <Route path="/dao-dien/:personKey" element={<PersonMovies type="director" />} />
                     <Route path="/search" element={<Search />} />
                     <Route path="/for-you" element={<ForYou />} />
                     <Route path="/user/profile" element={<Profile />} />

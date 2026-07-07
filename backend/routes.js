@@ -63,6 +63,46 @@ function cleanImageUrl(value) {
   return String(value).replace(/&quot;?|"/g, '').trim() || null;
 }
 
+async function attachMovieGenresAndCountries(db, rows) {
+  const movieIds = rows.map((row) => row.id);
+  if (!movieIds.length) return rows;
+
+  const placeholders = movieIds.map(() => '?').join(',');
+  const [genreRows] = await db.query(
+    `SELECT mg.movie_id, g.name
+     FROM movie_genres mg
+     JOIN genres g ON mg.genre_id = g.id
+     WHERE mg.movie_id IN (${placeholders})`,
+    movieIds
+  );
+  const [countryRows] = await db.query(
+    `SELECT mc.movie_id, c.name
+     FROM movie_countries mc
+     JOIN countries c ON mc.country_id = c.id
+     WHERE mc.movie_id IN (${placeholders})`,
+    movieIds
+  );
+
+  const genresMap = genreRows.reduce((acc, row) => {
+    if (!acc[row.movie_id]) acc[row.movie_id] = [];
+    acc[row.movie_id].push(row.name);
+    return acc;
+  }, {});
+  const countriesMap = countryRows.reduce((acc, row) => {
+    if (!acc[row.movie_id]) acc[row.movie_id] = [];
+    acc[row.movie_id].push(row.name);
+    return acc;
+  }, {});
+
+  return rows.map((row) => ({
+    ...row,
+    poster_url: cleanImageUrl(row.poster_url),
+    bg_url: cleanImageUrl(row.bg_url),
+    genres: genresMap[row.id] || [],
+    countries: countriesMap[row.id] || [],
+  }));
+}
+
 function attachSubtitleTracks(episodes, tracksByEpisode) {
   return episodes.map((episode) => {
     const storedTracks = tracksByEpisode.get(Number(episode.id)) || [];
@@ -129,16 +169,16 @@ async function sendOtpEmail(email, otp, type = 'register') {
   });
 
   const subject = type === 'register'
-    ? 'XÃ¡c nháº­n email IT Move'
+    ? 'Xác nhận email IT Move'
     : type === 'reset-password'
-      ? 'Äáº·t láº¡i máº­t kháº©u IT Move'
-      : 'MÃ£ OTP IT Move';
+      ? 'Đặt lại mật khẩu IT Move'
+      : 'Mã OTP IT Move';
 
   await transporter.sendMail({
     from: process.env.SMTP_FROM || '"IT Move" <no-reply@itmove.local>',
     to: email,
     subject,
-    text: `MÃ£ xÃ¡c nháº­n cá»§a báº¡n lÃ : ${otp}\n\nMÃ£ cÃ³ hiá»‡u lá»±c trong ${OTP_EXPIRATION_MINUTES} phÃºt.`,
+    text: `Mã xác nhận của bạn là: ${otp}\n\nMã có hiệu lực trong ${OTP_EXPIRATION_MINUTES} phút.`,
   });
 }
 
@@ -175,7 +215,7 @@ async function verifyGoogleCredential(credential) {
   };
 }
 
-// Láº¥y pool káº¿t ná»‘i tá»« app.locals
+// Lấy pool kết nối từ app.locals
 function getDb(req) {
   return req.app.locals.db;
 }
@@ -303,7 +343,7 @@ async function resolveProfileId(db, userId, requestedProfileId = null) {
       [numericProfileId, numericUserId]
     );
     if (!rows.length) {
-      const error = new Error('Profile khÃ´ng thuá»™c tÃ i khoáº£n nÃ y');
+      const error = new Error('Profile không thuộc tài khoản này');
       error.statusCode = 403;
       throw error;
     }
@@ -360,14 +400,14 @@ async function getValidatedWatchProgressInput(db, body) {
   let duration = clampSeconds(body?.duration_seconds);
 
   if (!movieId) {
-    const error = new Error('Thiáº¿u movie_id há»£p lá»‡');
+    const error = new Error('Thiếu movie_id hợp lệ');
     error.statusCode = 400;
     throw error;
   }
 
   const [movieRows] = await db.execute('SELECT id FROM movies WHERE id = ? LIMIT 1', [movieId]);
   if (!movieRows.length) {
-    const error = new Error('Phim khÃ´ng tá»“n táº¡i');
+    const error = new Error('Phim không tồn tại');
     error.statusCode = 404;
     throw error;
   }
@@ -379,7 +419,7 @@ async function getValidatedWatchProgressInput(db, body) {
       [episodeId, movieId]
     );
     if (!episodeRows.length) {
-      const error = new Error('Táº­p phim khÃ´ng tá»“n táº¡i hoáº·c khÃ´ng thuá»™c phim nÃ y');
+      const error = new Error('Tập phim không tồn tại hoặc không thuộc phim này');
       error.statusCode = 400;
       throw error;
     }
@@ -505,25 +545,25 @@ function buildRecentWatchActivity(rows, days = 7) {
   });
 }
 
-// ÄÄƒng kÃ½ tÃ i khoáº£n vÃ  gá»­i OTP xÃ¡c nháº­n email
+// Đăng ký tài khoản và gửi OTP xác nhận email
 router.post('/auth/register', async (req, res) => {
   const { username, password, email } = req.body;
-  if (!username || !password || !email) return res.status(400).json({ message: 'Thiáº¿u thÃ´ng tin Ä‘Äƒng kÃ½' });
+  if (!username || !password || !email) return res.status(400).json({ message: 'Thiếu thông tin đăng ký' });
   try {
     const db = getDb(req);
     const normalizedEmail = email.trim().toLowerCase();
     const [existingByEmail] = await db.execute('SELECT * FROM users WHERE email = ?', [normalizedEmail]);
     if (existingByEmail.length > 0) {
       const user = existingByEmail[0];
-      if (user.email_verified) return res.status(400).json({ message: 'Email Ä‘Ã£ Ä‘Æ°á»£c Ä‘Äƒng kÃ½' });
+      if (user.email_verified) return res.status(400).json({ message: 'Email đã được đăng ký' });
       const otp = generateOtp();
       await setUserOtp(db, user.id, otp);
       await sendOtpEmail(normalizedEmail, otp, 'register');
-      return res.json({ message: 'TÃ i khoáº£n chÆ°a xÃ¡c nháº­n. MÃ£ OTP má»›i Ä‘Ã£ Ä‘Æ°á»£c gá»­i.', requiresVerification: true, email: normalizedEmail });
+      return res.json({ message: 'Tài khoản chưa xác nhận. Mã OTP mới đã được gửi.', requiresVerification: true, email: normalizedEmail });
     }
 
     const [existingByUsername] = await db.execute('SELECT id FROM users WHERE username = ?', [username]);
-    if (existingByUsername.length > 0) return res.status(400).json({ message: 'TÃªn Ä‘Äƒng nháº­p Ä‘Ã£ tá»“n táº¡i' });
+    if (existingByUsername.length > 0) return res.status(400).json({ message: 'Tên đăng nhập đã tồn tại' });
 
     const hash = await bcrypt.hash(password, 10);
     const [result] = await db.execute(
@@ -533,71 +573,71 @@ router.post('/auth/register', async (req, res) => {
     const otp = generateOtp();
     await setUserOtp(db, result.insertId, otp);
     await sendOtpEmail(normalizedEmail, otp, 'register');
-    res.json({ message: 'ÄÄƒng kÃ½ thÃ nh cÃ´ng. Vui lÃ²ng nháº­p mÃ£ OTP Ä‘Ã£ gá»­i email Ä‘á»ƒ xÃ¡c nháº­n tÃ i khoáº£n.', requiresVerification: true, email: normalizedEmail });
+    res.json({ message: 'Đăng ký thành công. Vui lòng nhập mã OTP đã gửi email để xác nhận tài khoản.', requiresVerification: true, email: normalizedEmail });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// XÃ¡c nháº­n email báº±ng OTP
+// Xác nhận email bằng OTP
 router.post('/auth/verify-email', async (req, res) => {
   const { email, otp } = req.body;
-  if (!email || !otp) return res.status(400).json({ message: 'Thiáº¿u email hoáº·c mÃ£ OTP' });
+  if (!email || !otp) return res.status(400).json({ message: 'Thiếu email hoặc mã OTP' });
   try {
     const db = getDb(req);
     const [rows] = await db.execute('SELECT * FROM users WHERE email = ?', [email.trim().toLowerCase()]);
-    if (!rows.length) return res.status(404).json({ message: 'KhÃ´ng tÃ¬m tháº¥y tÃ i khoáº£n' });
+    if (!rows.length) return res.status(404).json({ message: 'Không tìm thấy tài khoản' });
     const user = rows[0];
-    if (user.email_verified) return res.json({ message: 'Email Ä‘Ã£ Ä‘Æ°á»£c xÃ¡c nháº­n' });
-    if (!user.email_otp || user.email_otp !== hashOtp(otp)) return res.status(400).json({ message: 'MÃ£ OTP khÃ´ng Ä‘Ãºng' });
-    if (user.email_otp_expires && new Date(user.email_otp_expires) < new Date()) return res.status(400).json({ message: 'MÃ£ OTP Ä‘Ã£ háº¿t háº¡n' });
+    if (user.email_verified) return res.json({ message: 'Email đã được xác nhận' });
+    if (!user.email_otp || user.email_otp !== hashOtp(otp)) return res.status(400).json({ message: 'Mã OTP không đúng' });
+    if (user.email_otp_expires && new Date(user.email_otp_expires) < new Date()) return res.status(400).json({ message: 'Mã OTP đã hết hạn' });
     await db.execute('UPDATE users SET email_verified=1, email_otp=NULL, email_otp_expires=NULL WHERE id=?', [user.id]);
-    res.json({ message: 'XÃ¡c nháº­n email thÃ nh cÃ´ng' });
+    res.json({ message: 'Xác nhận email thành công' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// Gá»­i láº¡i OTP xÃ¡c nháº­n email
+// Gửi lại OTP xác nhận email
 router.post('/auth/resend-verification', async (req, res) => {
   const { email } = req.body;
-  if (!email) return res.status(400).json({ message: 'Thiáº¿u email' });
+  if (!email) return res.status(400).json({ message: 'Thiếu email' });
   try {
     const db = getDb(req);
     const normalizedEmail = email.trim().toLowerCase();
     const [rows] = await db.execute('SELECT * FROM users WHERE email = ?', [normalizedEmail]);
-    if (!rows.length) return res.status(404).json({ message: 'KhÃ´ng tÃ¬m tháº¥y tÃ i khoáº£n' });
-    if (rows[0].email_verified) return res.json({ message: 'Email Ä‘Ã£ Ä‘Æ°á»£c xÃ¡c nháº­n' });
+    if (!rows.length) return res.status(404).json({ message: 'Không tìm thấy tài khoản' });
+    if (rows[0].email_verified) return res.json({ message: 'Email đã được xác nhận' });
     const otp = generateOtp();
     await setUserOtp(db, rows[0].id, otp);
     await sendOtpEmail(normalizedEmail, otp, 'register');
-    res.json({ message: 'MÃ£ OTP má»›i Ä‘Ã£ Ä‘Æ°á»£c gá»­i' });
+    res.json({ message: 'Mã OTP mới đã được gửi' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// ÄÄƒng nháº­p báº±ng username hoáº·c email
+// Đăng nhập bằng username hoặc email
 router.post('/auth/login', async (req, res) => {
   const { username, email, password } = req.body;
   const identifier = (username || email || '').trim();
-  if (!identifier || !password) return res.status(400).json({ message: 'Thiáº¿u thÃ´ng tin Ä‘Äƒng nháº­p' });
+  if (!identifier || !password) return res.status(400).json({ message: 'Thiếu thông tin đăng nhập' });
   try {
     const db = getDb(req);
     const [rows] = await db.execute('SELECT * FROM users WHERE username = ? OR email = ?', [identifier, identifier.toLowerCase()]);
-    if (!rows.length) return res.status(401).json({ message: 'ThÃ´ng tin Ä‘Äƒng nháº­p khÃ´ng há»£p lá»‡' });
+    if (!rows.length) return res.status(401).json({ message: 'Thông tin đăng nhập không hợp lệ' });
     const user = rows[0];
-    if (!user.is_active) return res.status(403).json({ message: 'TÃ i khoáº£n Ä‘Ã£ bá»‹ khÃ³a' });
-    if (!user.email_verified) return res.status(403).json({ message: 'Vui lÃ²ng xÃ¡c nháº­n email trÆ°á»›c khi Ä‘Äƒng nháº­p', requiresVerification: true, email: user.email });
+    if (!user.is_active) return res.status(403).json({ message: 'Tài khoản đã bị khóa' });
+    if (!user.email_verified) return res.status(403).json({ message: 'Vui lòng xác nhận email trước khi đăng nhập', requiresVerification: true, email: user.email });
     const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(401).json({ message: 'ThÃ´ng tin Ä‘Äƒng nháº­p khÃ´ng há»£p lá»‡' });
+    if (!match) return res.status(401).json({ message: 'Thông tin đăng nhập không hợp lệ' });
     res.json(formatUser(user));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// ÄÄƒng nháº­p báº±ng Google Identity credential
+// Đăng nhập bằng Google Identity credential
 router.post('/auth/google', async (req, res) => {
   const { credential } = req.body;
   if (!credential) return res.status(400).json({ message: 'Missing Google credential' });
@@ -623,7 +663,7 @@ router.post('/auth/google', async (req, res) => {
       const [createdRows] = await db.execute('SELECT * FROM users WHERE id = ?', [result.insertId]);
       user = createdRows[0];
     } else {
-      if (!user.is_active) return res.status(403).json({ message: 'TÃ i khoáº£n Ä‘Ã£ bá»‹ khÃ³a' });
+      if (!user.is_active) return res.status(403).json({ message: 'Tài khoản đã bị khóa' });
       if (!user.email_verified) {
         await db.execute('UPDATE users SET email_verified=1, email_otp=NULL, email_otp_expires=NULL WHERE id=?', [user.id]);
         user.email_verified = 1;
@@ -639,7 +679,7 @@ router.post('/auth/google', async (req, res) => {
 router.get('/profiles', async (req, res) => {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: 'ChÆ°a Ä‘Äƒng nháº­p' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
     await ensureDefaultProfile(db, userId);
     const [rows] = await db.execute(
@@ -660,13 +700,13 @@ router.get('/profiles', async (req, res) => {
 router.post('/profiles', async (req, res) => {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: 'ChÆ°a Ä‘Äƒng nháº­p' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
     const { name, avatarColor, avatarUrl, isKids, settings } = normalizeProfilePayload(req.body);
-    if (!name) return res.status(400).json({ message: 'TÃªn profile khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng' });
+    if (!name) return res.status(400).json({ message: 'Tên profile không được để trống' });
 
     const [[{ count }]] = await db.execute('SELECT COUNT(*) AS count FROM user_profiles WHERE user_id = ?', [userId]);
-    if (Number(count) >= 5) return res.status(400).json({ message: 'Má»—i tÃ i khoáº£n tá»‘i Ä‘a 5 profile' });
+    if (Number(count) >= 5) return res.status(400).json({ message: 'Mỗi tài khoản tối đa 5 profile' });
 
     const isDefault = Number(count) === 0 ? 1 : 0;
     const [result] = await db.execute(
@@ -696,11 +736,11 @@ router.post('/profiles', async (req, res) => {
 router.put('/profiles/:profileId', async (req, res) => {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: 'ChÆ°a Ä‘Äƒng nháº­p' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
     const profileId = await resolveProfileId(db, userId, req.params.profileId);
     const { name, avatarColor, avatarUrl, isKids, settings } = normalizeProfilePayload(req.body);
-    if (!name) return res.status(400).json({ message: 'TÃªn profile khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng' });
+    if (!name) return res.status(400).json({ message: 'Tên profile không được để trống' });
 
     await db.execute(
       `UPDATE user_profiles
@@ -730,7 +770,7 @@ router.put('/profiles/:profileId', async (req, res) => {
 router.post('/profiles/:profileId/default', async (req, res) => {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: 'ChÆ°a Ä‘Äƒng nháº­p' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
     const profileId = await resolveProfileId(db, userId, req.params.profileId);
     await db.execute('UPDATE user_profiles SET is_default = 0 WHERE user_id = ?', [userId]);
@@ -745,7 +785,7 @@ router.post('/profiles/:profileId/default', async (req, res) => {
 router.put('/profiles/:profileId/settings', async (req, res) => {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: 'ChÃ†Â°a Ã„â€˜Ã„Æ’ng nhÃ¡ÂºÂ­p' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
     const profileId = await resolveProfileId(db, userId, req.params.profileId);
     const settings = normalizeProfileSettingsPayload(req.body);
@@ -773,11 +813,11 @@ router.put('/profiles/:profileId/settings', async (req, res) => {
 router.delete('/profiles/:profileId', async (req, res) => {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: 'ChÆ°a Ä‘Äƒng nháº­p' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
     const profileId = await resolveProfileId(db, userId, req.params.profileId);
     const [[{ count }]] = await db.execute('SELECT COUNT(*) AS count FROM user_profiles WHERE user_id = ?', [userId]);
-    if (Number(count) <= 1) return res.status(400).json({ message: 'TÃ i khoáº£n cáº§n Ã­t nháº¥t 1 profile' });
+    if (Number(count) <= 1) return res.status(400).json({ message: 'Tài khoản cần ít nhất 1 profile' });
 
     const [rows] = await db.execute('SELECT is_default FROM user_profiles WHERE id = ? AND user_id = ? LIMIT 1', [profileId, userId]);
     const wasDefault = Boolean(rows[0]?.is_default);
@@ -807,7 +847,7 @@ router.get('/movies', async (req, res) => {
       `SELECT * FROM movies ${includeHidden ? '' : 'WHERE is_visible = 1'} ORDER BY ${orderBy}${limit ? ` LIMIT ${limit}` : ''}`
     );
 
-    // Láº¥y genres vÃ  countries cho táº¥t cáº£ movies
+    // Lấy genres và countries cho tất cả movies
     const movieIds = rows.map(row => row.id);
     let genresMap = {};
     let countriesMap = {};
@@ -841,7 +881,7 @@ router.get('/movies', async (req, res) => {
       }, {});
     }
 
-    // Gáº¯n genres vÃ  countries vÃ o tá»«ng movie, Ä‘á»“ng thá»i Ä‘áº£m báº£o cÃ¡c trÆ°á»ng cáº§n thiáº¿t luÃ´n cÃ³ máº·t
+    // Gắn genres và countries vào từng movie, đồng thời đảm bảo các trường cần thiết luôn có mặt
     const moviesWithGenresAndCountries = rows.map(row => ({
       ...row,
       age_limit: row.age_limit,
@@ -860,12 +900,12 @@ router.get('/movies', async (req, res) => {
   }
 });
 
-// ThÃªm phim (admin)
+// Thêm phim (admin)
 router.get('/recommendations', async (req, res) => {
   try {
     const db = getDb(req);
     const movieId = req.query.movie_id;
-    if (!movieId) return res.status(400).json({ message: 'movie_id lÃ  báº¯t buá»™c' });
+    if (!movieId) return res.status(400).json({ message: 'movie_id là bắt buộc' });
     const recommendations = await getSimilarMovies(db, movieId, clampLimit(req.query.limit));
     res.json(recommendations);
   } catch (err) {
@@ -881,6 +921,113 @@ router.get('/recommendations/user/:userId', async (req, res) => {
     res.json(recommendations);
   } catch (err) {
     res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.get('/people/:type/:id', async (req, res) => {
+  const type = String(req.params.type || '').toLowerCase();
+  const config = {
+    actors: {
+      table: 'actors',
+      linkTable: 'movie_actors',
+      linkColumn: 'actor_id',
+      role: 'actor',
+      role_label: 'Diễn viên',
+      movies_title: 'Các phim đã tham gia',
+    },
+    directors: {
+      table: 'directors',
+      linkTable: 'movie_directors',
+      linkColumn: 'director_id',
+      role: 'director',
+      role_label: 'Đạo diễn',
+      movies_title: 'Các phim đã đạo diễn',
+    },
+  }[type];
+  const personId = Number.parseInt(req.params.id, 10);
+
+  if (!config || !Number.isInteger(personId) || personId <= 0) {
+    return res.status(400).json({ message: 'Person type hoặc id không hợp lệ' });
+  }
+
+  try {
+    const db = getDb(req);
+    const [peopleRows] = await db.execute(
+      `SELECT id, name, profile_pic_url, bio FROM ${config.table} WHERE id = ? LIMIT 1`,
+      [personId]
+    );
+
+    if (!peopleRows.length) {
+      return res.status(404).json({ message: 'Không tìm thấy người này' });
+    }
+
+    const person = {
+      ...peopleRows[0],
+      profile_pic_url: cleanImageUrl(peopleRows[0].profile_pic_url),
+      role: config.role,
+      role_label: config.role_label,
+    };
+
+    const [movieRows] = await db.execute(
+      `
+        SELECT
+          m.id,
+          m.title,
+          m.original_title,
+          m.slug,
+          m.description,
+          m.poster_url,
+          m.release_year,
+          m.duration,
+          m.imdb_rating,
+          m.quality,
+          m.status,
+          m.is_series,
+          m.views,
+          m.created_at,
+          MAX(b.bg_url) AS bg_url,
+          COUNT(DISTINCT e.id) AS episode_count
+        FROM ${config.linkTable} mp
+        JOIN movies m ON mp.movie_id = m.id
+        LEFT JOIN banners b ON b.movie_id = m.id
+        LEFT JOIN episodes e ON e.movie_id = m.id
+        WHERE mp.${config.linkColumn} = ?
+          AND m.is_visible = 1
+        GROUP BY
+          m.id, m.title, m.original_title, m.slug, m.description, m.poster_url,
+          m.release_year, m.duration, m.imdb_rating, m.quality, m.status,
+          m.is_series, m.views, m.created_at
+        ORDER BY COALESCE(m.release_year, 0) DESC, m.created_at DESC, m.id DESC
+      `,
+      [personId]
+    );
+
+    const movies = await attachMovieGenresAndCountries(db, movieRows);
+    const yearCounts = movies.reduce((acc, movie) => {
+      const year = movie.release_year || 'Đang cập nhật';
+      acc[year] = (acc[year] || 0) + 1;
+      return acc;
+    }, {});
+
+    res.json({
+      person,
+      movies,
+      movies_title: config.movies_title,
+      stats: {
+        movie_count: movies.length,
+        first_year: movies.reduce((min, movie) => {
+          const year = Number(movie.release_year);
+          return Number.isFinite(year) && year > 0 ? Math.min(min || year, year) : min;
+        }, null),
+        latest_year: movies.reduce((max, movie) => {
+          const year = Number(movie.release_year);
+          return Number.isFinite(year) && year > 0 ? Math.max(max || year, year) : max;
+        }, null),
+        year_counts: yearCounts,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 
@@ -1109,7 +1256,7 @@ router.delete('/subtitles/:subtitleId', requireAdminMiddleware, async (req, res)
   try {
     const db = getDb(req);
     await deleteEpisodeSubtitle(db, req.params.subtitleId);
-    res.json({ message: 'ÄÃ£ xÃ³a phá»¥ Ä‘á».' });
+    res.json({ message: 'Đã xóa phụ đề.' });
   } catch (err) {
     res.status(err.statusCode || 500).json({ message: err.message });
   }
@@ -1130,7 +1277,7 @@ router.post('/movies', requireAdminMiddleware, async (req, res) => {
   }
 });
 
-// Sá»­a phim (admin)
+// Sửa phim (admin)
 router.put('/movies/:id', requireAdminMiddleware, async (req, res) => {
   const { title, description, poster_url, age_limit, original_title, release_year, duration, is_series, trailer_url, imdb_rating, quality, is_visible } = req.body;
   try {
@@ -1157,7 +1304,7 @@ router.post('/movies/tmdb-enrich-missing', requireAdminMiddleware, async (req, r
       delayMs: 0,
     });
     res.json({
-      message: 'ÄÃ£ cháº¡y bá»• sung dá»¯ liá»‡u TMDb hÃ ng loáº¡t.',
+      message: 'Đã chạy bổ sung dữ liệu TMDb hàng loạt.',
       ...result,
     });
   } catch (err) {
@@ -1175,7 +1322,7 @@ router.post('/movies/:id/tmdb-enrich', requireAdminMiddleware, async (req, res) 
       directorLimit: req.body?.director_limit || 4,
     });
     res.json({
-      message: 'ÄÃ£ kiá»ƒm tra vÃ  bá»• sung dá»¯ liá»‡u tá»« TMDb.',
+      message: 'Đã kiểm tra và bổ sung dữ liệu từ TMDb.',
       ...result,
     });
   } catch (err) {
@@ -1195,7 +1342,7 @@ router.patch('/movies/:id/visibility', async (req, res) => {
   }
 });
 
-// XÃ³a phim (admin)
+// Xóa phim (admin)
 router.delete('/movies/:id', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
@@ -1206,7 +1353,7 @@ router.delete('/movies/:id', requireAdminMiddleware, async (req, res) => {
   }
 });
 
-// Äáº·t vÃ©
+// Đặt vé
 router.post('/bookings', async (req, res) => {
   const { user_id, movie_id } = req.body;
   try {
@@ -1218,7 +1365,7 @@ router.post('/bookings', async (req, res) => {
   }
 });
 
-// Láº¥y vÃ© cá»§a user
+// Lấy vé của user
 router.get('/bookings/:user_id', async (req, res) => {
   try {
     const db = getDb(req);
@@ -1229,7 +1376,7 @@ router.get('/bookings/:user_id', async (req, res) => {
   }
 });
 
-// Láº¥y danh sÃ¡ch quá»‘c gia
+// Lấy danh sách quốc gia
 router.get('/countries', async (req, res) => {
   try {
     const db = getDb(req);
@@ -1240,55 +1387,55 @@ router.get('/countries', async (req, res) => {
   }
 });
 
-// ThÃªm quá»‘c gia má»›i
+// Thêm quốc gia mới
 router.post('/countries', requireAdminMiddleware, async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ message: 'Missing name' });
   try {
     const db = getDb(req);
-    // Kiá»ƒm tra trÃ¹ng tÃªn
+    // Kiểm tra trùng tên
     const [rows] = await db.execute('SELECT id FROM countries WHERE name = ?', [name]);
-    if (rows.length > 0) return res.status(400).json({ message: 'TÃªn quá»‘c gia Ä‘Ã£ tá»“n táº¡i' });
+    if (rows.length > 0) return res.status(400).json({ message: 'Tên quốc gia đã tồn tại' });
     await db.execute('INSERT INTO countries (name) VALUES (?)', [name]);
-    res.json({ message: 'ThÃªm quá»‘c gia thÃ nh cÃ´ng' });
+    res.json({ message: 'Thêm quốc gia thành công' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// Sá»­a quá»‘c gia
+// Sửa quốc gia
 router.put('/countries/:id', requireAdminMiddleware, async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ message: 'Missing name' });
   try {
     const db = getDb(req);
-    // Kiá»ƒm tra trÃ¹ng tÃªn (trá»« chÃ­nh nÃ³)
+    // Kiểm tra trùng tên (trừ chính nó)
     const [rows] = await db.execute('SELECT id FROM countries WHERE name = ? AND id != ?', [name, req.params.id]);
-    if (rows.length > 0) return res.status(400).json({ message: 'TÃªn quá»‘c gia Ä‘Ã£ tá»“n táº¡i' });
+    if (rows.length > 0) return res.status(400).json({ message: 'Tên quốc gia đã tồn tại' });
     const [result] = await db.execute('UPDATE countries SET name = ? WHERE id = ?', [name, req.params.id]);
-    if (result.affectedRows === 0) return res.status(404).json({ message: 'Quá»‘c gia khÃ´ng tá»“n táº¡i' });
-    res.json({ message: 'Cáº­p nháº­t quá»‘c gia thÃ nh cÃ´ng' });
+    if (result.affectedRows === 0) return res.status(404).json({ message: 'Quốc gia không tồn tại' });
+    res.json({ message: 'Cập nhật quốc gia thành công' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// XÃ³a quá»‘c gia
+// Xóa quốc gia
 router.delete('/countries/:id', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
-    // Kiá»ƒm tra quá»‘c gia cÃ³ Ä‘ang Ä‘Æ°á»£c liÃªn káº¿t vá»›i phim khÃ´ng
+    // Kiểm tra quốc gia có đang được liên kết với phim không
     const [used] = await db.execute('SELECT 1 FROM movie_countries WHERE country_id = ? LIMIT 1', [req.params.id]);
-    if (used.length > 0) return res.status(400).json({ message: 'KhÃ´ng thá»ƒ xÃ³a: Quá»‘c gia Ä‘ang Ä‘Æ°á»£c sá»­ dá»¥ng cho phim!' });
+    if (used.length > 0) return res.status(400).json({ message: 'Không thể xóa: Quốc gia đang được sử dụng cho phim!' });
     const [result] = await db.execute('DELETE FROM countries WHERE id = ?', [req.params.id]);
-    if (result.affectedRows === 0) return res.status(404).json({ message: 'Quá»‘c gia khÃ´ng tá»“n táº¡i' });
-    res.json({ message: 'ÄÃ£ xÃ³a quá»‘c gia thÃ nh cÃ´ng' });
+    if (result.affectedRows === 0) return res.status(404).json({ message: 'Quốc gia không tồn tại' });
+    res.json({ message: 'Đã xóa quốc gia thành công' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// Láº¥y danh sÃ¡ch thá»ƒ loáº¡i
+// Lấy danh sách thể loại
 router.get('/genres', async (req, res) => {
   try {
     const db = getDb(req);
@@ -1299,55 +1446,55 @@ router.get('/genres', async (req, res) => {
   }
 });
 
-// ThÃªm thá»ƒ loáº¡i má»›i
+// Thêm thể loại mới
 router.post('/genres', requireAdminMiddleware, async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ message: 'Missing name' });
   try {
     const db = getDb(req);
-    // Kiá»ƒm tra trÃ¹ng tÃªn
+    // Kiểm tra trùng tên
     const [rows] = await db.execute('SELECT id FROM genres WHERE name = ?', [name]);
-    if (rows.length > 0) return res.status(400).json({ message: 'TÃªn thá»ƒ loáº¡i Ä‘Ã£ tá»“n táº¡i' });
+    if (rows.length > 0) return res.status(400).json({ message: 'Tên thể loại đã tồn tại' });
     await db.execute('INSERT INTO genres (name) VALUES (?)', [name]);
-    res.json({ message: 'ThÃªm thá»ƒ loáº¡i thÃ nh cÃ´ng' });
+    res.json({ message: 'Thêm thể loại thành công' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// Sá»­a thá»ƒ loáº¡i
+// Sửa thể loại
 router.put('/genres/:id', requireAdminMiddleware, async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ message: 'Missing name' });
   try {
     const db = getDb(req);
-    // Kiá»ƒm tra trÃ¹ng tÃªn (trá»« chÃ­nh nÃ³)
+    // Kiểm tra trùng tên (trừ chính nó)
     const [rows] = await db.execute('SELECT id FROM genres WHERE name = ? AND id != ?', [name, req.params.id]);
-    if (rows.length > 0) return res.status(400).json({ message: 'TÃªn thá»ƒ loáº¡i Ä‘Ã£ tá»“n táº¡i' });
+    if (rows.length > 0) return res.status(400).json({ message: 'Tên thể loại đã tồn tại' });
     const [result] = await db.execute('UPDATE genres SET name = ? WHERE id = ?', [name, req.params.id]);
-    if (result.affectedRows === 0) return res.status(404).json({ message: 'Thá»ƒ loáº¡i khÃ´ng tá»“n táº¡i' });
-    res.json({ message: 'Cáº­p nháº­t thá»ƒ loáº¡i thÃ nh cÃ´ng' });
+    if (result.affectedRows === 0) return res.status(404).json({ message: 'Thể loại không tồn tại' });
+    res.json({ message: 'Cập nhật thể loại thành công' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// XÃ³a thá»ƒ loáº¡i
+// Xóa thể loại
 router.delete('/genres/:id', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
-    // Kiá»ƒm tra thá»ƒ loáº¡i cÃ³ Ä‘ang Ä‘Æ°á»£c liÃªn káº¿t vá»›i phim khÃ´ng
+    // Kiểm tra thể loại có đang được liên kết với phim không
     const [used] = await db.execute('SELECT 1 FROM movie_genres WHERE genre_id = ? LIMIT 1', [req.params.id]);
-    if (used.length > 0) return res.status(400).json({ message: 'KhÃ´ng thá»ƒ xÃ³a: Thá»ƒ loáº¡i Ä‘ang Ä‘Æ°á»£c sá»­ dá»¥ng cho phim!' });
+    if (used.length > 0) return res.status(400).json({ message: 'Không thể xóa: Thể loại đang được sử dụng cho phim!' });
     const [result] = await db.execute('DELETE FROM genres WHERE id = ?', [req.params.id]);
-    if (result.affectedRows === 0) return res.status(404).json({ message: 'Thá»ƒ loáº¡i khÃ´ng tá»“n táº¡i' });
-    res.json({ message: 'ÄÃ£ xÃ³a thá»ƒ loáº¡i thÃ nh cÃ´ng' });
+    if (result.affectedRows === 0) return res.status(404).json({ message: 'Thể loại không tồn tại' });
+    res.json({ message: 'Đã xóa thể loại thành công' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// Láº¥y phim theo thá»ƒ loáº¡i
+// Lấy phim theo thể loại
 router.get('/genres/:id/movies', async (req, res) => {
   try {
     const db = getDb(req);
@@ -1364,7 +1511,7 @@ router.get('/genres/:id/movies', async (req, res) => {
   }
 });
 
-// Láº¥y thá»ƒ loáº¡i theo tÃªn (tÃ¬m kiáº¿m)
+// Lấy thể loại theo tên (tìm kiếm)
 router.get('/genres/search/:name', async (req, res) => {
   try {
     const db = getDb(req);
@@ -1379,44 +1526,44 @@ router.get('/genres/search/:name', async (req, res) => {
   }
 });
 
-// QuÃªn máº­t kháº©u: gá»­i OTP Ä‘áº·t láº¡i máº­t kháº©u
+// Quên mật khẩu: gửi OTP đặt lại mật khẩu
 router.post('/auth/forgot-password', async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
-  if (!email) return res.status(400).json({ message: 'Vui lÃ²ng nháº­p email' });
+  if (!email) return res.status(400).json({ message: 'Vui lòng nhập email' });
 
   try {
     const db = getDb(req);
     const [rows] = await db.execute('SELECT id, email, is_active FROM users WHERE email = ? LIMIT 1', [email]);
 
-    // KhÃ´ng tiáº¿t lá»™ email cÃ³ tá»“n táº¡i hay khÃ´ng.
+    // Không tiết lộ email có tồn tại hay không.
     if (!rows.length) {
-      return res.json({ message: 'Náº¿u email tá»“n táº¡i, mÃ£ OTP Ä‘áº·t láº¡i máº­t kháº©u Ä‘Ã£ Ä‘Æ°á»£c gá»­i.' });
+      return res.json({ message: 'Nếu email tồn tại, mã OTP đặt lại mật khẩu đã được gửi.' });
     }
 
     const user = rows[0];
-    if (!user.is_active) return res.status(403).json({ message: 'TÃ i khoáº£n Ä‘Ã£ bá»‹ khÃ³a' });
+    if (!user.is_active) return res.status(403).json({ message: 'Tài khoản đã bị khóa' });
 
     const otp = generateOtp();
     await setPasswordResetOtp(db, user.id, otp);
     await sendOtpEmail(user.email, otp, 'reset-password');
 
-    res.json({ message: 'MÃ£ OTP Ä‘áº·t láº¡i máº­t kháº©u Ä‘Ã£ Ä‘Æ°á»£c gá»­i Ä‘áº¿n email cá»§a báº¡n.', email: user.email });
+    res.json({ message: 'Mã OTP đặt lại mật khẩu đã được gửi đến email của bạn.', email: user.email });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// XÃ¡c nháº­n OTP vÃ  Ä‘áº·t máº­t kháº©u má»›i
+// Xác nhận OTP và đặt mật khẩu mới
 router.post('/auth/reset-password', async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   const otp = String(req.body.otp || '').trim();
   const password = String(req.body.password || '');
 
   if (!email || !otp || !password) {
-    return res.status(400).json({ message: 'Vui lÃ²ng nháº­p email, OTP vÃ  máº­t kháº©u má»›i' });
+    return res.status(400).json({ message: 'Vui lòng nhập email, OTP và mật khẩu mới' });
   }
   if (password.length < 6) {
-    return res.status(400).json({ message: 'Máº­t kháº©u má»›i pháº£i cÃ³ Ã­t nháº¥t 6 kÃ½ tá»±' });
+    return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
   }
 
   try {
@@ -1425,15 +1572,15 @@ router.post('/auth/reset-password', async (req, res) => {
       'SELECT id, password_reset_otp, password_reset_expires, is_active FROM users WHERE email = ? LIMIT 1',
       [email]
     );
-    if (!rows.length) return res.status(404).json({ message: 'KhÃ´ng tÃ¬m tháº¥y tÃ i khoáº£n' });
+    if (!rows.length) return res.status(404).json({ message: 'Không tìm thấy tài khoản' });
 
     const user = rows[0];
-    if (!user.is_active) return res.status(403).json({ message: 'TÃ i khoáº£n Ä‘Ã£ bá»‹ khÃ³a' });
+    if (!user.is_active) return res.status(403).json({ message: 'Tài khoản đã bị khóa' });
     if (!user.password_reset_otp || user.password_reset_otp !== hashOtp(otp)) {
-      return res.status(400).json({ message: 'MÃ£ OTP khÃ´ng Ä‘Ãºng' });
+      return res.status(400).json({ message: 'Mã OTP không đúng' });
     }
     if (user.password_reset_expires && new Date(user.password_reset_expires) < new Date()) {
-      return res.status(400).json({ message: 'MÃ£ OTP Ä‘Ã£ háº¿t háº¡n' });
+      return res.status(400).json({ message: 'Mã OTP đã hết hạn' });
     }
 
     const hash = await bcrypt.hash(password, 10);
@@ -1442,13 +1589,13 @@ router.post('/auth/reset-password', async (req, res) => {
       [hash, user.id]
     );
 
-    res.json({ message: 'Äáº·t láº¡i máº­t kháº©u thÃ nh cÃ´ng. Báº¡n cÃ³ thá»ƒ Ä‘Äƒng nháº­p báº±ng máº­t kháº©u má»›i.' });
+    res.json({ message: 'Đặt lại mật khẩu thành công. Bạn có thể đăng nhập bằng mật khẩu mới.' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// Láº¥y tá»‘i Ä‘a 6 banner má»›i nháº¥t, kÃ¨m thÃ´ng tin phim vÃ  genres
+// Lấy tối đa 6 banner mới nhất, kèm thông tin phim và genres
 router.get('/banners', async (req, res) => {
   try {
     const db = getDb(req);
@@ -1482,7 +1629,7 @@ router.get('/banners', async (req, res) => {
       }, {});
     }
 
-    // Xá»­ lÃ½ badges: loáº¡i bá» trÆ°á»ng sx náº¿u cÃ³
+    // Xử lý badges: loại bỏ trường sx nếu có
     const cleanRows = rows.map(row => {
       let badges = [];
       try {
@@ -1507,7 +1654,7 @@ router.get('/banners', async (req, res) => {
   }
 });
 
-// ThÃªm banner má»›i
+// Thêm banner mới
 router.post('/banners', requireAdminMiddleware, async (req, res) => {
   const { movie_id, bg_url, title_url, thumbnails } = req.body;
   if (!movie_id || !bg_url) return res.status(400).json({ message: 'Missing required fields' });
@@ -1523,13 +1670,13 @@ router.post('/banners', requireAdminMiddleware, async (req, res) => {
   }
 });
 
-// Láº¥y chi tiáº¿t phim
+// Lấy chi tiết phim
 router.get('/movie/:id', async (req, res) => {
   try {
     const db = getDb(req);
     const movieId = req.params.id;
 
-    // 1. ThÃ´ng tin phim chÃ­nh
+    // 1. Thông tin phim chính
     const [movieRows] = await db.execute(
       'SELECT * FROM movies WHERE id = ?', [movieId]
     );
@@ -1578,10 +1725,10 @@ router.get('/movie/:id', async (req, res) => {
       `SELECT a.id, a.name, a.profile_pic_url, a.bio FROM movie_actors ma JOIN actors a ON ma.actor_id = a.id WHERE ma.movie_id = ?`, [movieId]
     );
 
-    // 9. Suggested movies (top imdb_rating, trá»« phim hiá»‡n táº¡i)
+    // 9. Suggested movies (top imdb_rating, trừ phim hiện tại)
     const suggestedRows = await getSimilarMovies(db, movieId, 12);
 
-    // 10. Káº¿t quáº£ tráº£ vá»
+    // 10. Kết quả trả về
     res.json({
       id: movie.id,
       title: movie.title,
@@ -1612,13 +1759,13 @@ router.get('/movie/:id', async (req, res) => {
   }
 });
 
-// API: /api/watch/:id - Tráº£ vá» thÃ´ng tin phim, genres, danh sÃ¡ch táº­p
+// API: /api/watch/:id - Trả về thông tin phim, genres, danh sách tập
 router.get('/watch/:id', async (req, res) => {
   try {
     const db = getDb(req);
     const movieId = req.params.id;
 
-    // 1. ThÃ´ng tin phim
+    // 1. Thông tin phim
     const [movieRows] = await db.execute('SELECT * FROM movies WHERE id = ?', [movieId]);
     if (!movieRows.length || !movieRows[0].is_visible) return res.status(404).json({ message: 'Movie not found' });
     await recordMovieView(db, req, movieId);
@@ -1643,7 +1790,7 @@ router.get('/watch/:id', async (req, res) => {
       `SELECT a.id, a.name, a.profile_pic_url, a.bio FROM movie_actors ma JOIN actors a ON ma.actor_id = a.id WHERE ma.movie_id = ?`, [movieId]
     );
 
-    // 3. Danh sÃ¡ch táº­p
+    // 3. Danh sách tập
     const [episodeRows] = await db.execute(
       `SELECT id, episode_number, title, video_url, hls_url, thumbnail_url, preview_url, duration_seconds, description, subtitle_url, dubbed_video_url FROM episodes WHERE movie_id = ? ORDER BY episode_number ASC`, [movieId]
     );
@@ -1676,12 +1823,12 @@ router.get('/movies/filter', async (req, res) => {
   try {
     const db = getDb(req);
     const {
-      country, // tÃªn quá»‘c gia
-      genre,   // tÃªn thá»ƒ loáº¡i
+      country, // tên quốc gia
+      genre,   // tên thể loại
       type,    // 'Phim lẻ', 'Phim bộ', 'Tất cả'
       rating,  // age_limit
-      year,    // nÄƒm sáº£n xuáº¥t
-      sort     // sáº¯p xáº¿p
+      year,    // năm sản xuất
+      sort     // sắp xếp
     } = req.query;
 
     let sql = `SELECT DISTINCT m.* FROM movies m`;
@@ -1689,11 +1836,11 @@ router.get('/movies/filter', async (req, res) => {
     let wheres = ['m.is_visible = 1'];
     let params = [];
 
-    // Join vá»›i báº£ng liÃªn quan náº¿u cáº§n
+    // Join với bảng liên quan nếu cần
     if (country && country.length > 0 && country !== 'Tất cả') {
       let countries = country;
       if (typeof countries === 'string') {
-        // Náº¿u lÃ  chuá»—i cÃ³ dáº¥u pháº©y, tÃ¡ch ra array
+        // Nếu là chuỗi có dấu phẩy, tách ra array
         if (countries.includes(',')) {
           countries = countries.split(',').map(s => s.trim());
         } else {
@@ -1706,7 +1853,7 @@ router.get('/movies/filter', async (req, res) => {
       params.push(...countries);
     }
     if (genre && genre.length > 0) {
-      // Äáº£m báº£o genre lÃ  array
+      // Đảm bảo genre là array
       let genres = genre;
       if (typeof genres === 'string') {
         if (genres.includes(',')) {
@@ -1752,22 +1899,22 @@ router.get('/movies/filter', async (req, res) => {
       params.push(...years);
     }
 
-    // GhÃ©p cÃ¡c join vÃ  where
+    // Ghép các join và where
     if (joins.length) sql += ' ' + joins.join(' ');
     if (wheres.length) sql += ' WHERE ' + wheres.join(' AND ');
 
-    // Sau khi ghÃ©p where, thÃªm GROUP BY m.id náº¿u cÃ³ filter thá»ƒ loáº¡i Ä‘á»ƒ trÃ¡nh duplicate
+    // Sau khi ghép where, thêm GROUP BY m.id nếu có filter thể loại để tránh duplicate
     if (joins.some(j => j.includes('movie_genres'))) {
       sql += ' GROUP BY m.id';
     }
 
-    // Sáº¯p xáº¿p
+    // Sắp xếp
     let order = 'm.created_at DESC';
     if (sort) {
-      if (sort === 'Má»›i nháº¥t') order = 'm.release_year DESC, m.created_at DESC';
-      else if (sort === 'Má»›i cáº­p nháº­t') order = 'm.created_at DESC';
-      else if (sort === 'Äiá»ƒm IMDb') order = 'm.imdb_rating DESC';
-      else if (sort === 'LÆ°á»£t xem') order = 'm.views DESC'; // náº¿u cÃ³ trÆ°á»ng views
+      if (sort === 'Mới nhất') order = 'm.release_year DESC, m.created_at DESC';
+      else if (sort === 'Mới cập nhật') order = 'm.created_at DESC';
+      else if (sort === 'Điểm IMDb') order = 'm.imdb_rating DESC';
+      else if (sort === 'Lượt xem') order = 'm.views DESC'; // nếu có trường views
     }
     sql += ` ORDER BY ${order}`;
 
@@ -1778,18 +1925,37 @@ router.get('/movies/filter', async (req, res) => {
   }
 });
 
-// Láº¥y danh sÃ¡ch diá»…n viÃªn
+// Lấy danh sách diễn viên
 router.get('/actors', async (req, res) => {
   try {
     const db = getDb(req);
-    const [rows] = await db.execute('SELECT * FROM actors ORDER BY name');
+    const imagePriority = req.query.image_priority === 'true';
+    const withStats = req.query.with_stats === 'true';
+    const [rows] = await db.execute(
+      withStats
+        ? `SELECT
+             a.*,
+             COALESCE(stats.movie_count, 0) AS movie_count
+           FROM actors a
+           LEFT JOIN (
+             SELECT actor_id, COUNT(DISTINCT movie_id) AS movie_count
+             FROM movie_actors
+             GROUP BY actor_id
+           ) stats ON stats.actor_id = a.id
+           ORDER BY ${imagePriority ? "CASE WHEN a.profile_pic_url IS NULL OR a.profile_pic_url = '' THEN 1 ELSE 0 END," : ''}
+                    movie_count DESC, a.name ASC`
+        : `SELECT *
+           FROM actors
+           ORDER BY ${imagePriority ? "CASE WHEN profile_pic_url IS NULL OR profile_pic_url = '' THEN 1 ELSE 0 END," : ''}
+                    name ASC`
+    );
     res.json(rows);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// Láº¥y danh sÃ¡ch táº­p phim cho 1 movie
+// Lấy danh sách tập phim cho 1 movie
 router.get('/movies/:id/episodes', async (req, res) => {
   try {
     const db = getDb(req);
@@ -1800,7 +1966,7 @@ router.get('/movies/:id/episodes', async (req, res) => {
   }
 });
 
-// ThÃªm táº­p phim má»›i cho phim
+// Thêm tập phim mới cho phim
 router.post('/movies/:id/episodes', requireAdminMiddleware, async (req, res) => {
   const {
     episode_number,
@@ -1814,7 +1980,7 @@ router.post('/movies/:id/episodes', requireAdminMiddleware, async (req, res) => 
     subtitle_url,
   } = req.body;
   if (!episode_number || !title || (!video_url && !hls_url)) {
-    return res.status(400).json({ message: 'Thiáº¿u thÃ´ng tin táº­p phim' });
+    return res.status(400).json({ message: 'Thiếu thông tin tập phim' });
   }
   try {
     const db = getDb(req);
@@ -1835,13 +2001,13 @@ router.post('/movies/:id/episodes', requireAdminMiddleware, async (req, res) => 
         subtitle_url || null,
       ]
     );
-    res.json({ message: 'ÄÃ£ thÃªm táº­p phim' });
+    res.json({ message: 'Đã thêm tập phim' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// Sá»­a táº­p phim
+// Sửa tập phim
 router.put('/episodes/:id', requireAdminMiddleware, async (req, res) => {
   const {
     episode_number,
@@ -1879,7 +2045,7 @@ router.put('/episodes/:id', requireAdminMiddleware, async (req, res) => {
   }
 });
 
-// XÃ³a táº­p phim
+// Xóa tập phim
 router.delete('/episodes/:id', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
@@ -2060,15 +2226,15 @@ router.delete('/banners/:id', requireAdminMiddleware, async (req, res) => {
 });
 
 // ===== MOVIE RELATIONSHIP API =====
-// Gáº¯n thá»ƒ loáº¡i cho phim
+// Gắn thể loại cho phim
 router.post('/movies/:id/genres', requireAdminMiddleware, async (req, res) => {
   const { genre_ids } = req.body; // array
   if (!Array.isArray(genre_ids)) return res.status(400).json({ message: 'genre_ids must be array' });
   try {
     const db = getDb(req);
-    // XÃ³a háº¿t genre cÅ©
+    // Xóa hết genre cũ
     await db.execute('DELETE FROM movie_genres WHERE movie_id=?', [req.params.id]);
-    // ThÃªm má»›i
+    // Thêm mới
     for (const gid of genre_ids) {
       await db.execute('INSERT INTO movie_genres (movie_id, genre_id) VALUES (?, ?)', [req.params.id, gid]);
     }
@@ -2077,7 +2243,7 @@ router.post('/movies/:id/genres', requireAdminMiddleware, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-// Gáº¯n quá»‘c gia cho phim
+// Gắn quốc gia cho phim
 router.post('/movies/:id/countries', requireAdminMiddleware, async (req, res) => {
   const { country_ids } = req.body;
   if (!Array.isArray(country_ids)) return res.status(400).json({ message: 'country_ids must be array' });
@@ -2092,7 +2258,7 @@ router.post('/movies/:id/countries', requireAdminMiddleware, async (req, res) =>
     res.status(500).json({ message: err.message });
   }
 });
-// Gáº¯n diá»…n viÃªn cho phim
+// Gắn diễn viên cho phim
 router.post('/movies/:id/actors', requireAdminMiddleware, async (req, res) => {
   const { actor_ids } = req.body;
   if (!Array.isArray(actor_ids)) return res.status(400).json({ message: 'actor_ids must be array' });
@@ -2107,7 +2273,7 @@ router.post('/movies/:id/actors', requireAdminMiddleware, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-// Gáº¯n Ä‘áº¡o diá»…n cho phim
+// Gắn đạo diễn cho phim
 router.post('/movies/:id/directors', requireAdminMiddleware, async (req, res) => {
   const { director_ids } = req.body;
   if (!Array.isArray(director_ids)) return res.status(400).json({ message: 'director_ids must be array' });
@@ -2127,7 +2293,7 @@ router.post('/movies/:id/directors', requireAdminMiddleware, async (req, res) =>
 router.get('/user/favorites', async (req, res) => {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: 'ChÆ°a Ä‘Äƒng nháº­p' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
     const profileId = await resolveProfileId(db, userId, profileHeader(req));
     res.json(await getMovieCardsByJoin(db, 'user_favorites', userId, profileId));
@@ -2140,7 +2306,7 @@ router.post('/user/favorites', async (req, res) => {
   try {
     const userId = getUserId(req);
     const { movie_id } = req.body;
-    if (!userId || !movie_id) return res.status(400).json({ message: 'Thiáº¿u user_id hoáº·c movie_id' });
+    if (!userId || !movie_id) return res.status(400).json({ message: 'Thiếu user_id hoặc movie_id' });
     const db = getDb(req);
     const profileId = await resolveProfileId(db, userId, profileHeader(req));
     await db.execute('INSERT IGNORE INTO user_favorites (user_id, profile_id, movie_id) VALUES (?, ?, ?)', [userId, profileId, movie_id]);
@@ -2153,7 +2319,7 @@ router.post('/user/favorites', async (req, res) => {
 router.delete('/user/favorites/:movieId', async (req, res) => {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: 'ChÆ°a Ä‘Äƒng nháº­p' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
     const profileId = await resolveProfileId(db, userId, profileHeader(req));
     await db.execute('DELETE FROM user_favorites WHERE user_id=? AND profile_id=? AND movie_id=?', [userId, profileId, req.params.movieId]);
@@ -2166,7 +2332,7 @@ router.delete('/user/favorites/:movieId', async (req, res) => {
 router.get('/user/watchlist', async (req, res) => {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: 'ChÆ°a Ä‘Äƒng nháº­p' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
     const profileId = await resolveProfileId(db, userId, profileHeader(req));
     res.json(await getMovieCardsByJoin(db, 'user_watchlist', userId, profileId));
@@ -2179,7 +2345,7 @@ router.post('/user/watchlist', async (req, res) => {
   try {
     const userId = getUserId(req);
     const { movie_id } = req.body;
-    if (!userId || !movie_id) return res.status(400).json({ message: 'Thiáº¿u user_id hoáº·c movie_id' });
+    if (!userId || !movie_id) return res.status(400).json({ message: 'Thiếu user_id hoặc movie_id' });
     const db = getDb(req);
     const profileId = await resolveProfileId(db, userId, profileHeader(req));
     await db.execute('INSERT IGNORE INTO user_watchlist (user_id, profile_id, movie_id) VALUES (?, ?, ?)', [userId, profileId, movie_id]);
@@ -2192,7 +2358,7 @@ router.post('/user/watchlist', async (req, res) => {
 router.delete('/user/watchlist/:movieId', async (req, res) => {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: 'ChÆ°a Ä‘Äƒng nháº­p' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
     const profileId = await resolveProfileId(db, userId, profileHeader(req));
     await db.execute('DELETE FROM user_watchlist WHERE user_id=? AND profile_id=? AND movie_id=?', [userId, profileId, req.params.movieId]);
@@ -2259,7 +2425,7 @@ router.patch('/user/notifications/:id/read', async (req, res) => {
 router.get('/user/history', async (req, res) => {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: 'ChÆ°a Ä‘Äƒng nháº­p' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
     const profileId = await resolveProfileId(db, userId, profileHeader(req));
     const [rows] = await db.execute(
@@ -2283,7 +2449,7 @@ router.get('/user/history', async (req, res) => {
 router.get('/user/continue', async (req, res) => {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: 'ChÆ°a Ä‘Äƒng nháº­p' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
     const profileId = await resolveProfileId(db, userId, profileHeader(req));
     const limit = req.query.limit ? clampLimit(req.query.limit, 12) : null;
@@ -2310,7 +2476,7 @@ router.get('/user/continue', async (req, res) => {
 router.get('/user/watch-stats', async (req, res) => {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: 'ChÃ†Â°a Ã„â€˜Ã„Æ’ng nhÃ¡ÂºÂ­p' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
 
     const db = getDb(req);
     const profileId = await resolveProfileId(db, userId, profileHeader(req));
@@ -2452,15 +2618,15 @@ router.get('/user/watch-stats', async (req, res) => {
 router.get('/watch-history/progress', async (req, res) => {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: 'ChÆ°a Ä‘Äƒng nháº­p' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
 
     const movieId = toPositiveInt(req.query.movie_id);
     const episodeId = req.query.episode_id ? toPositiveInt(req.query.episode_id) : null;
     const episodeNumber = req.query.episode_number ? toPositiveInt(req.query.episode_number) : null;
 
-    if (!movieId) return res.status(400).json({ message: 'Thiáº¿u movie_id há»£p lá»‡' });
+    if (!movieId) return res.status(400).json({ message: 'Thiếu movie_id hợp lệ' });
     if (!episodeId && !episodeNumber) {
-      return res.status(400).json({ message: 'Thiáº¿u episode_id hoáº·c episode_number há»£p lá»‡' });
+      return res.status(400).json({ message: 'Thiếu episode_id hoặc episode_number hợp lệ' });
     }
 
     const db = getDb(req);
@@ -2494,7 +2660,7 @@ router.get('/watch-history/progress', async (req, res) => {
 router.post('/watch-history/progress', async (req, res) => {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: 'ChÆ°a Ä‘Äƒng nháº­p' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
 
     const db = getDb(req);
     const profileId = await resolveProfileId(db, userId, profileHeader(req));
@@ -2515,7 +2681,7 @@ router.post('/watch-history/progress', async (req, res) => {
 router.post('/user/history', async (req, res) => {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: 'ChÆ°a Ä‘Äƒng nháº­p' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
     const profileId = await resolveProfileId(db, userId, profileHeader(req));
     const input = await getValidatedWatchProgressInput(db, req.body);
@@ -2529,7 +2695,7 @@ router.post('/user/history', async (req, res) => {
 router.delete('/user/history/:historyId', async (req, res) => {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ message: 'ChÆ°a Ä‘Äƒng nháº­p' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     const db = getDb(req);
     const profileId = await resolveProfileId(db, userId, profileHeader(req));
     await db.execute('DELETE FROM user_watch_history WHERE user_id=? AND profile_id=? AND id=?', [userId, profileId, req.params.historyId]);
@@ -2613,7 +2779,7 @@ async function assertCommentVisible(db, commentId) {
   );
   const comment = rows[0];
   if (!comment || comment.status !== 'visible' || Number(comment.is_visible) !== 1) {
-    const error = new Error('BÃ¬nh luáº­n khÃ´ng tá»“n táº¡i');
+    const error = new Error('Bình luận không tồn tại');
     error.statusCode = 404;
     throw error;
   }
@@ -2631,7 +2797,7 @@ async function ensureCommentCanPost(db, userId, movieId, content) {
   );
   const latest = recentRows[0];
   if (latest && Date.now() - new Date(latest.created_at).getTime() < 30 * 1000) {
-    const error = new Error('Báº¡n gá»­i bÃ¬nh luáº­n hÆ¡i nhanh. Thá»­ láº¡i sau vÃ i giÃ¢y nhÃ©.');
+    const error = new Error('Bạn gửi bình luận hơi nhanh. Thử lại sau vài giây nhé.');
     error.statusCode = 429;
     throw error;
   }
@@ -2647,7 +2813,7 @@ async function ensureCommentCanPost(db, userId, movieId, content) {
     [userId, movieId, content]
   );
   if (duplicateRows.length) {
-    const error = new Error('BÃ¬nh luáº­n nÃ y vá»«a Ä‘Æ°á»£c gá»­i. HÃ£y viáº¿t thÃªm ná»™i dung khÃ¡c nhÃ©.');
+    const error = new Error('Bình luận này vừa được gửi. Hãy viết thêm nội dung khác nhé.');
     error.statusCode = 429;
     throw error;
   }
@@ -2660,8 +2826,8 @@ function normalizeReportSearchText(value) {
   return String(value || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/Ä‘/g, 'd')
-    .replace(/Ä/g, 'd')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'd')
     .toLowerCase();
 }
 
@@ -2793,9 +2959,9 @@ router.post('/movies/:id/ratings', async (req, res) => {
   try {
     const userId = getUserId(req);
     const rating = Number(req.body.rating);
-    if (!userId) return res.status(401).json({ message: 'ChÆ°a Ä‘Äƒng nháº­p' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
     if (!Number.isInteger(rating) || rating < 1 || rating > 10) {
-      return res.status(400).json({ message: 'Äiá»ƒm Ä‘Ã¡nh giÃ¡ pháº£i tá»« 1 Ä‘áº¿n 10' });
+      return res.status(400).json({ message: 'Điểm đánh giá phải từ 1 đến 10' });
     }
     const db = getDb(req);
     const profileId = await resolveProfileId(db, userId, profileHeader(req));
@@ -2870,13 +3036,13 @@ router.post('/movies/:id/comments', async (req, res, next) => {
     const content = normalizeCommentText(req.body.content);
     const parentId = req.body.parent_id ? toPositiveInt(req.body.parent_id) : null;
     const isSpoiler = toBooleanFlag(req.body.is_spoiler);
-    if (!userId) return res.status(401).json({ message: 'ChÆ°a Ä‘Äƒng nháº­p' });
-    if (!content) return res.status(400).json({ message: 'Ná»™i dung bÃ¬nh luáº­n khÃ´ng Ä‘Æ°á»£c trá»‘ng' });
-    if (content.length > 1000) return res.status(400).json({ message: 'BÃ¬nh luáº­n tá»‘i Ä‘a 1000 kÃ½ tá»±' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
+    if (!content) return res.status(400).json({ message: 'Nội dung bình luận không được trống' });
+    if (content.length > 1000) return res.status(400).json({ message: 'Bình luận tối đa 1000 ký tự' });
 
     const db = getDb(req);
     const movieId = toPositiveInt(req.params.id);
-    if (!movieId) return res.status(400).json({ message: 'Thiáº¿u movie_id há»£p lá»‡' });
+    if (!movieId) return res.status(400).json({ message: 'Thiếu movie_id hợp lệ' });
 
     if (parentId) {
       const [parentRows] = await db.execute(
@@ -2886,7 +3052,7 @@ router.post('/movies/:id/comments', async (req, res, next) => {
          LIMIT 1`,
         [parentId, movieId]
       );
-      if (!parentRows.length) return res.status(404).json({ message: 'BÃ¬nh luáº­n gá»‘c khÃ´ng tá»“n táº¡i' });
+      if (!parentRows.length) return res.status(404).json({ message: 'Bình luận gốc không tồn tại' });
     }
 
     await ensureCommentCanPost(db, userId, movieId, content);
@@ -2904,8 +3070,8 @@ router.post('/movies/:id/comments/legacy', async (req, res) => {
   try {
     const userId = getUserId(req);
     const content = String(req.body.content || '').trim();
-    if (!userId) return res.status(401).json({ message: 'ChÆ°a Ä‘Äƒng nháº­p' });
-    if (!content) return res.status(400).json({ message: 'Ná»™i dung bÃ¬nh luáº­n khÃ´ng Ä‘Æ°á»£c trá»‘ng' });
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
+    if (!content) return res.status(400).json({ message: 'Nội dung bình luận không được trống' });
     if (content.length > 1000) return res.status(400).json({ message: 'Binh luan toi da 1000 ky tu' });
     const db = getDb(req);
     await db.execute(
@@ -3212,18 +3378,18 @@ router.delete('/admin/reports/:id', async (req, res) => {
 });
 
 // ====== PROFILE API ======
-// Láº¥y thÃ´ng tin profile user
+// Lấy thông tin profile user
 router.get('/user/profile', async (req, res) => {
   try {
-    // Láº¥y user_id tá»« query hoáº·c session (á»Ÿ Ä‘Ã¢y giáº£ láº­p láº¥y tá»« query)
+    // Lấy user_id từ query hoặc session (ở đây giả lập lấy từ query)
     const user_id = req.query?.user_id || req.body?.user_id || req.headers?.['x-user-id'];
-    if (!user_id) return res.status(401).json({ error: 'ChÆ°a Ä‘Äƒng nháº­p' });
+    if (!user_id) return res.status(401).json({ error: 'Chưa đăng nhập' });
     const db = getDb(req);
     const [rows] = await db.execute(
       'SELECT id, username, email, gender, avatar_url, phone, birth_date FROM users WHERE id = ?',
       [user_id]
     );
-    if (!rows.length) return res.status(404).json({ error: 'KhÃ´ng tÃ¬m tháº¥y user' });
+    if (!rows.length) return res.status(404).json({ error: 'Không tìm thấy user' });
     const profile = rows[0];
     res.json({
       ...profile,
@@ -3235,14 +3401,14 @@ router.get('/user/profile', async (req, res) => {
   }
 });
 
-// Cáº­p nháº­t thÃ´ng tin profile user
+// Cập nhật thông tin profile user
 router.put('/user/profile', async (req, res) => {
   try {
-    // Láº¥y user_id tá»« body hoáº·c headers (giáº£ láº­p)
+    // Lấy user_id từ body hoặc headers (giả lập)
     const user_id = req.body?.user_id || req.headers?.['x-user-id'];
-    if (!user_id) return res.status(401).json({ error: 'ChÆ°a Ä‘Äƒng nháº­p' });
+    if (!user_id) return res.status(401).json({ error: 'Chưa đăng nhập' });
     const { username, gender, avatar_url, avatar, phone, birth_date } = req.body;
-    if (!username) return res.status(400).json({ error: 'Thiáº¿u tÃªn hiá»ƒn thá»‹' });
+    if (!username) return res.status(400).json({ error: 'Thiếu tên hiển thị' });
     const db = getDb(req);
     const cleanAvatar = cleanImageUrl(avatar_url || avatar);
     const cleanPhone = phone ? String(phone).trim() : null;
@@ -3269,23 +3435,23 @@ router.put('/user/profile', async (req, res) => {
   }
 });
 
-// Äá»•i máº­t kháº©u
+// Đổi mật khẩu
 router.post('/user/change-password', async (req, res) => {
   try {
     const user_id = req.body?.user_id || req.headers?.['x-user-id'];
     const { oldPassword, newPassword } = req.body;
     if (!user_id || !oldPassword || !newPassword) {
-      return res.status(400).json({ error: 'Thiáº¿u thÃ´ng tin' });
+      return res.status(400).json({ error: 'Thiếu thông tin' });
     }
     const db = getDb(req);
-    // Láº¥y user
+    // Lấy user
     const [rows] = await db.execute('SELECT password FROM users WHERE id = ?', [user_id]);
-    if (!rows.length) return res.status(404).json({ error: 'KhÃ´ng tÃ¬m tháº¥y user' });
+    if (!rows.length) return res.status(404).json({ error: 'Không tìm thấy user' });
     const user = rows[0];
-    // So sÃ¡nh máº­t kháº©u cÅ©
+    // So sánh mật khẩu cũ
     const match = await require('bcrypt').compare(oldPassword, user.password);
-    if (!match) return res.status(401).json({ error: 'Máº­t kháº©u cÅ© khÃ´ng Ä‘Ãºng' });
-    // Hash máº­t kháº©u má»›i
+    if (!match) return res.status(401).json({ error: 'Mật khẩu cũ không đúng' });
+    // Hash mật khẩu mới
     const hash = await require('bcrypt').hash(newPassword, 10);
     await db.execute('UPDATE users SET password = ? WHERE id = ?', [hash, user_id]);
     res.json({ success: true });
@@ -3336,7 +3502,7 @@ router.delete('/producers/:id', requireAdminMiddleware, async (req, res) => {
 });
 
 // ===== USER MANAGEMENT (ADMIN) =====
-// Láº¥y danh sÃ¡ch user
+// Lấy danh sách user
 router.get('/users', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
@@ -3346,30 +3512,30 @@ router.get('/users', requireAdminMiddleware, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-// Cáº­p nháº­t quyá»n admin
+// Cập nhật quyền admin
 router.put('/users/:id/admin', requireAdminMiddleware, async (req, res) => {
   const { is_admin } = req.body;
   try {
     const db = getDb(req);
     await db.execute('UPDATE users SET is_admin=? WHERE id=?', [is_admin ? 1 : 0, req.params.id]);
-    res.json({ message: 'Cáº­p nháº­t quyá»n admin thÃ nh cÃ´ng' });
+    res.json({ message: 'Cập nhật quyền admin thành công' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// Cáº­p nháº­t tráº¡ng thÃ¡i khÃ³a/má»Ÿ khÃ³a tÃ i khoáº£n
+// Cập nhật trạng thái khóa/mở khóa tài khoản
 router.put('/users/:id/status', requireAdminMiddleware, async (req, res) => {
   const { is_active } = req.body;
   try {
     const db = getDb(req);
     await db.execute('UPDATE users SET is_active=? WHERE id=?', [is_active ? 1 : 0, req.params.id]);
-    res.json({ message: 'Cáº­p nháº­t tráº¡ng thÃ¡i tÃ i khoáº£n thÃ nh cÃ´ng' });
+    res.json({ message: 'Cập nhật trạng thái tài khoản thành công' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
-// XÃ³a user
+// Xóa user
 router.delete('/users/:id', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
@@ -3380,7 +3546,7 @@ router.delete('/users/:id', requireAdminMiddleware, async (req, res) => {
   }
 });
 
-// Sá»­a thÃ´ng tin user
+// Sửa thông tin user
 router.put('/users/:id', requireAdminMiddleware, async (req, res) => {
   const { username, email, gender } = req.body;
   try {
@@ -3878,15 +4044,15 @@ router.get('/admin/dashboard-queue', requireAdminMiddleware, async (req, res) =>
 
 // ==================== CATEGORIES API ====================
 
-// Láº¥y táº¥t cáº£ danh má»¥c
+// Lấy tất cả danh mục
 router.get('/categories', async (req, res) => {
   try {
     const db = getDb(req);
     const [rows] = await db.execute('SELECT * FROM categories ORDER BY id DESC');
     
-    // Láº¥y thÃ´ng tin genres vÃ  countries cho tá»«ng category
+    // Lấy thông tin genres và countries cho từng category
     const categoriesWithDetails = await Promise.all(rows.map(async (category) => {
-      // Láº¥y genres cá»§a category
+      // Lấy genres của category
       const [genres] = await db.execute(
         `SELECT g.* FROM genres g
          JOIN category_genres cg ON g.id = cg.genre_id
@@ -3894,7 +4060,7 @@ router.get('/categories', async (req, res) => {
         [category.id]
       );
       
-      // Láº¥y countries cá»§a category (thá»­-catch Ä‘á»ƒ trÃ¡nh lá»—i náº¿u báº£ng chÆ°a tá»“n táº¡i)
+      // Lấy countries của category (thử-catch để tránh lỗi nếu bảng chưa tồn tại)
       let countries = [];
       try {
         const [countryRows] = await db.execute(
@@ -3905,7 +4071,7 @@ router.get('/categories', async (req, res) => {
         );
         countries = countryRows;
       } catch (err) {
-        console.log('Báº£ng category_countries chÆ°a tá»“n táº¡i:', err.message);
+        console.log('Bảng category_countries chưa tồn tại:', err.message);
       }
       
       return {
@@ -3921,24 +4087,24 @@ router.get('/categories', async (req, res) => {
   }
 });
 
-// ThÃªm danh má»¥c má»›i
+// Thêm danh mục mới
 router.post('/categories', requireAdminMiddleware, async (req, res) => {
   const { name, genreIds, countryIds } = req.body;
-  if (!name) return res.status(400).json({ message: 'TÃªn danh má»¥c khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng' });
+  if (!name) return res.status(400).json({ message: 'Tên danh mục không được để trống' });
   
   try {
     const db = getDb(req);
     const [result] = await db.execute('INSERT INTO categories (name, created_at) VALUES (?, NOW())', [name]);
     const categoryId = result.insertId;
     
-    // ThÃªm liÃªn káº¿t vá»›i thá»ƒ loáº¡i náº¿u cÃ³
+    // Thêm liên kết với thể loại nếu có
     if (Array.isArray(genreIds) && genreIds.length > 0) {
       for (const genreId of genreIds) {
         await db.execute('INSERT INTO category_genres (category_id, genre_id) VALUES (?, ?)', [categoryId, genreId]);
       }
     }
     
-    // ThÃªm liÃªn káº¿t vá»›i quá»‘c gia náº¿u cÃ³
+    // Thêm liên kết với quốc gia nếu có
     try {
       if (Array.isArray(countryIds) && countryIds.length > 0) {
         for (const countryId of countryIds) {
@@ -3946,83 +4112,83 @@ router.post('/categories', requireAdminMiddleware, async (req, res) => {
         }
       }
     } catch (err) {
-      console.log('Báº£ng category_countries chÆ°a tá»“n táº¡i, bá» qua xá»­ lÃ½ quá»‘c gia:', err.message);
+      console.log('Bảng category_countries chưa tồn tại, bỏ qua xử lý quốc gia:', err.message);
     }
     
-    res.json({ success: true, id: categoryId, message: 'ThÃªm danh má»¥c thÃ nh cÃ´ng' });
+    res.json({ success: true, id: categoryId, message: 'Thêm danh mục thành công' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// Sá»­a danh má»¥c
+// Sửa danh mục
 router.put('/categories/:id', requireAdminMiddleware, async (req, res) => {
   const { name, genreIds, countryIds } = req.body;
   const categoryId = req.params.id;
   
   console.log('PUT /categories/:id', { categoryId, name, genreIds, countryIds });
   
-  if (!name) return res.status(400).json({ message: 'TÃªn danh má»¥c khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng' });
+  if (!name) return res.status(400).json({ message: 'Tên danh mục không được để trống' });
   
   try {
     const db = getDb(req);
     await db.execute('UPDATE categories SET name = ? WHERE id = ?', [name, categoryId]);
     
-    // XÃ³a cÃ¡c liÃªn káº¿t thá»ƒ loáº¡i cÅ©
+    // Xóa các liên kết thể loại cũ
     await db.execute('DELETE FROM category_genres WHERE category_id = ?', [categoryId]);
     
-    // ThÃªm láº¡i cÃ¡c liÃªn káº¿t thá»ƒ loáº¡i má»›i
+    // Thêm lại các liên kết thể loại mới
     if (Array.isArray(genreIds) && genreIds.length > 0) {
       for (const genreId of genreIds) {
         await db.execute('INSERT INTO category_genres (category_id, genre_id) VALUES (?, ?)', [categoryId, genreId]);
       }
     }
     
-    // XÃ³a cÃ¡c liÃªn káº¿t quá»‘c gia cÅ© (náº¿u báº£ng tá»“n táº¡i)
+    // Xóa các liên kết quốc gia cũ (nếu bảng tồn tại)
     try {
       await db.execute('DELETE FROM category_countries WHERE category_id = ?', [categoryId]);
       
-      // ThÃªm láº¡i cÃ¡c liÃªn káº¿t quá»‘c gia má»›i
+      // Thêm lại các liên kết quốc gia mới
       if (Array.isArray(countryIds) && countryIds.length > 0) {
         for (const countryId of countryIds) {
           await db.execute('INSERT INTO category_countries (category_id, country_id) VALUES (?, ?)', [categoryId, countryId]);
         }
       }
     } catch (err) {
-      console.log('Báº£ng category_countries chÆ°a tá»“n táº¡i, bá» qua xá»­ lÃ½ quá»‘c gia:', err.message);
+      console.log('Bảng category_countries chưa tồn tại, bỏ qua xử lý quốc gia:', err.message);
     }
     
-    res.json({ success: true, message: 'Cáº­p nháº­t danh má»¥c thÃ nh cÃ´ng' });
+    res.json({ success: true, message: 'Cập nhật danh mục thành công' });
   } catch (err) {
     console.error('Error updating category:', err);
     res.status(500).json({ message: err.message });
   }
 });
 
-// XÃ³a danh má»¥c
+// Xóa danh mục
 router.delete('/categories/:id', requireAdminMiddleware, async (req, res) => {
   const categoryId = req.params.id;
   
   try {
     const db = getDb(req);
-    // XÃ³a cÃ¡c liÃªn káº¿t trÆ°á»›c khi xÃ³a category
+    // Xóa các liên kết trước khi xóa category
     await db.execute('DELETE FROM category_genres WHERE category_id = ?', [categoryId]);
     
-    // XÃ³a liÃªn káº¿t quá»‘c gia náº¿u báº£ng tá»“n táº¡i
+    // Xóa liên kết quốc gia nếu bảng tồn tại
     try {
       await db.execute('DELETE FROM category_countries WHERE category_id = ?', [categoryId]);
     } catch (err) {
-      console.log('Báº£ng category_countries chÆ°a tá»“n táº¡i, bá» qua:', err.message);
+      console.log('Bảng category_countries chưa tồn tại, bỏ qua:', err.message);
     }
     
     await db.execute('DELETE FROM categories WHERE id = ?', [categoryId]);
-    res.json({ success: true, message: 'XÃ³a danh má»¥c thÃ nh cÃ´ng' });
+    res.json({ success: true, message: 'Xóa danh mục thành công' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// Láº¥y thá»ƒ loáº¡i cá»§a danh má»¥c
+// Lấy thể loại của danh mục
 router.get('/categories/:id/genres', async (req, res) => {
   const categoryId = req.params.id;
   
@@ -4040,7 +4206,7 @@ router.get('/categories/:id/genres', async (req, res) => {
   }
 });
 
-// Láº¥y quá»‘c gia cá»§a danh má»¥c
+// Lấy quốc gia của danh mục
 router.get('/categories/:id/countries', async (req, res) => {
   const categoryId = req.params.id;
   
@@ -4054,13 +4220,13 @@ router.get('/categories/:id/countries', async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
-    console.log('Lá»—i khi láº¥y quá»‘c gia cá»§a danh má»¥c:', err.message);
-    // Tráº£ vá» máº£ng rá»—ng náº¿u báº£ng chÆ°a tá»“n táº¡i
+    console.log('Lỗi khi lấy quốc gia của danh mục:', err.message);
+    // Trả về mảng rỗng nếu bảng chưa tồn tại
     res.json([]);
   }
 });
 
-// Láº¥y phim theo danh má»¥c (dá»±a trÃªn cÃ¡c thá»ƒ loáº¡i vÃ  quá»‘c gia cá»§a danh má»¥c)
+// Lấy phim theo danh mục (dựa trên các thể loại và quốc gia của danh mục)
 router.get('/categories/:id/movies', async (req, res) => {
   const categoryId = req.params.id;
   
@@ -4068,13 +4234,13 @@ router.get('/categories/:id/movies', async (req, res) => {
     const db = getDb(req);
     const limit = req.query.limit ? clampLimit(req.query.limit, 12) : null;
     
-    // Láº¥y cÃ¡c genre_id cá»§a category nÃ y
+    // Lấy các genre_id của category này
     const [genres] = await db.execute(
       'SELECT genre_id FROM category_genres WHERE category_id = ?',
       [categoryId]
     );
     
-    // Láº¥y cÃ¡c country_id cá»§a category nÃ y
+    // Lấy các country_id của category này
     const [countries] = await db.execute(
       'SELECT country_id FROM category_countries WHERE category_id = ?',
       [categoryId]
@@ -4091,14 +4257,14 @@ router.get('/categories/:id/movies', async (req, res) => {
     let params = [];
     let conditions = ['m.is_visible = 1'];
     
-    // ThÃªm Ä‘iá»u kiá»‡n genre náº¿u cÃ³
+    // Thêm điều kiện genre nếu có
     if (genreIds.length > 0) {
       sql += ' JOIN movie_genres mg ON m.id = mg.movie_id';
       conditions.push(`mg.genre_id IN (${genreIds.map(() => '?').join(',')})`);
       params.push(...genreIds);
     }
     
-    // ThÃªm Ä‘iá»u kiá»‡n country náº¿u cÃ³
+    // Thêm điều kiện country nếu có
     if (countryIds.length > 0) {
       sql += ' JOIN movie_countries mc ON m.id = mc.movie_id';
       conditions.push(`mc.country_id IN (${countryIds.map(() => '?').join(',')})`);
@@ -4113,9 +4279,9 @@ router.get('/categories/:id/movies', async (req, res) => {
     
     const [movies] = await db.execute(sql, params);
     
-    // ThÃªm thÃ´ng tin genres vÃ  countries cho tá»«ng phim
+    // Thêm thông tin genres và countries cho từng phim
     const moviesWithDetails = await Promise.all(movies.map(async (movie) => {
-      // Láº¥y genres cá»§a phim
+      // Lấy genres của phim
       const [movieGenres] = await db.execute(
         `SELECT g.* FROM genres g
          JOIN movie_genres mg ON g.id = mg.genre_id
@@ -4123,7 +4289,7 @@ router.get('/categories/:id/movies', async (req, res) => {
         [movie.id]
       );
       
-      // Láº¥y countries cá»§a phim
+      // Lấy countries của phim
       const [movieCountries] = await db.execute(
         `SELECT c.* FROM countries c
          JOIN movie_countries mc ON c.id = mc.country_id
@@ -4144,7 +4310,7 @@ router.get('/categories/:id/movies', async (req, res) => {
   }
 });
 
-// API Ä‘á»ƒ táº¡o báº£ng category_countries (chá»‰ dÃ¹ng má»™t láº§n)
+// API để tạo bảng category_countries (chỉ dùng một lần)
 router.post('/setup/category-countries', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
@@ -4157,7 +4323,7 @@ router.post('/setup/category-countries', requireAdminMiddleware, async (req, res
         FOREIGN KEY (\`country_id\`) REFERENCES \`countries\` (\`id\`) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
     `);
-    res.json({ success: true, message: 'Báº£ng category_countries Ä‘Ã£ Ä‘Æ°á»£c táº¡o thÃ nh cÃ´ng' });
+    res.json({ success: true, message: 'Bảng category_countries đã được tạo thành công' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

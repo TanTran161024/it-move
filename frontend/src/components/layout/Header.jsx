@@ -14,7 +14,7 @@ const NAV_ITEMS = [
   { label: 'Phim lẻ', query: { is_series: 0 } },
   { label: 'Phim bộ', query: { is_series: 1 } },
   { label: 'Quốc gia', menu: 'countries' },
-  { label: 'Diễn viên', query: { tab: 'actor' } },
+  { label: 'Diễn viên', path: '/dien-vien' },
 ];
 
 const SEARCH_FALLBACK_POSTER =
@@ -765,7 +765,7 @@ export default function Header() {
           <MenuAction icon="sparkles" onClick={() => goTo('/for-you')}>Dành cho bạn</MenuAction>
           <MenuAction icon="play" onClick={() => goTo('/movies?is_series=0')}>Phim lẻ</MenuAction>
           <MenuAction icon="playCircle" onClick={() => goTo('/movies?is_series=1')}>Phim bộ</MenuAction>
-          <MenuAction icon="user" onClick={() => goTo('/movies?tab=actor')}>Diễn viên</MenuAction>
+          <MenuAction icon="user" onClick={() => goTo('/dien-vien')}>Diễn viên</MenuAction>
         </div>
       </MenuPanel>
 
