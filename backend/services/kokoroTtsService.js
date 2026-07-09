@@ -22,6 +22,7 @@ const KOKORO_VOICES = [
 const voiceIds = new Set(KOKORO_VOICES.map((voice) => voice.id));
 const serviceUrl = (process.env.KOKORO_TTS_URL || 'http://localhost:8100').replace(/\/+$/, '');
 const requestTimeoutMs = Number(process.env.KOKORO_TTS_TIMEOUT_MS || 180000);
+const transcriptionTimeoutMs = Number(process.env.WHISPER_TRANSCRIBE_TIMEOUT_MS || 7200000);
 const outputRoot = path.join(__dirname, '..', 'storage', 'dubbing');
 
 async function requestKokoro(endpoint, options = {}, timeoutMs = requestTimeoutMs) {
@@ -108,9 +109,24 @@ async function synthesizeSpeech({ text, voice = 'diem_trinh', speed = 1 }) {
   };
 }
 
+async function transcribeAudio({ audioPath, language = null }) {
+  const response = await requestKokoro('/transcribe', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ audio_path: audioPath, language }),
+  }, transcriptionTimeoutMs);
+
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}));
+    throw new Error(detail.detail || 'Whisper không thể nhận diện hội thoại.');
+  }
+  return response.json();
+}
+
 module.exports = {
   KOKORO_VOICES,
   getKokoroStatus,
   synthesizeSpeech,
   synthesizeEpisodePreview,
+  transcribeAudio,
 };

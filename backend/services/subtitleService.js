@@ -154,6 +154,10 @@ function normalizeSubtitleLanguage(value) {
   return (language || 'vi').slice(0, 12);
 }
 
+function normalizeSyncStatus(value) {
+  return ['verified', 'transcribed'].includes(value) ? value : 'unchecked';
+}
+
 async function fetchSubtitleText(subtitleUrl) {
   const safeUrl = normalizeSubtitleUrl(subtitleUrl);
   if (!safeUrl) {
@@ -325,6 +329,13 @@ async function saveEpisodeSubtitle(db, episodeId, payload = {}) {
   const label = normalizeSubtitleLabel(payload.label, srclang);
   const format = detectSubtitleFormat(content, `subtitle.${payload.format || 'vtt'}`);
   const isDefault = payload.is_default === false || payload.is_default === 0 ? 0 : 1;
+  const originalContent = payload.original_content ? normalizeSubtitleContent(payload.original_content) : null;
+  const syncStatus = normalizeSyncStatus(payload.sync_status);
+  const syncScore = Number.isFinite(Number(payload.sync_score)) ? Number(payload.sync_score) : null;
+  const syncOffset = Number.isFinite(Number(payload.sync_offset_seconds)) ? Number(payload.sync_offset_seconds) : null;
+  const syncDrift = Number.isFinite(Number(payload.sync_drift_seconds)) ? Number(payload.sync_drift_seconds) : null;
+  const syncReport = payload.sync_report ? JSON.stringify(payload.sync_report) : null;
+  const syncedAt = syncStatus === 'unchecked' ? null : new Date();
   const transaction = typeof db.beginTransaction === 'function'
     ? db
     : await db.getConnection();
@@ -337,16 +348,26 @@ async function saveEpisodeSubtitle(db, episodeId, payload = {}) {
     }
 
     const [result] = await transaction.execute(
-      `INSERT INTO episode_subtitles (episode_id, label, srclang, format, content, is_default)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO episode_subtitles
+         (episode_id, label, srclang, format, content, original_content, is_default,
+          sync_status, sync_score, sync_offset_seconds, sync_drift_seconds, sync_report_json, synced_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
          id = LAST_INSERT_ID(id),
          label = VALUES(label),
          format = VALUES(format),
          content = VALUES(content),
+         original_content = VALUES(original_content),
          is_default = VALUES(is_default),
+         sync_status = VALUES(sync_status),
+         sync_score = VALUES(sync_score),
+         sync_offset_seconds = VALUES(sync_offset_seconds),
+         sync_drift_seconds = VALUES(sync_drift_seconds),
+         sync_report_json = VALUES(sync_report_json),
+         synced_at = VALUES(synced_at),
          updated_at = CURRENT_TIMESTAMP`,
-      [episodeId, label, srclang, format, content, isDefault]
+      [episodeId, label, srclang, format, content, originalContent, isDefault,
+        syncStatus, syncScore, syncOffset, syncDrift, syncReport, syncedAt]
     );
 
     await transaction.commit();
@@ -357,6 +378,10 @@ async function saveEpisodeSubtitle(db, episodeId, payload = {}) {
       srclang,
       format,
       is_default: Boolean(isDefault),
+      sync_status: syncStatus,
+      sync_score: syncScore,
+      sync_offset_seconds: syncOffset,
+      sync_drift_seconds: syncDrift,
     };
   } catch (error) {
     await transaction.rollback();
@@ -383,7 +408,9 @@ async function listEpisodeSubtitles(db, episodeId) {
   }
 
   const [rows] = await db.execute(
-    `SELECT id, episode_id, label, srclang, format, content, is_default, created_at, updated_at
+    `SELECT id, episode_id, label, srclang, format, content, is_default,
+            sync_status, sync_score, sync_offset_seconds, sync_drift_seconds,
+            sync_report_json, synced_at, created_at, updated_at
      FROM episode_subtitles
      WHERE episode_id = ?
      ORDER BY is_default DESC, srclang ASC, id ASC`,
@@ -404,6 +431,8 @@ async function listEpisodeSubtitles(db, episodeId) {
 async function getEpisodeSubtitle(db, subtitleId) {
   const [rows] = await db.execute(
     `SELECT s.id, s.episode_id, s.label, s.srclang, s.format, s.content, s.is_default,
+            s.sync_status, s.sync_score, s.sync_offset_seconds, s.sync_drift_seconds,
+            s.sync_report_json, s.synced_at,
             s.created_at, s.updated_at, e.episode_number, e.title AS episode_title,
             m.id AS movie_id, m.title AS movie_title
      FROM episode_subtitles s
@@ -459,7 +488,10 @@ async function updateEpisodeSubtitle(db, subtitleId, payload = {}) {
 
     await transaction.execute(
       `UPDATE episode_subtitles
-       SET label = ?, srclang = ?, format = ?, content = ?, is_default = ?, updated_at = CURRENT_TIMESTAMP
+       SET label = ?, srclang = ?, format = ?, content = ?, original_content = NULL,
+           is_default = ?, sync_status = 'unchecked', sync_score = NULL,
+           sync_offset_seconds = NULL, sync_drift_seconds = NULL,
+           sync_report_json = NULL, synced_at = NULL, updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [label, srclang, format, content, isDefault ? 1 : 0, subtitleId]
     );

@@ -28,6 +28,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DownloadIcon from '@mui/icons-material/Download';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import RecordVoiceOverIcon from '@mui/icons-material/RecordVoiceOver';
 import SearchIcon from '@mui/icons-material/Search';
 import SubtitlesIcon from '@mui/icons-material/Subtitles';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -180,6 +181,7 @@ export default function SubtitleTranslator() {
   const [onlineResults, setOnlineResults] = useState([]);
   const [onlineErrors, setOnlineErrors] = useState([]);
   const [onlineLoading, setOnlineLoading] = useState(false);
+  const [generatingFromAudio, setGeneratingFromAudio] = useState(false);
   const [onlineMessage, setOnlineMessage] = useState('');
   const [onlineError, setOnlineError] = useState('');
   const [storedSubtitles, setStoredSubtitles] = useState([]);
@@ -345,6 +347,7 @@ export default function SubtitleTranslator() {
     download_url: result.download_url,
     release_name: result.release_name,
     format: result.format,
+    sync_with_audio: true,
     ...extra,
   });
 
@@ -380,6 +383,36 @@ export default function SubtitleTranslator() {
       setOnlineError(err.response?.data?.message || 'Không thể tìm phụ đề online.');
     } finally {
       setOnlineLoading(false);
+    }
+  };
+
+  const handleGenerateFromAudio = async () => {
+    if (!movieId || !episodeId) {
+      setOnlineError('Bạn cần chọn phim và tập trước khi tạo phụ đề.');
+      return;
+    }
+
+    setGeneratingFromAudio(true);
+    setOnlineError('');
+    setOnlineMessage('');
+    try {
+      const response = await axios.post(
+        `${API}/api/admin/subtitles/generate-from-audio`,
+        {
+          movie_id: Number(movieId),
+          episode_id: Number(episodeId),
+          language: onlineLanguage,
+          is_default: true,
+        },
+        { headers: authHeaders }
+      );
+      const count = response.data.sync?.asr?.segment_count || 0;
+      setOnlineMessage(`Đã nghe video và tạo ${count} câu phụ đề theo hội thoại.`);
+      await loadStoredSubtitles(episodeId);
+    } catch (err) {
+      setOnlineError(err.response?.data?.message || 'Không thể tạo phụ đề từ hội thoại.');
+    } finally {
+      setGeneratingFromAudio(false);
     }
   };
 
@@ -425,15 +458,23 @@ export default function SubtitleTranslator() {
     setOnlineError('');
     setOnlineMessage('');
     try {
-      await axios.post(
+      const response = await axios.post(
         `${API}/api/admin/subtitles/import-online`,
         onlinePayload(result, { is_default: true }),
         { headers: authHeaders }
       );
-      setOnlineMessage('Đã import phụ đề vào tập phim.');
+      const sync = response.data.sync || {};
+      const regenerated = sync.mode === 'asr_regenerated';
+      const offset = Number(sync.offset_seconds || 0).toFixed(3);
+      const drift = Number(sync.drift_seconds || 0).toFixed(3);
+      setOnlineMessage(regenerated
+        ? `Phụ đề tải về không khớp. Đã nghe video và tạo lại ${sync.asr?.segment_count || 0} câu theo hội thoại.`
+        : `Đã import và căn thời gian theo hội thoại. Offset ${offset}s · drift ${drift}s.`);
       await loadStoredSubtitles(episodeId);
     } catch (err) {
-      setOnlineError(err.response?.data?.message || 'Không thể import phụ đề này.');
+      const report = err.response?.data?.sync_report;
+      const score = Number.isFinite(Number(report?.score)) ? ` Điểm đồng bộ: ${report.score}.` : '';
+      setOnlineError(`${err.response?.data?.message || 'Không thể import phụ đề này.'}${score}`);
     } finally {
       setImportingId('');
     }
@@ -485,7 +526,7 @@ export default function SubtitleTranslator() {
             <SubtitlesIcon sx={{ color: 'var(--admin-accent)', fontSize: 32 }} /> Phụ đề theo tập
           </Typography>
           <Typography sx={{ color: 'var(--admin-text-muted)', mt: 1 }}>
-            Upload, dịch hoặc tìm phụ đề online rồi lưu trực tiếp vào từng tập phim.
+            Upload, dịch hoặc tìm phụ đề online; phụ đề import sẽ được tự động căn theo hội thoại trước khi lưu.
           </Typography>
         </Box>
         <Button variant="outlined" color="inherit" startIcon={<RefreshIcon />} onClick={handleRefresh}>
@@ -757,6 +798,15 @@ export default function SubtitleTranslator() {
                       >
                         Tìm phụ đề
                       </Button>
+                      <Button
+                        variant="outlined"
+                        startIcon={generatingFromAudio ? <CircularProgress size={18} color="inherit" /> : <RecordVoiceOverIcon />}
+                        onClick={handleGenerateFromAudio}
+                        disabled={generatingFromAudio || !movieId || !episodeId}
+                        sx={{ height: 40, width: { xs: '100%', md: 'auto' } }}
+                      >
+                        Tạo từ hội thoại
+                      </Button>
                     </Box>
 
                     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', color: 'var(--admin-text-muted)', borderTop: '1px solid var(--admin-border)', pt: 2 }}>
@@ -838,7 +888,7 @@ export default function SubtitleTranslator() {
                             onClick={() => handleImportOnline(result)}
                             disabled={importingId === id}
                           >
-                            Import
+                            Import & đồng bộ
                           </Button>
                         </Box>
                       </Box>
@@ -895,6 +945,18 @@ export default function SubtitleTranslator() {
                       <Typography variant="caption" sx={{ color: 'var(--admin-text-muted)' }}>
                         {subtitle.srclang?.toUpperCase()} · {subtitle.format?.toUpperCase()} · {(subtitle.content_length || 0).toLocaleString('vi-VN')} ký tự
                       </Typography>
+                      <Box sx={{ display: 'flex', gap: 0.75, mt: 0.75, flexWrap: 'wrap' }}>
+                        <Chip
+                          size="small"
+                          color={['verified', 'transcribed'].includes(subtitle.sync_status) ? 'success' : 'default'}
+                          label={subtitle.sync_status === 'transcribed'
+                            ? 'Tạo lại từ hội thoại'
+                            : subtitle.sync_status === 'verified' ? 'Đã khớp thời gian thoại' : 'Chưa kiểm định'}
+                        />
+                        {subtitle.sync_status === 'verified' && (
+                          <Chip size="small" variant="outlined" label={`Offset ${Number(subtitle.sync_offset_seconds || 0).toFixed(3)}s`} />
+                        )}
+                      </Box>
                     </Box>
                     <Box sx={{ display: 'flex', gap: 0.5 }}>
                       <IconButton

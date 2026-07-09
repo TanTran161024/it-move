@@ -1,5 +1,11 @@
+const fsPromises = require('fs/promises');
+const os = require('os');
+const path = require('path');
 const zlib = require('zlib');
 const { ensureWebVtt, saveEpisodeSubtitle } = require('./subtitleService');
+const { extractSpeechAudio, parseWebVtt, synchronizeCues } = require('./dubbingService');
+const { transcribeAudio } = require('./kokoroTtsService');
+const { translateSubtitle } = require('./subtitleTranslatorService');
 
 const FETCH_TIMEOUT_MS = 15000;
 const MAX_REMOTE_SUBTITLE_BYTES = 1024 * 1024;
@@ -349,9 +355,13 @@ async function getMovieEpisode(db, movieId, episodeId) {
        m.original_title,
        m.release_year,
        m.is_series,
+       m.tmdb_id,
+       m.tmdb_type,
        e.id AS episode_id,
        e.episode_number,
-       e.title AS episode_title
+       e.title AS episode_title,
+       e.hls_url,
+       e.video_url
      FROM movies m
      JOIN episodes e ON e.movie_id = m.id
      WHERE m.id = ? AND e.id = ?
@@ -370,12 +380,16 @@ async function getMovieEpisode(db, movieId, episodeId) {
 
 function buildProviderQuery(target) {
   const movieTitle = cleanTitle(target.original_title || target.movie_title);
+  const seasonMatch = String(target.original_title || target.movie_title || '')
+    .match(/(?:season|phần)\s*(\d+)/i);
   return {
     title: movieTitle || target.movie_title,
     fallbackTitle: cleanTitle(target.movie_title),
     year: target.release_year ? Number(target.release_year) : null,
     episodeNumber: target.episode_number ? Number(target.episode_number) : null,
+    seasonNumber: seasonMatch ? Number(seasonMatch[1]) : 1,
     isSeries: Boolean(target.is_series),
+    tmdbId: target.tmdb_id ? Number(target.tmdb_id) : null,
   };
 }
 
@@ -443,6 +457,10 @@ async function searchOpenSubtitles(target, language) {
     if (!loose && query.isSeries && query.episodeNumber) {
       params.set('type', 'episode');
       params.set('episode_number', String(query.episodeNumber));
+      params.set('season_number', String(query.seasonNumber));
+      if (query.tmdbId) params.set('parent_tmdb_id', String(query.tmdbId));
+    } else if (!loose && query.tmdbId) {
+      params.set('tmdb_id', String(query.tmdbId));
     }
 
     const data = await fetchJson(`https://api.opensubtitles.com/api/v1/subtitles?${params.toString()}`, {
@@ -550,7 +568,8 @@ async function searchOnlineSubtitles(db, payload = {}) {
     }
   }
 
-  results.sort((left, right) => right.score - left.score);
+  const relevantResults = results.filter((item) => item.score >= 70);
+  relevantResults.sort((left, right) => right.score - left.score);
 
   return {
     query: {
@@ -561,7 +580,7 @@ async function searchOnlineSubtitles(db, payload = {}) {
     },
     episode: target,
     providers,
-    results: results.slice(0, 30),
+    results: relevantResults.slice(0, 30),
     errors,
   };
 }
@@ -648,7 +667,7 @@ async function importOnlineSubtitle(db, payload = {}) {
     throw error;
   }
 
-  await getMovieEpisode(db, movieId, episodeId);
+  const target = await getMovieEpisode(db, movieId, episodeId);
   const provider = assertProvider(payload.provider);
   const language = normalizeLanguage(payload.language || payload.srclang);
   const downloaded = await downloadProviderSubtitle(payload);
@@ -667,12 +686,69 @@ async function importOnlineSubtitle(db, payload = {}) {
     };
   }
 
+  let contentToSave = downloaded.content;
+  let formatToSave = format;
+  let syncStatus = 'unchecked';
+  let syncScore = null;
+  let syncReport = { applied: false, disabled: payload.sync_with_audio === false };
+  if (payload.sync_with_audio !== false) {
+    const source = target.hls_url || target.video_url;
+    if (!source) {
+      const error = new Error('Tập phim chưa có nguồn MP4/HLS để đồng bộ phụ đề với hội thoại.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const cues = parseWebVtt(vttContent);
+    const workDir = await fsPromises.mkdtemp(path.join(os.tmpdir(), `itmove-subtitle-${episodeId}-`));
+    try {
+      let synchronized = null;
+      try {
+        if (!cues.length) throw new Error('Phụ đề tải về không có timestamp hợp lệ.');
+        synchronized = await synchronizeCues(source, cues, workDir);
+        syncReport = synchronized.report;
+      } catch (error) {
+        syncReport = {
+          applied: false,
+          reliable: false,
+          warning: `Không thể căn phụ đề tải về: ${error.message}`.slice(0, 1000),
+        };
+      }
+
+      if (syncReport.reliable !== false) {
+        contentToSave = ensureWebVtt(synchronized.synced_content, 'subtitle-synced.srt');
+        formatToSave = 'vtt';
+        syncStatus = 'verified';
+        syncScore = syncReport.score;
+      } else {
+        const regenerated = await regenerateSubtitleFromAudio(source, language, workDir, syncReport);
+        contentToSave = regenerated.content;
+        formatToSave = 'vtt';
+        syncStatus = 'transcribed';
+        syncScore = regenerated.score;
+        syncReport = regenerated.report;
+      }
+    } catch (error) {
+      if (!error.statusCode) error.statusCode = 422;
+      error.syncReport = error.syncReport || syncReport;
+      throw error;
+    } finally {
+      await fsPromises.rm(workDir, { recursive: true, force: true });
+    }
+  }
+
   const subtitle = await saveEpisodeSubtitle(db, episodeId, {
-    content: downloaded.content,
+    content: contentToSave,
+    original_content: downloaded.content,
     srclang: language,
     label: buildSubtitleLabel(provider, language, payload.release_name || downloaded.fileName),
-    format,
+    format: formatToSave,
     is_default: payload.is_default !== false,
+    sync_status: syncStatus,
+    sync_score: syncScore,
+    sync_offset_seconds: syncReport.offset_seconds,
+    sync_drift_seconds: syncReport.drift_seconds,
+    sync_report: syncReport,
   });
 
   return {
@@ -680,10 +756,129 @@ async function importOnlineSubtitle(db, payload = {}) {
     provider: provider.id,
     release_name: payload.release_name || downloaded.fileName,
     subtitle,
+    sync: syncReport,
   };
 }
 
+function formatVttTimestamp(seconds) {
+  const milliseconds = Math.max(0, Math.round(Number(seconds) * 1000));
+  const hours = Math.floor(milliseconds / 3600000);
+  const minutes = Math.floor((milliseconds % 3600000) / 60000);
+  const secs = Math.floor((milliseconds % 60000) / 1000);
+  const ms = milliseconds % 1000;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
+}
+
+function transcriptToVtt(segments) {
+  const cues = segments.map((segment, index) => (
+    `${index + 1}\n${formatVttTimestamp(segment.start)} --> ${formatVttTimestamp(segment.end)}\n${String(segment.text || '').trim()}`
+  ));
+  return `WEBVTT\n\n${cues.join('\n\n')}\n`;
+}
+
+async function regenerateSubtitleFromAudio(source, targetLanguage, workDir, alignmentReport) {
+  const audioPath = path.join(workDir, 'dialogue-16khz.wav');
+  await extractSpeechAudio(source, audioPath);
+  const transcription = await transcribeAudio({ audioPath });
+  const transcriptVtt = transcriptToVtt(transcription.segments);
+  let content = transcriptVtt;
+  let translation = {
+    provider: 'none',
+    source_language: transcription.language,
+    target_language: targetLanguage,
+  };
+
+  if (normalizeLanguage(transcription.language) !== targetLanguage) {
+    translation = await translateSubtitle({
+      content: transcriptVtt,
+      source_language: transcription.language,
+      target_language: targetLanguage,
+      format: 'vtt',
+      bilingual: false,
+    });
+    if (translation.fallback) {
+      const error = new Error(translation.message || 'Không thể dịch transcript sang ngôn ngữ phụ đề đã chọn.');
+      error.statusCode = 502;
+      throw error;
+    }
+    content = ensureWebVtt(translation.translated_content, 'subtitle.vtt');
+  }
+
+  const confidences = transcription.segments
+    .map((segment) => Number(segment.confidence))
+    .filter(Number.isFinite);
+  const averageConfidence = confidences.length
+    ? confidences.reduce((sum, value) => sum + value, 0) / confidences.length
+    : null;
+  return {
+    content,
+    score: averageConfidence === null ? null : Number((averageConfidence * 100).toFixed(3)),
+    report: {
+      mode: 'asr_regenerated',
+      reliable: true,
+      warning: 'Timestamp từ phụ đề tải về không dùng được; hệ thống đã nghe video và tạo lại phụ đề.',
+      alignment: alignmentReport,
+      asr: {
+        model: transcription.model,
+        language: transcription.language,
+        language_probability: transcription.language_probability,
+        segment_count: transcription.segments.length,
+        average_confidence: averageConfidence === null ? null : Number(averageConfidence.toFixed(4)),
+      },
+      translation: {
+        provider: translation.provider,
+        model: translation.model || null,
+        source_language: transcription.language,
+        target_language: targetLanguage,
+      },
+    },
+  };
+}
+
+async function generateSubtitleFromEpisodeAudio(db, payload = {}) {
+  const movieId = Number(payload.movie_id);
+  const episodeId = Number(payload.episode_id);
+  if (!Number.isInteger(movieId) || !Number.isInteger(episodeId)) {
+    const error = new Error('Thiếu movie_id hoặc episode_id hợp lệ');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const target = await getMovieEpisode(db, movieId, episodeId);
+  const source = target.hls_url || target.video_url;
+  if (!source) {
+    const error = new Error('Tập phim chưa có nguồn MP4/HLS để nhận diện hội thoại.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const language = normalizeLanguage(payload.language);
+  const workDir = await fsPromises.mkdtemp(path.join(os.tmpdir(), `itmove-transcribe-${episodeId}-`));
+  try {
+    const regenerated = await regenerateSubtitleFromAudio(source, language, workDir, {
+      applied: false,
+      reliable: false,
+      skipped: true,
+      warning: 'Tạo phụ đề trực tiếp từ hội thoại video.',
+    });
+    const subtitle = await saveEpisodeSubtitle(db, episodeId, {
+      content: regenerated.content,
+      srclang: language,
+      label: `Whisper ${language.toUpperCase()} · ${target.episode_title || `Tập ${target.episode_number}`}`,
+      format: 'vtt',
+      is_default: payload.is_default !== false,
+      sync_status: 'transcribed',
+      sync_score: regenerated.score,
+      sync_report: regenerated.report,
+    });
+    return { generated: true, subtitle, sync: regenerated.report };
+  } finally {
+    await fsPromises.rm(workDir, { recursive: true, force: true });
+  }
+}
+
 module.exports = {
+  generateSubtitleFromEpisodeAudio,
   importOnlineSubtitle,
   listSubtitleProviders,
   searchOnlineSubtitles,

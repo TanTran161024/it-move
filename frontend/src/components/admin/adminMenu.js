@@ -4,6 +4,7 @@ import ImageIcon from '@mui/icons-material/Image';
 import MovieIcon from '@mui/icons-material/Movie';
 import PeopleIcon from '@mui/icons-material/People';
 import RateReviewIcon from '@mui/icons-material/RateReview';
+import RecordVoiceOverIcon from '@mui/icons-material/RecordVoiceOver';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import SubtitlesIcon from '@mui/icons-material/Subtitles';
@@ -79,6 +80,12 @@ export const adminMenuGroups = [
         label: 'Phụ đề theo tập',
         description: 'Upload, dịch, tìm online và lưu phụ đề cho từng tập.',
         Icon: SubtitlesIcon,
+      },
+      {
+        key: 'dubbing',
+        label: 'Xưởng lồng tiếng',
+        description: 'Điều phối phụ đề, Whisper, Kokoro và job lồng tiếng theo tập.',
+        Icon: RecordVoiceOverIcon,
       },
       {
         key: 'ai_tools',

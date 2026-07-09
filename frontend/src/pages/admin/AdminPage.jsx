@@ -9,6 +9,7 @@ import { adminMenuItems } from '../../components/admin/adminMenu';
 import CategoryManager from '../../components/admin/CategoryManager';
 import AdminFeedbackManager from '../../components/admin/AdminFeedbackManager';
 import SubtitleTranslator from '../../components/admin/SubtitleTranslator';
+import DubbingStudio from '../../components/admin/DubbingStudio';
 import AdminDashboardStats from '../../components/admin/AdminDashboardStats';
 import AdminAutomationHub from '../../components/admin/AdminAutomationHub';
 import EditIcon from '@mui/icons-material/Edit';
@@ -937,6 +938,9 @@ export default function Admin() {
         )}
         {selectedMenu === 'subtitles' && (
           <SubtitleTranslator />
+        )}
+        {selectedMenu === 'dubbing' && (
+          <DubbingStudio />
         )}
         {selectedMenu === 'users' && (
           <Box sx={{ color: 'var(--admin-text)', mt: 4, width: '100%' }}>

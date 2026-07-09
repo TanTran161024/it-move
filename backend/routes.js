@@ -24,6 +24,7 @@ const {
   updateEpisodeSubtitle,
 } = require('./services/subtitleService');
 const {
+  generateSubtitleFromEpisodeAudio,
   importOnlineSubtitle,
   listSubtitleProviders,
   searchOnlineSubtitles,
@@ -1166,7 +1167,22 @@ router.post('/admin/subtitles/import-online', requireAdminMiddleware, async (req
     const result = await importOnlineSubtitle(db, req.body || {});
     res.json(result);
   } catch (err) {
-    res.status(err.statusCode || 500).json({ message: err.message || 'Không thể import phụ đề online.' });
+    res.status(err.statusCode || 500).json({
+      message: err.message || 'Không thể import phụ đề online.',
+      sync_report: err.syncReport || null,
+    });
+  }
+});
+
+router.post('/admin/subtitles/generate-from-audio', requireAdminMiddleware, async (req, res) => {
+  try {
+    const result = await generateSubtitleFromEpisodeAudio(getDb(req), req.body || {});
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({
+      message: err.message || 'Không thể tạo phụ đề từ hội thoại.',
+      sync_report: err.syncReport || null,
+    });
   }
 });
 
@@ -2103,7 +2119,9 @@ router.post('/admin/episodes/:id/dubbing/jobs', requireAdminMiddleware, async (r
       episodeId: req.params.id,
       subtitleId: toPositiveInt(req.body?.subtitle_id),
       voice: req.body?.voice || 'diem_trinh',
+      sourceMode: req.body?.source_mode || 'subtitle',
       originalAudioVolume: req.body?.original_audio_volume,
+      syncEnabled: req.body?.sync_enabled !== false,
       requestedBy: req.admin.userId,
     });
     res.status(201).json(job);

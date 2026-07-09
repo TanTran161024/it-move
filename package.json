@@ -4,7 +4,8 @@
   "scripts": {
     "install:all": "npm install && npm --prefix frontend install && npm --prefix backend install",
     "frontend": "npm --prefix frontend run dev",
-    "backend": "npm --prefix backend start",
+    "backend": "concurrently -k --names API,TTS --prefix-colors blue,magenta \"npm run backend:api\" \"npm run tts:service\"",
+    "backend:api": "npm --prefix backend start",
     "migrate": "npm --prefix backend run migrate",
     "build": "npm --prefix frontend run build",
     "preview": "npm --prefix frontend run preview",
@@ -24,7 +25,9 @@
   "directories": {
     "doc": "docs"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/TanTran161024/it-move.git"

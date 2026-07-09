@@ -1,4 +1,4 @@
-import { Alert, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Box, Typography, IconButton, FormControl, InputLabel, Select, MenuItem, CircularProgress, LinearProgress, Slider } from '@mui/material';
+import { Alert, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Box, Typography, IconButton, FormControl, InputLabel, Select, MenuItem, CircularProgress, LinearProgress, Slider, Switch, FormControlLabel } from '@mui/material';
 import { useEffect, useState } from 'react';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -32,7 +32,38 @@ function readableDubbingError(message) {
   if (message === 'Subtitle not configured') {
     return 'Tập phim chưa có phụ đề. Hãy thêm phụ đề có timestamp trước khi lồng tiếng.';
   }
+  if (String(message || '').startsWith('FFmpeg thất bại')) {
+    return 'Không thể đọc hoặc ghép nguồn video. Hãy kiểm tra URL MP4/HLS trực tiếp rồi chạy lại.';
+  }
   return message;
+}
+
+const dubbingStageLabel = {
+  queued: 'Đang chờ',
+  preparing: 'Chuẩn bị dữ liệu',
+  transcribing: 'Nghe hội thoại video',
+  translating: 'Dịch hội thoại sang tiếng Việt',
+  synchronizing: 'Đồng bộ phụ đề',
+  synthesizing: 'Tạo giọng Việt',
+  mixing: 'Ghép và chuẩn hóa âm thanh',
+  completed: 'Hoàn thành',
+  failed: 'Thất bại',
+  cancelled: 'Đã hủy',
+};
+
+function qualityReportOf(job) {
+  if (!job?.quality_report_json) return null;
+  if (typeof job.quality_report_json === 'object') return job.quality_report_json;
+  try {
+    return JSON.parse(job.quality_report_json);
+  } catch {
+    return null;
+  }
+}
+
+function jobStageText(job) {
+  const terminal = { succeeded: 'Hoàn thành', failed: 'Thất bại', cancelled: 'Đã hủy' };
+  return terminal[job?.status] || dubbingStageLabel[job?.stage] || (job?.status === 'running' ? 'Đang xử lý' : 'Đang chờ');
 }
 
 export default function EpisodeManager({
@@ -69,6 +100,8 @@ export default function EpisodeManager({
   const [dubbingDataLoading, setDubbingDataLoading] = useState(false);
   const [newSubtitleContent, setNewSubtitleContent] = useState('');
   const [subtitleSaving, setSubtitleSaving] = useState(false);
+  const [autoSyncSubtitle, setAutoSyncSubtitle] = useState(true);
+  const [dubbingSourceMode, setDubbingSourceMode] = useState('subtitle');
 
   const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value });
   const handleEdit = ep => {
@@ -98,13 +131,16 @@ export default function EpisodeManager({
     handleCancelEdit();
   };
 
-  const loadDubbingData = async (episodeId) => {
+  const loadDubbingData = async (episodeId, episodeContext = dubbingEpisode) => {
     setDubbingDataLoading(true);
     try {
       const data = await onLoadDubbingData(episodeId);
       const subtitles = data.subtitles || [];
       setDubbingSubtitles(subtitles);
       setDubbingSubtitleId(subtitles.find((item) => item.is_default)?.id || subtitles[0]?.id || '');
+      if (!subtitles.length && !episodeContext?.subtitle_url) {
+        setDubbingSourceMode('video');
+      }
       setDubbingJob((data.jobs || [])[0] || null);
     } catch (error) {
       setDubbingError(error.response?.data?.message || 'Không thể tải dữ liệu lồng tiếng.');
@@ -124,7 +160,9 @@ export default function EpisodeManager({
     setDubbingSubtitleId('');
     setOriginalAudioVolume(0.25);
     setNewSubtitleContent('');
-    loadDubbingData(episode.id);
+    setAutoSyncSubtitle(true);
+    setDubbingSourceMode('subtitle');
+    loadDubbingData(episode.id, episode);
   };
 
   const closeDubbing = () => {
@@ -156,9 +194,11 @@ export default function EpisodeManager({
     setDubbingError('');
     try {
       const job = await onCreateDubbingJob(dubbingEpisode.id, {
-        subtitle_id: dubbingSubtitleId || null,
+        source_mode: dubbingSourceMode,
+        subtitle_id: dubbingSourceMode === 'subtitle' ? (dubbingSubtitleId || null) : null,
         voice: dubbingVoice,
         original_audio_volume: originalAudioVolume,
+        sync_enabled: dubbingSourceMode === 'subtitle' && autoSyncSubtitle,
       });
       setDubbingJob(job);
     } catch (error) {
@@ -219,6 +259,10 @@ export default function EpisodeManager({
   }, [dubbingJob, onDubbingCompleted, onGetDubbingJob]);
 
   const hasSubtitleSource = dubbingSubtitles.length > 0 || Boolean(dubbingEpisode?.subtitle_url);
+  const hasVideoSource = Boolean(dubbingEpisode?.hls_url || dubbingEpisode?.video_url);
+  const needsSubtitleSource = dubbingSourceMode === 'subtitle';
+  const canCreateDubbing = dubbingSourceMode === 'video' ? hasVideoSource : hasSubtitleSource;
+  const qualityReport = qualityReportOf(dubbingJob);
 
   return (
     <>
@@ -339,7 +383,33 @@ export default function EpisodeManager({
               ))}
             </Select>
           </FormControl>
-          <FormControl size="small" sx={darkFieldSx} disabled={dubbingDataLoading}>
+          <FormControl size="small" sx={darkFieldSx}>
+            <InputLabel id="dubbing-source-mode-label">Nguồn lồng tiếng</InputLabel>
+            <Select
+              labelId="dubbing-source-mode-label"
+              value={dubbingSourceMode}
+              label="Nguồn lồng tiếng"
+              onChange={(event) => setDubbingSourceMode(event.target.value)}
+              disabled={Boolean(dubbingJob && ['queued', 'running'].includes(dubbingJob.status))}
+            >
+              <MenuItem value="subtitle">Từ phụ đề có sẵn</MenuItem>
+              <MenuItem value="video">Chỉ từ video</MenuItem>
+            </Select>
+          </FormControl>
+
+          {dubbingSourceMode === 'video' && (
+            <Alert severity="info">
+              Chế độ này chỉ cần nguồn MP4/HLS: hệ thống sẽ nghe hội thoại trong video, dịch sang tiếng Việt nếu cần, tạo giọng Kokoro rồi ghép vào video.
+            </Alert>
+          )}
+
+          {dubbingSourceMode === 'video' && !hasVideoSource && (
+            <Alert severity="warning">
+              Tập này chưa có nguồn MP4/HLS nên chưa thể lồng tiếng trực tiếp từ video.
+            </Alert>
+          )}
+
+          <FormControl size="small" sx={darkFieldSx} disabled={dubbingDataLoading || dubbingSourceMode === 'video'}>
             <InputLabel id="dubbing-subtitle-label">Phụ đề nguồn</InputLabel>
             <Select
               labelId="dubbing-subtitle-label"
@@ -367,7 +437,7 @@ export default function EpisodeManager({
             </Select>
           </FormControl>
 
-          {!hasSubtitleSource && (
+          {needsSubtitleSource && !hasSubtitleSource && (
             <Box sx={{ display: 'grid', gap: 1.25 }}>
               <Alert severity="warning">
                 Tập này chưa có phụ đề. Dán nội dung VTT hoặc SRT có timestamp để tiếp tục lồng tiếng.
@@ -393,9 +463,23 @@ export default function EpisodeManager({
             </Box>
           )}
 
+          {dubbingSourceMode === 'subtitle' && (
+            <FormControlLabel
+              control={(
+                <Switch
+                  checked={autoSyncSubtitle}
+                  onChange={(event) => setAutoSyncSubtitle(event.target.checked)}
+                  disabled={Boolean(dubbingJob && ['queued', 'running'].includes(dubbingJob.status))}
+                />
+              )}
+              label="Tự đồng bộ phụ đề với hội thoại trước khi lồng tiếng"
+              sx={{ color: 'var(--admin-text)' }}
+            />
+          )}
+
           <Box sx={{ px: 0.5 }}>
             <Typography sx={{ color: 'var(--admin-text)', fontWeight: 700, fontSize: '0.85rem' }}>
-              Âm lượng nền gốc: {Math.round(originalAudioVolume * 100)}%
+              Âm lượng gốc khi có lời Việt: {Math.round(originalAudioVolume * 100)}%
             </Typography>
             <Slider
               value={originalAudioVolume}
@@ -412,7 +496,7 @@ export default function EpisodeManager({
             <Box sx={{ borderTop: '1px solid var(--admin-border)', pt: 2, display: 'grid', gap: 1.25 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
                 <Typography sx={{ color: 'var(--admin-text-strong)', fontWeight: 800 }}>
-                  Job #{dubbingJob.id} - {{ queued: 'Đang chờ', running: 'Đang xử lý', succeeded: 'Hoàn thành', failed: 'Thất bại', cancelled: 'Đã hủy' }[dubbingJob.status] || dubbingJob.status}
+                  Job #{dubbingJob.id} - {jobStageText(dubbingJob)}
                 </Typography>
                 <Typography sx={{ color: 'var(--admin-text-muted)', fontWeight: 700 }}>{dubbingJob.progress || 0}%</Typography>
               </Box>
@@ -420,6 +504,28 @@ export default function EpisodeManager({
               <Typography sx={{ color: 'var(--admin-text-muted)', fontSize: '0.82rem' }}>
                 {dubbingJob.completed_segments || 0}/{dubbingJob.total_segments || 0} câu thoại
               </Typography>
+              {qualityReport?.sync?.warning && <Alert severity="warning">{qualityReport.sync.warning}</Alert>}
+              {qualityReport?.sync?.applied && qualityReport.sync.mode !== 'video_transcribed' && (
+                <Alert severity="info">
+                  Đã đồng bộ phụ đề: lệch trung vị {Number(qualityReport.sync.offset_seconds || 0).toFixed(2)} giây,
+                  độ trôi {Number(qualityReport.sync.drift_seconds || 0).toFixed(2)} giây.
+                </Alert>
+              )}
+              {qualityReport?.sync?.mode === 'video_transcribed' && (
+                <Alert severity="info">
+                  Đã tạo lời Việt từ video: Whisper nhận diện {qualityReport.sync.asr?.segment_count || 0} câu,
+                  ngôn ngữ gốc {String(qualityReport.sync.asr?.language || 'auto').toUpperCase()}
+                  {Number.isFinite(Number(qualityReport.sync.asr?.average_confidence))
+                    ? `, độ tin cậy trung bình ${(Number(qualityReport.sync.asr.average_confidence) * 100).toFixed(1)}%.`
+                    : '.'}
+                </Alert>
+              )}
+              {qualityReport?.speech?.fast_cues > 0 && (
+                <Alert severity={qualityReport.speech.very_fast_cues > 0 ? 'warning' : 'info'}>
+                  Có {qualityReport.speech.fast_cues} câu cần đọc nhanh hơn 1.2x
+                  {qualityReport.speech.very_fast_cues > 0 ? `; ${qualityReport.speech.very_fast_cues} câu vượt 1.4x.` : '.'}
+                </Alert>
+              )}
               {dubbingJob.error_message && <Alert severity="error">{readableDubbingError(dubbingJob.error_message)}</Alert>}
               {dubbingJob.status === 'succeeded' && dubbingJob.playback_url && (
                 <Box component="video" src={dubbingJob.playback_url} controls sx={{ width: '100%', maxHeight: 300, bgcolor: '#000' }} />
@@ -466,11 +572,11 @@ export default function EpisodeManager({
           <Button
             variant="contained"
             onClick={createFullDubbing}
-            disabled={dubbingLoading || dubbingDataLoading || subtitleSaving || !dubbingService.available || !hasSubtitleSource || Boolean(dubbingJob && ['queued', 'running', 'succeeded'].includes(dubbingJob.status))}
+            disabled={dubbingLoading || dubbingDataLoading || subtitleSaving || !dubbingService.available || !canCreateDubbing || Boolean(dubbingJob && ['queued', 'running', 'succeeded'].includes(dubbingJob.status))}
             startIcon={dubbingLoading ? <CircularProgress size={16} color="inherit" /> : <RecordVoiceOverIcon />}
             sx={{ bgcolor: 'var(--admin-accent)', '&:hover': { bgcolor: 'var(--admin-accent-hover)' } }}
           >
-            {dubbingLoading ? 'Đang tạo...' : 'Lồng tiếng toàn bộ tập'}
+            {dubbingLoading ? 'Đang tạo...' : (dubbingSourceMode === 'video' ? 'Lồng tiếng từ video' : 'Lồng tiếng toàn bộ tập')}
           </Button>
         </DialogActions>
       </Dialog>
