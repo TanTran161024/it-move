@@ -140,6 +140,44 @@ function MenuDivider() {
   return <div className="h-px bg-border w-full my-1" />;
 }
 
+function NavHoverMenu({ title, items, queryKey, onSelect }) {
+  const allUrl = '/movies';
+  return (
+    <div className="absolute left-1/2 top-full z-[80] mt-3 w-[560px] max-w-[calc(100vw-96px)] -translate-x-1/2 rounded-2xl border border-border bg-surface/95 p-3 text-white shadow-[0_18px_55px_-18px_rgba(0,0,0,0.9)] backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-150">
+      <div className="absolute -top-3 left-0 h-3 w-full" />
+      <div className="mb-2 flex items-center justify-between gap-3 px-2 py-1">
+        <div>
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-primary">{title}</div>
+          <div className="mt-1 text-sm font-semibold text-text-secondary">Chọn nhanh để lọc danh sách phim.</div>
+        </div>
+        <button
+          type="button"
+          onClick={() => onSelect(allUrl)}
+          className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-bold text-white/80 transition-colors hover:border-primary/50 hover:bg-primary/10 hover:text-white"
+        >
+          Tất cả
+        </button>
+      </div>
+      <div className="grid max-h-[60vh] grid-cols-2 gap-1 overflow-y-auto pr-1">
+        {items.length ? items.map((item) => (
+          <button
+            key={item.id || item.name}
+            type="button"
+            onClick={() => onSelect(`/movies?${queryKey}=${encodeURIComponent(item.name)}`)}
+            className="min-w-0 rounded-xl px-3 py-2.5 text-left text-sm font-bold text-text-secondary transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
+          >
+            <span className="block truncate">{item.name}</span>
+          </button>
+        )) : (
+          <div className="col-span-2 rounded-xl bg-white/5 px-4 py-5 text-sm font-semibold text-text-secondary">
+            Đang tải dữ liệu...
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function buildMoviesUrl(query) {
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => params.set(key, value));
@@ -174,6 +212,8 @@ export default function Header() {
   const [mobileAnchor, setMobileAnchor] = useState(null);
   const [userAnchor, setUserAnchor] = useState(null);
   const [notificationAnchor, setNotificationAnchor] = useState(null);
+  const [activeNavMenu, setActiveNavMenu] = useState(null);
+  const [navLookups, setNavLookups] = useState({ genres: [], countries: [] });
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -182,6 +222,7 @@ export default function Header() {
   const searchInputRef = useRef(null);
   const searchOverlayRef = useRef(null);
   const searchCacheRef = useRef({});
+  const navMenuCloseTimerRef = useRef(null);
   const searchFilterLabels = useMemo(() => getSmartFilterLabels(searchMeta?.filters), [searchMeta]);
 
   useEffect(() => {
@@ -200,6 +241,26 @@ export default function Header() {
       window.removeEventListener(PROFILE_CHANGE_EVENT, syncProfile);
       window.removeEventListener('storage', syncProfile);
     };
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    Promise.all([
+      fetch(`${API}/api/genres`, { signal: controller.signal }).then((res) => (res.ok ? res.json() : [])),
+      fetch(`${API}/api/countries`, { signal: controller.signal }).then((res) => (res.ok ? res.json() : [])),
+    ])
+      .then(([genres, countries]) => {
+        setNavLookups({
+          genres: Array.isArray(genres) ? genres : [],
+          countries: Array.isArray(countries) ? countries : [],
+        });
+      })
+      .catch((error) => {
+        if (error.name !== 'AbortError') {
+          setNavLookups({ genres: [], countries: [] });
+        }
+      });
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
@@ -337,6 +398,7 @@ export default function Header() {
 
   const closeMenus = () => {
     setMobileAnchor(null);
+    setActiveNavMenu(null);
   };
 
   const goTo = (url) => {
@@ -358,6 +420,22 @@ export default function Header() {
     closeMenus();
     searchCacheRef.current = {};
     setIsSearchOpen(true);
+  };
+
+  const openNavMenu = (menu) => {
+    window.clearTimeout(navMenuCloseTimerRef.current);
+    setActiveNavMenu(menu);
+  };
+
+  const scheduleCloseNavMenu = () => {
+    window.clearTimeout(navMenuCloseTimerRef.current);
+    navMenuCloseTimerRef.current = window.setTimeout(() => setActiveNavMenu(null), 120);
+  };
+
+  const handleNavMenuSelect = (url) => {
+    window.clearTimeout(navMenuCloseTimerRef.current);
+    setActiveNavMenu(null);
+    goTo(url);
   };
 
   const addRecentSearch = (term) => {
@@ -472,16 +550,38 @@ export default function Header() {
 
           {/* Desktop Nav */}
           <nav className="hidden lg:flex items-center gap-8">
-            {NAV_ITEMS.map((item) => (
-              <button
-                key={item.label}
-                className="text-text-secondary hover:text-white transition-colors duration-300 flex items-center gap-1.5 text-sm font-semibold tracking-wide"
-                onClick={(event) => handleNavClick(event, item)}
-              >
-                {item.label}
-                {item.menu && <Icon name="chevronDown" size={16} className="opacity-50" />}
-              </button>
-            ))}
+            {NAV_ITEMS.map((item) => {
+              const isMenuOpen = item.menu && activeNavMenu === item.menu;
+              const menuTitle = item.menu === 'genres' ? 'Thể loại' : 'Quốc gia';
+              const queryKey = item.menu === 'genres' ? 'genre' : 'country';
+              return (
+                <div
+                  key={item.label}
+                  className="relative"
+                  onMouseEnter={item.menu ? () => openNavMenu(item.menu) : undefined}
+                  onMouseLeave={item.menu ? scheduleCloseNavMenu : undefined}
+                  onFocus={item.menu ? () => openNavMenu(item.menu) : undefined}
+                >
+                  <button
+                    className={`flex items-center gap-1.5 text-sm font-semibold tracking-wide transition-colors duration-300 ${isMenuOpen ? 'text-white' : 'text-text-secondary hover:text-white'}`}
+                    onClick={(event) => handleNavClick(event, item)}
+                    aria-haspopup={item.menu ? 'menu' : undefined}
+                    aria-expanded={item.menu ? Boolean(isMenuOpen) : undefined}
+                  >
+                    {item.label}
+                    {item.menu && <Icon name="chevronDown" size={16} className={`opacity-50 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} />}
+                  </button>
+                  {isMenuOpen && (
+                    <NavHoverMenu
+                      title={menuTitle}
+                      items={navLookups[item.menu] || []}
+                      queryKey={queryKey}
+                      onSelect={handleNavMenuSelect}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </nav>
         </div>
 

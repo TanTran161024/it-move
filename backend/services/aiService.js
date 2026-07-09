@@ -15,13 +15,14 @@ const {
   getCandidateMovies,
 } = require('./movieRetrievalService');
 const { getUserRecommendations } = require('./recommendationService');
+const { getProfileTasteProfile } = require('./profileTasteService');
 
 const MAX_CONTEXT_MOVIES = 12;
 const MAX_RETURNED_MOVIES = 6;
 
-async function getFallbackForClarification(db, userId, profileId) {
+async function getFallbackForClarification(db, userId, profileId, tasteProfile = null) {
   if (!userId) return [];
-  return getUserRecommendations(db, userId, 4, profileId).catch(() => []);
+  return getUserRecommendations(db, userId, 4, profileId, { tasteProfile }).catch(() => []);
 }
 
 function buildOffTopicResponse(intent) {
@@ -41,8 +42,8 @@ function buildOffTopicResponse(intent) {
   };
 }
 
-async function buildClarificationResponse(db, userId, profileId, intent) {
-  const fallback = await getFallbackForClarification(db, userId, profileId);
+async function buildClarificationResponse(db, userId, profileId, intent, tasteProfile = null) {
+  const fallback = await getFallbackForClarification(db, userId, profileId, tasteProfile);
   return {
     reply: 'Bạn muốn xem theo mood nào?\nThử nói: hành động hài, kinh dị căng thẳng, tình cảm Hàn Quốc.',
     recommendations: fallback,
@@ -51,11 +52,12 @@ async function buildClarificationResponse(db, userId, profileId, intent) {
       memory_used: Boolean(intent.hasMemory),
       follow_up: Boolean(intent.isFollowUp),
       refinement: intent.refinement,
+      taste_summary: tasteProfile?.summary || [],
     },
     source: 'clarification',
     provider: 'database-rules',
     model: null,
-    grounding: buildGrounding('clarification', fallback, fallback),
+    grounding: buildGrounding('clarification', fallback, fallback, tasteProfile),
   };
 }
 
@@ -73,8 +75,12 @@ async function chatWithMovieAdvisor(db, { message, user_id, profile_id, history,
     return buildOffTopicResponse(intent);
   }
 
+  const tasteProfile = user_id
+    ? await getProfileTasteProfile(db, user_id, profile_id).catch(() => null)
+    : null;
+
   if (shouldAskClarifyingQuestion(cleanMessage)) {
-    return buildClarificationResponse(db, user_id, profile_id, intent);
+    return buildClarificationResponse(db, user_id, profile_id, intent, tasteProfile);
   }
 
   const retrievalMessage = buildRetrievalMessage(cleanMessage, history);
@@ -86,6 +92,7 @@ async function chatWithMovieAdvisor(db, { message, user_id, profile_id, history,
     profileId: profile_id,
     limit: baseLimit,
     signals: messageSignals(retrievalMessage),
+    tasteProfile,
   });
 
   let candidates = excludedIds.length
@@ -108,6 +115,7 @@ async function chatWithMovieAdvisor(db, { message, user_id, profile_id, history,
   try {
     const geminiResult = await callGemini(retrievalMessage, candidates, intent, {
       maxReturnedMovies: MAX_RETURNED_MOVIES,
+      tasteProfile,
     });
     const geminiIds = extractRecommendationIds(geminiResult);
     if (geminiIds.length) {
@@ -134,6 +142,7 @@ async function chatWithMovieAdvisor(db, { message, user_id, profile_id, history,
     model: provider === 'gemini' ? getGeminiModel() : null,
     aiError,
     intent,
+    tasteProfile,
     limit: MAX_RETURNED_MOVIES,
   });
 }

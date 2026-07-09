@@ -1,4 +1,5 @@
 const DEFAULT_MODEL = 'gemini-2.5-flash';
+const { compactTasteProfile } = require('./profileTasteService');
 
 let geminiHealth = {
   ok: null,
@@ -96,17 +97,22 @@ function compactMovie(movie) {
   };
 }
 
-function buildGeminiPrompt(message, recommendations, intent = {}, maxReturnedMovies = 6) {
+function buildGeminiPrompt(message, recommendations, intent = {}, maxReturnedMovies = 6, tasteProfile = null) {
   const context = recommendations.map(compactMovie);
+  const compactTaste = compactTasteProfile(tasteProfile);
   return `
 Bạn là bộ chọn phim cho website Smart Movie Streaming Web.
 CONTEXT là danh sách phim thật đã lấy từ MySQL. Bạn chỉ được chọn id có trong CONTEXT.
 Không tạo phim mới, không tự bịa rating, poster, tập phim, link xem, diễn viên hoặc năm phát hành.
 Nếu dữ liệu không đủ khớp, vẫn chỉ chọn các phim phù hợp nhất trong CONTEXT và không thêm dữ liệu ngoài.
 Nếu USER_MESSAGE là câu nối tiếp như "phim khác", "nhẹ nhàng hơn", "ngắn thôi", hãy dùng CONVERSATION_INTENT để hiểu yêu cầu mới.
+PROFILE_TASTE là gu đã học của profile hiện tại; dùng nó để ưu tiên phim hợp gu, nhưng USER_MESSAGE vẫn là yêu cầu chính.
 
 CONTEXT:
 ${JSON.stringify(context, null, 2)}
+
+PROFILE_TASTE:
+${JSON.stringify(compactTaste, null, 2)}
 
 CONVERSATION_INTENT:
 ${JSON.stringify({
@@ -226,7 +232,7 @@ async function callGemini(message, recommendations, intent, options = {}) {
 
   const model = getGeminiModel();
   const text = await requestGemini(
-    buildGeminiPrompt(message, recommendations, intent, options.maxReturnedMovies || 6),
+    buildGeminiPrompt(message, recommendations, intent, options.maxReturnedMovies || 6, options.tasteProfile || null),
     buildGeminiGenerationConfig(model)
   );
   return safeParseJson(text);

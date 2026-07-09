@@ -6,7 +6,22 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const { getSimilarMovies, getUserRecommendations, clampLimit } = require('./services/recommendationService');
 const { chatWithMovieAdvisor, getAiStatus } = require('./services/aiService');
+const {
+  deleteAdminAiFeedback,
+  getAdminAiTasteDashboard,
+  hideAdminMovieForProfile,
+  resetAdminProfileAiFeedback,
+} = require('./services/adminAiTasteService');
 const { ensureChatSession, getAiChatStats, getLatestChatHistory, saveChatExchange } = require('./services/chatSessionService');
+const {
+  clearAiMovieFeedback,
+  getAiFeedbackStats,
+  getAiMovieFeedbackMap,
+  listAiMovieFeedback,
+  normalizeAiFeedbackType,
+  setAiMovieFeedback,
+} = require('./services/aiFeedbackService');
+const { compactTasteProfile, getProfileTasteProfile } = require('./services/profileTasteService');
 const { generateMovieDescription } = require('./services/adminDescriptionService');
 const { translateSubtitle } = require('./services/subtitleTranslatorService');
 const { enrichMissingMoviesWithTmdb, enrichMovieWithTmdb } = require('./services/tmdbService');
@@ -918,7 +933,35 @@ router.get('/recommendations/user/:userId', async (req, res) => {
   try {
     const db = getDb(req);
     const profileId = await resolveProfileId(db, req.params.userId, profileHeader(req));
-    const recommendations = await getUserRecommendations(db, req.params.userId, clampLimit(req.query.limit), profileId);
+    const includeTaste = ['1', 'true', 'yes'].includes(String(req.query.include_taste || '').toLowerCase());
+    const tasteProfile = includeTaste
+      ? await getProfileTasteProfile(db, req.params.userId, profileId).catch(() => null)
+      : null;
+    const recommendations = await getUserRecommendations(
+      db,
+      req.params.userId,
+      clampLimit(req.query.limit),
+      profileId,
+      tasteProfile ? { tasteProfile } : {}
+    );
+
+    if (includeTaste) {
+      const movieIds = recommendations.map((movie) => Number(movie.id)).filter(Boolean);
+      const feedback = await getAiMovieFeedbackMap(db, {
+        userId: req.params.userId,
+        profileId,
+        movieIds,
+      }).catch(() => ({}));
+
+      return res.json({
+        movies: recommendations,
+        source: 'personalized',
+        profile_id: profileId,
+        taste_profile: compactTasteProfile(tasteProfile),
+        feedback,
+      });
+    }
+
     res.json(recommendations);
   } catch (err) {
     res.status(err.statusCode || 500).json({ message: err.message });
@@ -1050,10 +1093,54 @@ router.get('/admin/ai-health', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
     const chat = await getAiChatStats(db);
+    const feedback = await getAiFeedbackStats(db);
     res.json({
       status: getAiStatus(),
       chat,
+      feedback,
     });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.get('/admin/ai-taste', requireAdminMiddleware, async (req, res) => {
+  try {
+    const result = await getAdminAiTasteDashboard(getDb(req), {
+      profileId: req.query?.profile_id,
+      limit: req.query?.limit,
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.delete('/admin/ai-taste/feedback/:id', requireAdminMiddleware, async (req, res) => {
+  try {
+    const deleted = await deleteAdminAiFeedback(getDb(req), req.params.id);
+    res.json({ deleted });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.post('/admin/ai-taste/profiles/:profileId/reset', requireAdminMiddleware, async (req, res) => {
+  try {
+    const deleted = await resetAdminProfileAiFeedback(getDb(req), req.params.profileId);
+    res.json({ deleted });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.post('/admin/ai-taste/feedback/hide', requireAdminMiddleware, async (req, res) => {
+  try {
+    const feedback = await hideAdminMovieForProfile(getDb(req), {
+      profileId: req.body?.profile_id,
+      movieId: req.body?.movie_id,
+    });
+    res.json({ feedback });
   } catch (err) {
     res.status(err.statusCode || 500).json({ message: err.message });
   }
@@ -1111,6 +1198,109 @@ router.get('/ai/chat/history', async (req, res) => {
       limit: req.query?.limit,
     });
     res.json(history);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.get('/ai/movie-feedback/list', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: 'Chua dang nhap' });
+    const db = getDb(req);
+    const profileId = await resolveProfileId(db, userId, profileHeader(req));
+    const feedback = await listAiMovieFeedback(db, {
+      userId,
+      profileId,
+      limit: req.query?.limit,
+    });
+    res.json({ profile_id: profileId, feedback });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.get('/ai/movie-feedback', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: 'Chua dang nhap' });
+    const db = getDb(req);
+    const profileId = await resolveProfileId(db, userId, profileHeader(req));
+    const feedback = await getAiMovieFeedbackMap(db, {
+      userId,
+      profileId,
+      movieIds: req.query?.movie_ids || req.query?.movie_id,
+    });
+    res.json({ feedback });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.get('/ai/profile-taste', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.json({
+        signals_count: 0,
+        positive: { genres: [], countries: [] },
+        negative: { genres: [], countries: [] },
+        duration: { preference: null, average_minutes: null, buckets: { short: 0, medium: 0, long: 0, series: 0 } },
+        summary: [],
+      });
+    }
+    const db = getDb(req);
+    const profileId = await resolveProfileId(db, userId, profileHeader(req));
+    const taste = await getProfileTasteProfile(db, userId, profileId);
+    res.json({
+      profile_id: profileId,
+      ...taste,
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.post('/ai/movie-feedback', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: 'Can dang nhap de luu gu phim' });
+    const feedbackType = normalizeAiFeedbackType(req.body?.feedback_type || req.body?.type);
+    if (!feedbackType) return res.status(400).json({ message: 'feedback_type khong hop le' });
+
+    const db = getDb(req);
+    const profileId = await resolveProfileId(db, userId, profileHeader(req));
+    const feedback = await setAiMovieFeedback(db, {
+      userId,
+      profileId,
+      movieId: req.body?.movie_id,
+      feedbackType,
+      active: req.body?.active !== false,
+      sessionId: req.body?.session_id,
+      source: req.body?.source || 'chatbot',
+      metadata: {
+        user_agent: req.headers['user-agent'] || null,
+      },
+    });
+    res.json({ success: true, movie_id: Number(req.body?.movie_id), feedback });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.delete('/ai/movie-feedback', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ message: 'Can dang nhap de cap nhat gu phim' });
+    const db = getDb(req);
+    const profileId = await resolveProfileId(db, userId, profileHeader(req));
+    const deleted = await clearAiMovieFeedback(db, {
+      userId,
+      profileId,
+      movieId: req.body?.movie_id || req.query?.movie_id,
+      feedbackType: req.body?.feedback_type || req.query?.feedback_type,
+    });
+    res.json({ success: true, deleted });
   } catch (err) {
     res.status(err.statusCode || 500).json({ message: err.message });
   }

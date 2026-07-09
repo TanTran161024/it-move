@@ -33,6 +33,10 @@ function hasAnyPhrase(normalizedText, phrases) {
   return phrases.some((phrase) => hasPhrase(normalizedText, phrase));
 }
 
+function includesWanted(signals, wanted) {
+  return signals.wanted.includes(wanted);
+}
+
 function isMovieRelated(message) {
   const normalized = normalizeText(message);
   const movieTerms = [
@@ -69,6 +73,15 @@ function shouldAskClarifyingQuestion(message) {
 function parseChatRefinement(message) {
   const normalized = normalizeText(message);
   const signals = messageSignals(message);
+  const noSeries = hasAnyPhrase(normalized, [
+    'khong phim bo', 'khong series', 'khong nhieu tap', 'phim le thoi', 'chi phim le',
+  ]);
+  const noAnime = hasAnyPhrase(normalized, [
+    'khong anime', 'bo anime', 'tranh anime', 'khong hoat hinh', 'bo hoat hinh',
+  ]);
+  const noHorror = hasAnyPhrase(normalized, [
+    'khong kinh di', 'bo kinh di', 'tranh kinh di', 'khong ma', 'bo ma', 'it ma', 'bot ma',
+  ]);
 
   return {
     alternative: hasAnyPhrase(normalized, [
@@ -87,6 +100,25 @@ function parseChatRefinement(message) {
     funnier: signals.wanted.includes('hai') || hasAnyPhrase(normalized, [
       'hai hon', 'vui hon', 'buon cuoi hon',
     ]),
+    newer: hasAnyPhrase(normalized, [
+      'moi hon', 'phim moi', 'moi nhat', 'gan day', 'nam moi', 'doi moi hon',
+    ]),
+    higherRated: hasAnyPhrase(normalized, [
+      'imdb cao', 'diem cao', 'rating cao', 'danh gia cao', 'chat luong hon', 'phim hay hon',
+    ]),
+    noSeries,
+    seriesOnly: !noSeries && hasAnyPhrase(normalized, [
+      'phim bo', 'series', 'nhieu tap', 'xem dai tap', 'co nhieu tap',
+    ]),
+    animeOnly: !noAnime && (
+      includesWanted(signals, 'hoat hinh')
+      || hasAnyPhrase(normalized, ['anime thoi', 'anime nhat', 'chi anime', 'hoat hinh thoi', 'chi hoat hinh'])
+    ),
+    noAnime,
+    noHorror,
+    koreanOnly: includesWanted(signals, 'han quoc') || hasAnyPhrase(normalized, ['phim han', 'han quoc thoi', 'chi han quoc']),
+    chineseOnly: includesWanted(signals, 'trung quoc') || hasAnyPhrase(normalized, ['phim trung', 'trung quoc thoi', 'chi trung quoc']),
+    japaneseOnly: includesWanted(signals, 'nhat ban') || hasAnyPhrase(normalized, ['phim nhat', 'anime nhat', 'nhat thoi', 'nhat ban thoi', 'chi nhat ban']),
   };
 }
 
@@ -135,6 +167,16 @@ function buildRetrievalMessage(message, history) {
     refinement.shorter ? 'thời lượng ngắn xem nhanh' : null,
     refinement.moreIntense ? 'gay cấn hồi hộp căng thẳng' : null,
     refinement.funnier ? 'hài vui vẻ' : null,
+    refinement.newer ? 'phim mới gần đây' : null,
+    refinement.higherRated ? 'IMDb cao đánh giá cao' : null,
+    refinement.noSeries ? 'phim lẻ' : null,
+    refinement.seriesOnly ? 'phim bộ series nhiều tập' : null,
+    refinement.animeOnly ? 'anime hoạt hình Nhật' : null,
+    refinement.noAnime ? 'phim người đóng live action' : null,
+    refinement.noHorror ? 'nhẹ nhàng hài tình cảm gia đình' : null,
+    refinement.koreanOnly ? 'Hàn Quốc' : null,
+    refinement.chineseOnly ? 'Trung Quốc' : null,
+    refinement.japaneseOnly ? 'Nhật Bản' : null,
   ].filter(Boolean).join(' ');
 
   return [recentUserContext, message, refinementTerms].filter(Boolean).join(' ');

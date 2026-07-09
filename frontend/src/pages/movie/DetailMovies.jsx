@@ -25,6 +25,7 @@ import ForgotPasswordDialog from '../../components/auth/ForgotPasswordDialog';
 import LoginDialog from '../../components/auth/LoginDialog';
 import RegisterDialog from '../../components/auth/RegisterDialog';
 import MovieCard, { MovieCardSkeleton } from '../../components/movie/MovieCard';
+import MovieTasteFeedback from '../../components/movie/MovieTasteFeedback';
 import { FALLBACK_POSTER } from '../../utils/imageFallbacks';
 import { API_URL as API } from '../../config/api';
 import { getProfileHeaders, getStoredUser } from '../../utils/profile';
@@ -1137,6 +1138,19 @@ const DetailMovies = () => {
                       <ChatBubbleOutlineIcon />
                     </button>
                   </div>
+                </div>
+                <div className="mt-5 border-t border-white/10 pt-5">
+                  <div className="mb-3 flex flex-col gap-1">
+                    <span className="text-sm font-black text-white">Dạy gu cho profile này</span>
+                    <span className="text-xs font-bold text-white/45">Phản hồi của bạn giúp chatbot và trang gợi ý chọn phim sát gu hơn.</span>
+                  </div>
+                  <MovieTasteFeedback
+                    movieId={data.id}
+                    source="detail"
+                    variant="detail"
+                    onRequireLogin={requireLogin}
+                    onChanged={({ message }) => setFeedbackMessage(message || 'Đã cập nhật gu phim.')}
+                  />
                 </div>
               </div>
 

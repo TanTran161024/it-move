@@ -1,3 +1,10 @@
+const {
+  getAiExcludedFeedbackMovieIds,
+  getAiNegativeFeedbackSeeds,
+  getAiPositiveFeedbackSeeds,
+} = require('./aiFeedbackService');
+const { getProfileTasteProfile, scoreMovieWithTaste } = require('./profileTasteService');
+
 const DEFAULT_LIMIT = 12;
 const MAX_POOL_SIZE = 240;
 const COUNTRY_SIGNALS = new Set(['trung quoc', 'han quoc', 'nhat ban', 'viet nam', 'my']);
@@ -334,6 +341,44 @@ async function getPopularMovies(db, options = {}) {
   }));
 }
 
+async function getTasteOnlyRecommendations(db, tasteProfile, options = {}) {
+  if (!tasteProfile?.signals_count) return [];
+
+  const targetLimit = clampLimit(options.limit, DEFAULT_LIMIT);
+  const candidates = await getMovieProfiles(db, {
+    excludeIds: options.excludeIds || [],
+    limit: MAX_POOL_SIZE,
+  });
+
+  const ranked = candidates
+    .map((candidate) => {
+      const taste = scoreMovieWithTaste(candidate, tasteProfile);
+      const score = (taste.score * 6)
+        + Math.min(Number(candidate.imdb_rating) || 0, 10)
+        + Math.min(Math.log10((candidate.views || 0) + 1) * 2, 8);
+      return {
+        candidate,
+        score: Math.round(score),
+        contentScore: Math.max(0, taste.score),
+        matched: { genres: [], countries: [], actors: [], directors: [] },
+        reasons: taste.reasons?.length ? taste.reasons : ['Hợp gu profile'],
+      };
+    })
+    .filter((item) => item.contentScore > 0)
+    .sort((left, right) => right.score - left.score || (right.candidate.views || 0) - (left.candidate.views || 0))
+    .slice(0, targetLimit)
+    .map((item) => toMovieCard(item.candidate, item));
+
+  if (ranked.length >= targetLimit) return ranked;
+
+  const fallback = await getPopularMovies(db, {
+    excludeIds: unique([...(options.excludeIds || []), ...ranked.map((movie) => movie.id)]),
+    limit: targetLimit - ranked.length,
+  });
+
+  return [...ranked, ...fallback];
+}
+
 async function getSimilarMovies(db, movieId, limit = DEFAULT_LIMIT) {
   const targetLimit = clampLimit(limit);
   const numericId = Number(movieId);
@@ -388,6 +433,34 @@ async function getCompletedMovieIds(db, userId, profileId = null) {
   return rows.map((row) => Number(row.movie_id)).filter(Boolean);
 }
 
+function seedLastSeenTime(value) {
+  if (!value) return 0;
+  const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function mergeSeedRows(rows) {
+  const map = new Map();
+  rows.forEach((row) => {
+    const movieId = Number(row.movie_id);
+    if (!movieId) return;
+    const weight = Number(row.weight) || 1;
+    const lastSeen = row.last_seen || null;
+    const current = map.get(movieId);
+    if (
+      !current
+      || weight > current.weight
+      || (weight === current.weight && seedLastSeenTime(lastSeen) > seedLastSeenTime(current.last_seen))
+    ) {
+      map.set(movieId, { movie_id: movieId, weight, last_seen: lastSeen });
+    }
+  });
+
+  return [...map.values()]
+    .sort((left, right) => right.weight - left.weight || seedLastSeenTime(right.last_seen) - seedLastSeenTime(left.last_seen))
+    .slice(0, 12);
+}
+
 async function getUserSeedMovies(db, userId, profileId = null) {
   const [rows] = await db.execute(
     `
@@ -422,15 +495,15 @@ async function getUserSeedMovies(db, userId, profileId = null) {
     `,
     [userId, profileId, profileId, userId, profileId, profileId, userId, userId, profileId, profileId]
   );
-  return rows
+  const aiFeedbackRows = await getAiPositiveFeedbackSeeds(db, userId, profileId);
+  return mergeSeedRows([...rows, ...aiFeedbackRows])
     .map((row) => ({
-      movie_id: Number(row.movie_id),
-      weight: Number(row.weight) || 1,
-    }))
-    .filter((row) => row.movie_id > 0);
+      movie_id: row.movie_id,
+      weight: row.weight,
+    }));
 }
 
-async function getUserRecommendations(db, userId, limit = DEFAULT_LIMIT, profileId = null) {
+async function getUserRecommendations(db, userId, limit = DEFAULT_LIMIT, profileId = null, options = {}) {
   const targetLimit = clampLimit(limit);
   const numericUserId = Number(userId);
   if (!Number.isInteger(numericUserId) || numericUserId <= 0) {
@@ -446,20 +519,38 @@ async function getUserRecommendations(db, userId, limit = DEFAULT_LIMIT, profile
     throw error;
   }
 
-  const [completedIds, seedRows] = await Promise.all([
+  const providedTasteProfile = options.tasteProfile || null;
+  const [completedIds, feedbackExcludedIds, seedRows, negativeSeedRows, tasteProfile] = await Promise.all([
     getCompletedMovieIds(db, numericUserId, profileId),
+    getAiExcludedFeedbackMovieIds(db, numericUserId, profileId),
     getUserSeedMovies(db, numericUserId, profileId),
+    getAiNegativeFeedbackSeeds(db, numericUserId, profileId),
+    providedTasteProfile ? Promise.resolve(providedTasteProfile) : getProfileTasteProfile(db, numericUserId, profileId).catch(() => null),
   ]);
+  const excludedIds = unique([...completedIds, ...feedbackExcludedIds]);
+
+  if (!seedRows.length && tasteProfile?.signals_count) {
+    const tasteOnly = await getTasteOnlyRecommendations(db, tasteProfile, {
+      excludeIds,
+      limit: targetLimit,
+    });
+    if (tasteOnly.length) return tasteOnly;
+  }
 
   if (!seedRows.length) {
-    return getPopularMovies(db, { excludeIds: completedIds, limit: targetLimit });
+    return getPopularMovies(db, { excludeIds, limit: targetLimit });
   }
 
   const seedIds = seedRows.map((row) => row.movie_id);
   const seedWeights = new Map(seedRows.map((row) => [row.movie_id, row.weight]));
+  const negativeSeedIds = negativeSeedRows.map((row) => row.movie_id);
+  const negativeSeedWeights = new Map(negativeSeedRows.map((row) => [row.movie_id, row.weight]));
   const seeds = await getMovieProfiles(db, { ids: seedIds, limit: seedIds.length });
+  const negativeSeeds = negativeSeedIds.length
+    ? await getMovieProfiles(db, { ids: negativeSeedIds, limit: negativeSeedIds.length })
+    : [];
   const candidates = await getMovieProfiles(db, {
-    excludeIds: [...new Set([...seedIds, ...completedIds])],
+    excludeIds: unique([...seedIds, ...excludedIds]),
     limit: MAX_POOL_SIZE,
   });
   const scores = new Map();
@@ -481,6 +572,22 @@ async function getUserRecommendations(db, userId, limit = DEFAULT_LIMIT, profile
       Object.entries(result.matched).forEach(([key, values]) => {
         values.forEach((value) => matched[key].add(value));
       });
+    }
+
+    const taste = scoreMovieWithTaste(candidate, tasteProfile);
+    if (taste.score) {
+      total += taste.score * 5;
+      contentTotal += Math.max(0, taste.score);
+      taste.reasons.forEach((reason) => reasonSet.add(reason));
+    }
+
+    for (const negativeSeed of negativeSeeds) {
+      const result = scoreAgainstSeed(negativeSeed, candidate);
+      if (result.contentScore <= 0) continue;
+      const weight = negativeSeedWeights.get(negativeSeed.id) || 1;
+      const penalty = Math.round(Math.min(result.contentScore, 90) * weight * 0.35);
+      total -= penalty;
+      contentTotal -= penalty;
     }
 
     if (contentTotal <= 0) continue;
@@ -507,7 +614,7 @@ async function getUserRecommendations(db, userId, limit = DEFAULT_LIMIT, profile
   if (ranked.length >= targetLimit) return ranked;
 
   const fallback = await getPopularMovies(db, {
-    excludeIds: [...new Set([...seedIds, ...completedIds, ...ranked.map((movie) => movie.id)])],
+    excludeIds: unique([...seedIds, ...excludedIds, ...ranked.map((movie) => movie.id)]),
     limit: targetLimit - ranked.length,
   });
 
@@ -621,11 +728,19 @@ function scoreMessageMatch(profile, signals) {
 async function searchMoviesForMessage(db, message, options = {}) {
   const signals = messageSignals(message);
   const hasSpecificIntent = signals.wanted.length > 0 || Boolean(signals.year) || signals.terms.length > 0;
+  const tasteProfile = options.tasteProfile || null;
   const profiles = await getMovieProfiles(db, { limit: MAX_POOL_SIZE });
   const ranked = profiles
     .map((profile) => {
       const result = scoreMessageMatch(profile, signals);
-      return { profile, ...result };
+      const taste = scoreMovieWithTaste(profile, tasteProfile, signals);
+      const reasons = unique([...(result.reasons || []), ...(taste.reasons || [])]).slice(0, 4);
+      return {
+        profile,
+        ...result,
+        score: result.score + taste.score,
+        reasons,
+      };
     })
     .filter((item) => {
       if (!hasSpecificIntent) return true;

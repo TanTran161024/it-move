@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e50914"/>
+      <stop offset="100%" stop-color="#b20710"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.25)"/>
+      <stop offset="50%" stop-color="rgba(255,255,255,0)"/>
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Chat bubble body -->
+  <rect x="12" y="16" width="104" height="80" rx="20" ry="20" fill="url(#bg)"/>
+
+  <!-- Chat bubble tail -->
+  <path d="M30 96 L22 116 L50 96" fill="url(#bg)"/>
+
+  <!-- Subtle shine overlay on bubble -->
+  <rect x="12" y="16" width="104" height="80" rx="20" ry="20" fill="url(#shine)"/>
+
+  <!-- Play triangle -->
+  <path d="M50 42 L50 76 L82 59 Z" fill="#fff" filter="url(#shadow)"/>
+
+  <!-- AI sparkle — 4-point star, top-right -->
+  <path d="M98 22 C99 28 103 32 109 33 C103 34 99 38 98 44 C97 38 93 34 87 33 C93 32 97 28 98 22Z" fill="#fff" opacity="0.9"/>
+
+  <!-- Small sparkle accent -->
+  <path d="M84 18 C84.5 21 86.5 23 89.5 23.5 C86.5 24 84.5 26 84 29 C83.5 26 81.5 24 78.5 23.5 C81.5 23 83.5 21 84 18Z" fill="#fff" opacity="0.55"/>
+</svg>

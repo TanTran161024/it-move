@@ -1,7 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
-import { FaBookmark, FaCheck, FaInfoCircle, FaPaperPlane, FaPlay, FaRedo, FaTimes } from 'react-icons/fa';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  FaBookmark,
+  FaCheck,
+  FaInfoCircle,
+  FaPaperPlane,
+  FaPlay,
+  FaQuestionCircle,
+  FaRedo,
+  FaTimes,
+} from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import './MovieChatbot.css';
+import MovieTasteFeedback from '../movie/MovieTasteFeedback';
 import { API_BASE_URL as API } from '../../config/api';
 import { getActiveProfile, getProfileHeaders } from '../../utils/profile';
 
@@ -13,9 +23,10 @@ const starterMessages = [
   'Tối nay xem gì cho cuốn?',
   'Tôi muốn phim hành động hài',
   'Gợi ý phim tình cảm nhẹ nhàng',
+  'Anime Nhật IMDb cao',
 ];
 
-const followUpMessages = ['Phim khác', 'Nhẹ nhàng hơn', 'Ngắn thôi'];
+const followUpMessages = ['Phim khác', 'Ngắn thôi', 'Mới hơn', 'IMDb cao hơn', 'Không kinh dị', 'Anime thôi'];
 
 const welcomeMessage = {
   role: 'assistant',
@@ -54,7 +65,7 @@ function normalizeStoredMessages(value) {
       provider: item?.provider,
       grounding: item?.grounding,
       aiError: item?.aiError,
-      suggestedReplies: Array.isArray(item?.suggestedReplies) ? item.suggestedReplies.slice(0, 4) : [],
+      suggestedReplies: Array.isArray(item?.suggestedReplies) ? item.suggestedReplies.slice(0, 8) : [],
     }))
     .filter((item) => item.content);
 
@@ -91,6 +102,23 @@ function getVisibleMatchReasons(movie) {
     .slice(0, 2);
 }
 
+function getRecommendationExplanation(movie) {
+  const explanation = movie?.why_recommended || movie?.recommendation_explanation;
+  const details = Array.isArray(explanation?.details)
+    ? explanation.details.map((item) => String(item || '').trim()).filter(Boolean)
+    : [];
+  const fallbackDetails = getVisibleMatchReasons(movie).map((reason) => `Điểm khớp từ hệ thống: ${reason}.`);
+  const mergedDetails = details.length ? details : fallbackDetails;
+  const summary = String(explanation?.summary || mergedDetails[0] || '').trim();
+  const detailList = mergedDetails.filter((detail) => detail !== summary);
+
+  if (!summary && !mergedDetails.length) return null;
+  return {
+    summary: summary || 'Phim này nằm trong nhóm phù hợp nhất từ kho dữ liệu hiện có.',
+    details: detailList.slice(0, 6),
+  };
+}
+
 export default function MovieChatbot() {
   const navigate = useNavigate();
   const inputRef = useRef(null);
@@ -104,13 +132,40 @@ export default function MovieChatbot() {
   const [chatSessionId, setChatSessionId] = useState(loadChatSessionId);
   const [watchlistIds, setWatchlistIds] = useState(() => new Set());
   const [watchlistBusyId, setWatchlistBusyId] = useState(null);
+  const [tasteSummary, setTasteSummary] = useState([]);
+  const [expandedWhyIds, setExpandedWhyIds] = useState(() => new Set());
   const [actionMessage, setActionMessage] = useState('');
+
+  const loadTasteProfile = useCallback(async (signal) => {
+    const user = getStoredUser();
+    if (!user.id) {
+      setTasteSummary([]);
+      return;
+    }
+
+    const response = await fetch(`${API}/api/ai/profile-taste`, {
+      headers: getProfileHeaders(),
+      signal,
+    });
+    if (!response.ok) return;
+    const body = await response.json().catch(() => ({}));
+    setTasteSummary(Array.isArray(body.summary) ? body.summary.slice(0, 3) : []);
+  }, []);
 
   useEffect(() => {
     if (open) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
   }, [messages, loading, open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const controller = new AbortController();
+    loadTasteProfile(controller.signal).catch((err) => {
+      if (err.name !== 'AbortError') console.warn('[Chat taste]', err.message);
+    });
+    return () => controller.abort();
+  }, [loadTasteProfile, open]);
 
   useEffect(() => {
     try {
@@ -161,6 +216,7 @@ export default function MovieChatbot() {
     setMessages([welcomeMessage]);
     setChatSessionId('');
     historyLoadedRef.current = true;
+    setExpandedWhyIds(new Set());
     setError('');
     setActionMessage('');
     setInput('');
@@ -304,10 +360,21 @@ export default function MovieChatbot() {
     }
   };
 
+  const toggleWhy = (movieId) => {
+    setExpandedWhyIds((current) => {
+      const next = new Set(current);
+      if (next.has(movieId)) next.delete(movieId);
+      else next.add(movieId);
+      return next;
+    });
+  };
+
   const renderMovieCard = (movie) => {
     const movieId = Number(movie.id);
     const saved = watchlistIds.has(movieId);
     const busy = watchlistBusyId === movieId;
+    const explanation = getRecommendationExplanation(movie);
+    const whyOpen = expandedWhyIds.has(movieId);
 
     return (
     <article
@@ -352,6 +419,43 @@ export default function MovieChatbot() {
           {saved ? 'Đã lưu' : busy ? 'Đang lưu' : 'Thêm'}
         </button>
       </span>
+      {explanation && (
+        <div className={`movie-chatbot-why${whyOpen ? ' is-open' : ''}`}>
+          <button
+            type="button"
+            className="movie-chatbot-why-toggle"
+            aria-expanded={whyOpen}
+            onClick={(event) => {
+              event.stopPropagation();
+              toggleWhy(movieId);
+            }}
+          >
+            <FaQuestionCircle /> Vì sao gợi ý?
+          </button>
+          {whyOpen && (
+            <div className="movie-chatbot-why-panel">
+              <p>{explanation.summary}</p>
+              {explanation.details.length > 0 && (
+                <ul>
+                  {explanation.details.map((detail) => (
+                    <li key={detail}>{detail}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      <MovieTasteFeedback
+        movieId={movieId}
+        sessionId={chatSessionId}
+        source="chatbot"
+        variant="chatbot"
+        onChanged={({ message }) => {
+          setActionMessage(message || 'Đã cập nhật gu phim.');
+          loadTasteProfile().catch((err) => console.warn('[Chat taste]', err.message));
+        }}
+      />
     </article>
     );
   };
@@ -364,19 +468,19 @@ export default function MovieChatbot() {
         <section className="movie-chatbot-panel" aria-label="Tư vấn phim">
           <header className="movie-chatbot-header">
             <div className="movie-chatbot-title">
-              <span className="movie-chatbot-avatar" style={{ padding: 0, overflow: 'hidden', background: 'transparent' }}>
-                <img src="/chatbot-logo-128.png" alt="NetDL Assistant" style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'drop-shadow(0 0 5px rgba(168,85,247,0.5))' }} />
+              <span className="movie-chatbot-avatar">
+                <img src="/chatbot-logo.svg" alt="IT Move AI" />
               </span>
               <div>
-                <strong>NetDL Assistant</strong>
-                <small>Nhớ gu trong phiên chat</small>
+                <strong>IT Move AI</strong>
+                <small>{tasteSummary.length ? `Nhớ gu: ${tasteSummary.join(', ')}` : 'Sẵn sàng tư vấn phim'}</small>
               </div>
             </div>
             <div className="movie-chatbot-header-actions">
-              <button type="button" className="movie-chatbot-close" onClick={resetChat} aria-label="Bắt đầu lại">
+              <button type="button" className="movie-chatbot-close" onClick={resetChat} aria-label="Bắt đầu lại" title="Khởi động lại">
                 <FaRedo />
               </button>
-              <button type="button" className="movie-chatbot-close" onClick={() => setOpen(false)} aria-label="Đóng chatbot">
+              <button type="button" className="movie-chatbot-close" onClick={() => setOpen(false)} aria-label="Đóng chatbot" title="Đóng">
                 <FaTimes />
               </button>
             </div>
@@ -449,9 +553,9 @@ export default function MovieChatbot() {
         aria-label="Mở tư vấn phim"
       >
         <div className="movie-chatbot-fab-icon">
-          {open ? <FaTimes /> : <img src="/chatbot-logo-128.png" alt="NetDL Assistant" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}
+          {open ? <FaTimes /> : <img src="/chatbot-logo.svg" alt="IT Move AI" />}
         </div>
-        {!open && <span className="movie-chatbot-fab-text">Tư vấn phim AI</span>}
+        {!open && <span className="movie-chatbot-fab-text">Chatbot gợi ý phim</span>}
       </button>
     </div>
   );

@@ -1,0 +1,119 @@
+.movie-taste-feedback {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+}
+
+.movie-taste-feedback__button {
+  min-width: 0;
+  min-height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #c1c8d6;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  overflow: hidden;
+  padding: 0 8px;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.movie-taste-feedback__button span:not(.movie-taste-feedback__spinner) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.movie-taste-feedback__button svg {
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+
+.movie-taste-feedback__button:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.11);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.movie-taste-feedback__button.is-active.like,
+.movie-taste-feedback__button.is-active.watched {
+  border-color: rgba(45, 212, 191, 0.5);
+  background: rgba(45, 212, 191, 0.12);
+  color: #7df4df;
+}
+
+.movie-taste-feedback__button.is-active.dislike,
+.movie-taste-feedback__button.is-active.hide {
+  border-color: rgba(248, 113, 113, 0.5);
+  background: rgba(248, 113, 113, 0.13);
+  color: #fca5a5;
+}
+
+.movie-taste-feedback__button:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.movie-taste-feedback__spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.24);
+  border-top-color: currentColor;
+  border-radius: 999px;
+  animation: movie-taste-feedback-spin 0.7s linear infinite;
+}
+
+.movie-taste-feedback--chatbot {
+  margin-top: 7px;
+}
+
+.movie-taste-feedback--chatbot .movie-taste-feedback__button {
+  min-height: 32px;
+  border-radius: 7px;
+  font-size: 10px;
+  padding: 0 6px;
+}
+
+.movie-taste-feedback--detail {
+  max-width: 560px;
+}
+
+.movie-taste-feedback--detail .movie-taste-feedback__button {
+  min-height: 42px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+  font-size: 12px;
+}
+
+.movie-taste-feedback--settings .movie-taste-feedback__button {
+  min-height: 30px;
+  font-size: 10px;
+  padding: 0 6px;
+}
+
+.movie-taste-feedback--compact {
+  gap: 5px;
+}
+
+.movie-taste-feedback--compact .movie-taste-feedback__button {
+  min-height: 30px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 10px;
+  padding: 0 6px;
+}
+
+@keyframes movie-taste-feedback-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

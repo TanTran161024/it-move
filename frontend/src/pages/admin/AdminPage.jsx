@@ -12,6 +12,7 @@ import SubtitleTranslator from '../../components/admin/SubtitleTranslator';
 import DubbingStudio from '../../components/admin/DubbingStudio';
 import AdminDashboardStats from '../../components/admin/AdminDashboardStats';
 import AdminAutomationHub from '../../components/admin/AdminAutomationHub';
+import AITasteManager from '../../components/admin/AITasteManager';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
@@ -1101,6 +1102,7 @@ export default function Admin() {
           <AdminFeedbackManager />
         )}
         {selectedMenu === 'ai_tools' && <AdminAutomationHub />}
+        {selectedMenu === 'ai_taste' && <AITasteManager />}
         {selectedMenu === 'settings' && (
           <Box className="admin-empty">
             <Typography variant="h5" sx={{ color: 'var(--admin-text-strong)', mb: 2 }}>Cài đặt hệ thống</Typography>

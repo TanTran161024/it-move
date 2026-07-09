@@ -10,7 +10,8 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SubtitlesIcon from '@mui/icons-material/Subtitles';
 import TuneIcon from '@mui/icons-material/Tune';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import MovieTasteFeedback from '../../components/movie/MovieTasteFeedback';
 import ProfileSidebar from '../../components/user/ProfileSidebar';
 import { API_URL as API } from '../../config/api';
 import {
@@ -190,6 +191,244 @@ function ProfileHero({ activeProfile, user, playerSettings }) {
         </div>
       </div>
     </section>
+  );
+}
+
+const EMPTY_TASTE = {
+  signals_count: 0,
+  positive: { genres: [], countries: [] },
+  negative: { genres: [], countries: [] },
+  duration: { preference: null, average_minutes: null, buckets: { short: 0, medium: 0, long: 0, series: 0 } },
+  summary: [],
+};
+
+const FEEDBACK_GROUPS = [
+  { id: 'like', title: 'Đã thích', tone: 'emerald' },
+  { id: 'dislike', title: 'Không thích', tone: 'red' },
+  { id: 'watched', title: 'Đã xem', tone: 'sky' },
+  { id: 'hide', title: 'Không gợi ý nữa', tone: 'amber' },
+];
+
+function tasteToneClass(tone) {
+  const classes = {
+    emerald: 'border-emerald-300/25 bg-emerald-400/10 text-emerald-100',
+    red: 'border-red-300/25 bg-red-400/10 text-red-100',
+    sky: 'border-sky-300/25 bg-sky-400/10 text-sky-100',
+    amber: 'border-amber-300/25 bg-amber-400/10 text-amber-100',
+    neutral: 'border-white/10 bg-white/[0.07] text-white/70',
+  };
+  return classes[tone] || classes.neutral;
+}
+
+function TasteChipGroup({ title, items, tone = 'neutral', emptyText = 'Chưa đủ dữ liệu' }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+      <div className="text-[11px] font-black uppercase tracking-[0.16em] text-white/40">{title}</div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {items?.length ? items.slice(0, 6).map((item) => (
+          <span key={item.name} className={`rounded-full border px-3 py-1 text-xs font-black ${tasteToneClass(tone)}`}>
+            {item.name}
+          </span>
+        )) : (
+          <span className="text-sm font-bold text-white/40">{emptyText}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FeedbackMovieRow({ movie, type, onChanged }) {
+  return (
+    <div className="grid gap-3 rounded-2xl border border-white/10 bg-black/25 p-3 sm:grid-cols-[52px_minmax(0,1fr)]">
+      <Link to={`/movies/${movie.movie_id}`} className="block h-[78px] w-[52px] overflow-hidden rounded-xl bg-white/10">
+        {movie.poster_url ? (
+          <img src={movie.poster_url} alt={movie.title} className="h-full w-full object-cover" loading="lazy" />
+        ) : (
+          <span className="grid h-full place-items-center px-1 text-center text-[10px] font-black text-white/35">No poster</span>
+        )}
+      </Link>
+      <div className="min-w-0">
+        <Link to={`/movies/${movie.movie_id}`} className="line-clamp-1 text-sm font-black text-white hover:text-primary">
+          {movie.title}
+        </Link>
+        <div className="mt-1 line-clamp-1 text-xs font-bold text-white/45">
+          {[movie.release_year, movie.duration, movie.genres?.[0]].filter(Boolean).join(' · ') || 'Đã lưu gu'}
+        </div>
+        <MovieTasteFeedback
+          movieId={movie.movie_id}
+          initialStatus={{ [type]: true }}
+          source="settings"
+          variant="settings"
+          className="mt-3"
+          onChanged={onChanged}
+        />
+      </div>
+    </div>
+  );
+}
+
+function TasteSettingsPanel({ hasUser, hasProfile, onStatus }) {
+  const [taste, setTaste] = useState(EMPTY_TASTE);
+  const [feedback, setFeedback] = useState({ like: [], dislike: [], watched: [], hide: [] });
+  const [loading, setLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  const loadTasteData = useCallback((signal) => {
+    if (!hasUser || !hasProfile) {
+      setTaste(EMPTY_TASTE);
+      setFeedback({ like: [], dislike: [], watched: [], hide: [] });
+      return Promise.resolve();
+    }
+
+    setLoading(true);
+    return Promise.all([
+      fetch(`${API}/ai/profile-taste`, { headers: getProfileHeaders(), signal }).then((res) => (res.ok ? res.json() : EMPTY_TASTE)),
+      fetch(`${API}/ai/movie-feedback/list?limit=120`, { headers: getProfileHeaders(), signal }).then((res) => (res.ok ? res.json() : { feedback: {} })),
+    ])
+      .then(([tasteBody, feedbackBody]) => {
+        setTaste({ ...EMPTY_TASTE, ...tasteBody });
+        setFeedback({
+          like: feedbackBody.feedback?.like || [],
+          dislike: feedbackBody.feedback?.dislike || [],
+          watched: feedbackBody.feedback?.watched || [],
+          hide: feedbackBody.feedback?.hide || [],
+        });
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') onStatus?.('Không thể tải gu xem phim.', 'warning');
+      })
+      .finally(() => {
+        if (!signal?.aborted) setLoading(false);
+      });
+  }, [hasProfile, hasUser, onStatus]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    loadTasteData(controller.signal);
+    return () => controller.abort();
+  }, [loadTasteData]);
+
+  const totalFeedback = FEEDBACK_GROUPS.reduce((total, group) => total + (feedback[group.id]?.length || 0), 0);
+
+  const resetTasteFeedback = async () => {
+    if (!window.confirm('Xóa toàn bộ phản hồi chatbot của profile này? Lịch sử xem, rating và danh sách phim vẫn được giữ nguyên.')) return;
+    setResetting(true);
+    try {
+      const response = await fetch(`${API}/ai/movie-feedback`, {
+        method: 'DELETE',
+        headers: getProfileHeaders(),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.message || 'Không thể reset gu.');
+      onStatus?.(`Đã xóa ${body.deleted || 0} phản hồi chatbot.`);
+      await loadTasteData();
+    } catch (err) {
+      onStatus?.(err.message || 'Không thể reset gu.', 'warning');
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  if (!hasUser || !hasProfile) {
+    return (
+      <div className="p-4 text-sm font-bold text-white/50 sm:p-6">
+        Đăng nhập và chọn profile để xem gu phim đã học.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5 p-4 sm:p-6">
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+          <div className="text-[11px] font-black uppercase tracking-[0.16em] text-white/40">Tín hiệu đã học</div>
+          <div className="mt-2 text-3xl font-black text-white">{taste.signals_count || 0}</div>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+          <div className="text-[11px] font-black uppercase tracking-[0.16em] text-white/40">Phản hồi chatbot</div>
+          <div className="mt-2 text-3xl font-black text-white">{totalFeedback}</div>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+          <div className="text-[11px] font-black uppercase tracking-[0.16em] text-white/40">Thời lượng hay chọn</div>
+          <div className="mt-2 text-lg font-black text-white">
+            {taste.duration?.average_minutes ? `${taste.duration.average_minutes} phút` : 'Chưa rõ'}
+          </div>
+        </div>
+      </div>
+
+      {taste.summary?.length ? (
+        <div className="rounded-2xl border border-primary/20 bg-primary/10 p-4">
+          <div className="text-[11px] font-black uppercase tracking-[0.16em] text-red-100/65">Bot đang hiểu bạn là</div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {taste.summary.map((item) => (
+              <span key={item} className="rounded-full border border-primary/30 bg-black/25 px-3 py-1 text-xs font-black text-red-50">
+                {item}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <TasteChipGroup title="Thể loại yêu thích" items={taste.positive?.genres} tone="emerald" />
+        <TasteChipGroup title="Quốc gia yêu thích" items={taste.positive?.countries} tone="sky" />
+        <TasteChipGroup title="Thể loại ít muốn xem" items={taste.negative?.genres} tone="red" />
+        <TasteChipGroup title="Quốc gia ít muốn xem" items={taste.negative?.countries} tone="amber" />
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="font-black text-white">Phim đã phản hồi</div>
+          <p className="mt-1 text-sm text-white/45">Bạn có thể bấm lại trên từng phim để bỏ hoặc đổi phản hồi.</p>
+        </div>
+        <button
+          type="button"
+          onClick={resetTasteFeedback}
+          disabled={resetting || loading || totalFeedback === 0}
+          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-300/25 bg-red-500/10 px-4 py-3 text-sm font-black text-red-100 transition-colors hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <RestartAltIcon sx={{ fontSize: 19 }} />
+          Reset phản hồi AI
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-5 text-sm font-bold text-white/45">
+          Đang tải gu xem phim...
+        </div>
+      ) : totalFeedback === 0 ? (
+        <div className="rounded-2xl border border-white/10 bg-black/25 p-5 text-sm font-bold text-white/45">
+          Chưa có phản hồi chatbot. Hãy bấm Thích, Không thích, Đã xem hoặc Không gợi ý nữa trên phim bất kỳ.
+        </div>
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-2">
+          {FEEDBACK_GROUPS.map((group) => (
+            <div key={group.id} className="rounded-2xl border border-white/10 bg-black/20 p-3">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <span className={`rounded-full border px-3 py-1 text-xs font-black ${tasteToneClass(group.tone)}`}>{group.title}</span>
+                <span className="text-xs font-bold text-white/40">{feedback[group.id]?.length || 0} phim</span>
+              </div>
+              <div className="space-y-3">
+                {(feedback[group.id] || []).slice(0, 6).map((movie) => (
+                  <FeedbackMovieRow
+                    key={`${group.id}-${movie.movie_id}`}
+                    movie={movie}
+                    type={group.id}
+                    onChanged={({ message }) => {
+                      onStatus?.(message || 'Đã cập nhật gu phim.');
+                      loadTasteData();
+                    }}
+                  />
+                ))}
+                {feedback[group.id]?.length > 6 ? (
+                  <div className="text-center text-xs font-bold text-white/35">Còn {feedback[group.id].length - 6} phim khác</div>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -396,6 +635,15 @@ export default function UserSettings() {
                     />
                   </div>
                 </SettingRow>
+              </SectionCard>
+
+              <SectionCard
+                icon={MovieFilterIcon}
+                title="Gu xem phim"
+                description="Bot học từ phản hồi, rating, danh sách phim và lịch sử xem của profile này."
+                accent="rgba(45,212,191,0.65)"
+              >
+                <TasteSettingsPanel hasUser={hasUser} hasProfile={hasProfile} onStatus={showStatus} />
               </SectionCard>
             </div>
 

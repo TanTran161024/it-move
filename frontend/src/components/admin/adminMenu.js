@@ -8,6 +8,7 @@ import RecordVoiceOverIcon from '@mui/icons-material/RecordVoiceOver';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import SubtitlesIcon from '@mui/icons-material/Subtitles';
+import PsychologyIcon from '@mui/icons-material/Psychology';
 
 export const adminMenuGroups = [
   {
@@ -92,6 +93,12 @@ export const adminMenuGroups = [
         label: 'AI & tự động hóa',
         description: 'Theo dõi chatbot và các công cụ hỗ trợ vận hành.',
         Icon: SmartToyIcon,
+      },
+      {
+        key: 'ai_taste',
+        label: 'AI & Gu người dùng',
+        description: 'Quản lý chatbot, feedback phim và gu từng profile.',
+        Icon: PsychologyIcon,
       },
     ],
   },
