@@ -22,6 +22,13 @@ const {
   setAiMovieFeedback,
 } = require('./services/aiFeedbackService');
 const { compactTasteProfile, getProfileTasteProfile } = require('./services/profileTasteService');
+const {
+  createRecommendationRequestId,
+  getRecommendationAnalytics,
+  recordRecommendationEvents,
+  recordRecommendationResponse,
+} = require('./services/recommendationAnalyticsService');
+const { getDenseEmbeddingStatus, getMovieEmbeddingStatus } = require('./services/denseEmbeddingService');
 const { generateMovieDescription } = require('./services/adminDescriptionService');
 const { translateSubtitle } = require('./services/subtitleTranslatorService');
 const { enrichMissingMoviesWithTmdb, enrichMovieWithTmdb } = require('./services/tmdbService');
@@ -61,6 +68,7 @@ const {
 const OTP_EXPIRATION_MINUTES = 10;
 const TEST_VIEW_MIN = Number(process.env.TEST_VIEW_MIN || 1000);
 const TEST_VIEW_MAX = Number(process.env.TEST_VIEW_MAX || 10000);
+const CHAT_STREAM_CHUNK_DELAY_MS = Number(process.env.CHAT_STREAM_CHUNK_DELAY_MS || 18);
 
 function randomTestViews() {
   return Math.floor(Math.random() * (TEST_VIEW_MAX - TEST_VIEW_MIN + 1)) + TEST_VIEW_MIN;
@@ -372,6 +380,103 @@ async function resolveProfileId(db, userId, requestedProfileId = null) {
 
 function profileHeader(req) {
   return getProfileId(req);
+}
+
+async function runAiChatRequest(req) {
+  const db = getDb(req);
+  const userId = req.body?.user_id || req.headers?.['x-user-id'];
+  const profileId = req.body?.profile_id || req.headers?.['x-profile-id'];
+  const requestId = createRecommendationRequestId();
+  const startedAt = Date.now();
+  let session = null;
+
+  try {
+    session = await ensureChatSession(db, {
+      sessionId: req.body?.session_id,
+      userId,
+      profileId,
+    });
+    const result = await chatWithMovieAdvisor(db, {
+      message: req.body?.message,
+      user_id: userId,
+      profile_id: profileId,
+      history: req.body?.history,
+      shown_movie_ids: req.body?.shown_movie_ids,
+    });
+    const response = {
+      ...result,
+      request_id: requestId,
+      session_id: session.id,
+      session_persisted: session.persisted,
+    };
+    await saveChatExchange(db, {
+      sessionId: session.id,
+      userMessage: req.body?.message,
+      assistantResult: response,
+    });
+    await recordRecommendationResponse(db, {
+      requestId,
+      sessionId: session.id,
+      userId,
+      profileId,
+      result: response,
+      latencyMs: Date.now() - startedAt,
+      message: req.body?.message,
+    }).catch((error) => console.warn('[Recommendation analytics]', error.message));
+    return response;
+  } catch (error) {
+    await recordRecommendationResponse(db, {
+      requestId,
+      sessionId: session?.id || null,
+      userId,
+      profileId,
+      error,
+      latencyMs: Date.now() - startedAt,
+      message: req.body?.message,
+    }).catch((analyticsError) => console.warn('[Recommendation analytics]', analyticsError.message));
+    throw error;
+  }
+}
+
+function setupSseResponse(res) {
+  res.status(200);
+  res.set({
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  if (typeof res.flushHeaders === 'function') res.flushHeaders();
+}
+
+function writeSseEvent(res, event, data = {}) {
+  res.write(`event: ${event}\n`);
+  res.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+function splitStreamText(text) {
+  const source = String(text || '');
+  const chunks = [];
+  let index = 0;
+  while (index < source.length) {
+    if (source[index] === '\n') {
+      chunks.push('\n');
+      index += 1;
+      continue;
+    }
+
+    let nextIndex = Math.min(source.length, index + Math.max(4, Math.ceil(source.length / 90)));
+    while (nextIndex < source.length && /\S/.test(source[nextIndex]) && nextIndex - index < 18) {
+      nextIndex += 1;
+    }
+    chunks.push(source.slice(index, nextIndex));
+    index = nextIndex;
+  }
+  return chunks;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 }
 
 async function requireAdmin(req, res) {
@@ -1086,7 +1191,7 @@ router.get('/movies/smart-search', async (req, res) => {
 });
 
 router.get('/ai/status', (req, res) => {
-  res.json(getAiStatus());
+  res.json({ ...getAiStatus(), dense_embedding: getDenseEmbeddingStatus() });
 });
 
 router.get('/admin/ai-health', requireAdminMiddleware, async (req, res) => {
@@ -1094,10 +1199,14 @@ router.get('/admin/ai-health', requireAdminMiddleware, async (req, res) => {
     const db = getDb(req);
     const chat = await getAiChatStats(db);
     const feedback = await getAiFeedbackStats(db);
+    const analytics = await getRecommendationAnalytics(db, { days: req.query?.days || 30 });
+    const embeddings = await getMovieEmbeddingStatus(db);
     res.json({
       status: getAiStatus(),
       chat,
       feedback,
+      analytics,
+      embeddings,
     });
   } catch (err) {
     res.status(err.statusCode || 500).json({ message: err.message });
@@ -1109,6 +1218,7 @@ router.get('/admin/ai-taste', requireAdminMiddleware, async (req, res) => {
     const result = await getAdminAiTasteDashboard(getDb(req), {
       profileId: req.query?.profile_id,
       limit: req.query?.limit,
+      days: req.query?.days,
     });
     res.json(result);
   } catch (err) {
@@ -1157,33 +1267,61 @@ router.post('/admin/movies/description', requireAdminMiddleware, async (req, res
 
 router.post('/ai/chat', async (req, res) => {
   try {
-    const db = getDb(req);
-    const userId = req.body?.user_id || req.headers?.['x-user-id'];
-    const profileId = req.body?.profile_id || req.headers?.['x-profile-id'];
-    const session = await ensureChatSession(db, {
-      sessionId: req.body?.session_id,
-      userId,
-      profileId,
-    });
-    const result = await chatWithMovieAdvisor(db, {
-      message: req.body?.message,
-      user_id: userId,
-      profile_id: profileId,
-      history: req.body?.history,
-      shown_movie_ids: req.body?.shown_movie_ids,
-    });
-    await saveChatExchange(db, {
-      sessionId: session.id,
-      userMessage: req.body?.message,
-      assistantResult: result,
-    });
-    res.json({
-      ...result,
-      session_id: session.id,
-      session_persisted: session.persisted,
-    });
+    res.json(await runAiChatRequest(req));
   } catch (err) {
     res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.post('/ai/chat/stream', async (req, res) => {
+  let closed = false;
+  res.on('close', () => {
+    closed = true;
+  });
+
+  const send = (event, data) => {
+    if (!closed && !res.writableEnded) writeSseEvent(res, event, data);
+  };
+
+  try {
+    setupSseResponse(res);
+    send('status', { phase: 'received', message: 'Đã nhận yêu cầu tư vấn phim.' });
+
+    const result = await runAiChatRequest(req);
+    if (closed) return;
+
+    send('session', {
+      session_id: result.session_id,
+      session_persisted: result.session_persisted,
+    });
+    send('status', { phase: 'reply', message: 'Đang viết câu trả lời.' });
+
+    for (const chunk of splitStreamText(result.reply || '')) {
+      if (closed) return;
+      send('reply_delta', { text: chunk });
+      await delay(CHAT_STREAM_CHUNK_DELAY_MS);
+    }
+
+    send('recommendations', {
+      request_id: result.request_id,
+      recommendations: Array.isArray(result.recommendations) ? result.recommendations : [],
+      suggested_replies: Array.isArray(result.suggested_replies) ? result.suggested_replies : [],
+      conversation: result.conversation || null,
+      source: result.source || 'rule-based',
+      provider: result.provider || null,
+      model: result.model || null,
+      ai_error: result.ai_error || null,
+      grounding: result.grounding || null,
+    });
+    send('done', result);
+  } catch (err) {
+    if (!res.headersSent) setupSseResponse(res);
+    send('error', {
+      message: err.message || 'Mình bị gián đoạn một chút.',
+      status: err.statusCode || 500,
+    });
+  } finally {
+    if (!closed && !res.writableEnded) res.end();
   }
 });
 
@@ -1198,6 +1336,49 @@ router.get('/ai/chat/history', async (req, res) => {
       limit: req.query?.limit,
     });
     res.json(history);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ message: err.message });
+  }
+});
+
+router.post('/ai/recommendation-events', async (req, res) => {
+  try {
+    const db = getDb(req);
+    const userId = getUserId(req) || null;
+    const profileId = userId
+      ? await resolveProfileId(db, userId, profileHeader(req))
+      : null;
+    const rawEvents = Array.isArray(req.body?.events) ? req.body.events : [req.body];
+    const events = rawEvents.slice(0, 40).map((event) => {
+      const metadata = event?.metadata && typeof event.metadata === 'object' && !Array.isArray(event.metadata)
+        ? event.metadata
+        : {};
+      return {
+        event_type: event?.event_type || event?.type,
+        event_key: event?.event_key,
+        request_id: event?.request_id,
+        session_id: event?.session_id,
+        movie_id: event?.movie_id,
+        position: event?.position,
+        source: event?.source || 'chatbot',
+        provider: event?.provider,
+        latency_ms: event?.latency_ms,
+        metadata: {
+          ui_variant: metadata.ui_variant ? String(metadata.ui_variant).slice(0, 40) : null,
+          feedback_type: metadata.feedback_type ? String(metadata.feedback_type).slice(0, 40) : null,
+        },
+      };
+    });
+    const result = await recordRecommendationEvents(db, {
+      userId,
+      profileId,
+      sessionId: req.body?.session_id,
+      requestId: req.body?.request_id,
+      source: req.body?.source || 'chatbot',
+      provider: req.body?.provider,
+      events,
+    });
+    res.status(202).json({ success: true, ...result });
   } catch (err) {
     res.status(err.statusCode || 500).json({ message: err.message });
   }
@@ -1246,6 +1427,7 @@ router.get('/ai/profile-taste', async (req, res) => {
         positive: { genres: [], countries: [] },
         negative: { genres: [], countries: [] },
         duration: { preference: null, average_minutes: null, buckets: { short: 0, medium: 0, long: 0, series: 0 } },
+        reason_signals: {},
         summary: [],
       });
     }
@@ -1267,10 +1449,15 @@ router.post('/ai/movie-feedback', async (req, res) => {
     if (!userId) return res.status(401).json({ message: 'Can dang nhap de luu gu phim' });
     const feedbackType = normalizeAiFeedbackType(req.body?.feedback_type || req.body?.type);
     if (!feedbackType) return res.status(400).json({ message: 'feedback_type khong hop le' });
+    const clientMetadata = req.body?.metadata
+      && typeof req.body.metadata === 'object'
+      && !Array.isArray(req.body.metadata)
+      ? req.body.metadata
+      : {};
 
     const db = getDb(req);
     const profileId = await resolveProfileId(db, userId, profileHeader(req));
-    const feedback = await setAiMovieFeedback(db, {
+    let feedback = await setAiMovieFeedback(db, {
       userId,
       profileId,
       movieId: req.body?.movie_id,
@@ -1279,9 +1466,56 @@ router.post('/ai/movie-feedback', async (req, res) => {
       sessionId: req.body?.session_id,
       source: req.body?.source || 'chatbot',
       metadata: {
+        reason: clientMetadata.reason ? String(clientMetadata.reason).slice(0, 80) : null,
+        reason_label: clientMetadata.reason_label ? String(clientMetadata.reason_label).slice(0, 120) : null,
+        reason_type: clientMetadata.reason_type ? String(clientMetadata.reason_type).slice(0, 40) : null,
+        ui_variant: clientMetadata.ui_variant ? String(clientMetadata.ui_variant).slice(0, 40) : null,
+        request_id: clientMetadata.request_id ? String(clientMetadata.request_id).slice(0, 64) : null,
+        position: toPositiveInt(clientMetadata.position),
         user_agent: req.headers['user-agent'] || null,
       },
     });
+
+    if (req.body?.active !== false && clientMetadata.reason === 'seen_before' && feedbackType !== 'watched') {
+      feedback = await setAiMovieFeedback(db, {
+        userId,
+        profileId,
+        movieId: req.body?.movie_id,
+        feedbackType: 'watched',
+        active: true,
+        sessionId: req.body?.session_id,
+        source: req.body?.source || 'chatbot',
+        metadata: {
+          inferred_from: feedbackType,
+          reason: 'seen_before',
+          request_id: clientMetadata.request_id ? String(clientMetadata.request_id).slice(0, 64) : null,
+        },
+      });
+    }
+
+    if (req.body?.active !== false) {
+      const requestId = clientMetadata.request_id ? String(clientMetadata.request_id).slice(0, 64) : null;
+      const analyticsKey = clientMetadata.event_key
+        ? String(clientMetadata.event_key).slice(0, 160)
+        : `feedback:${requestId || req.body?.session_id || crypto.randomUUID()}:${req.body?.movie_id}:${feedbackType}`;
+      await recordRecommendationEvents(db, {
+        userId,
+        profileId,
+        sessionId: req.body?.session_id,
+        requestId,
+        source: req.body?.source || 'chatbot',
+        events: [{
+          event_type: 'feedback',
+          event_key: analyticsKey,
+          movie_id: req.body?.movie_id,
+          position: clientMetadata.position,
+          metadata: {
+            feedback_type: feedbackType,
+            ui_variant: clientMetadata.ui_variant || null,
+          },
+        }],
+      }).catch((error) => console.warn('[Recommendation analytics]', error.message));
+    }
     res.json({ success: true, movie_id: Number(req.body?.movie_id), feedback });
   } catch (err) {
     res.status(err.statusCode || 500).json({ message: err.message });

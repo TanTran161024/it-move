@@ -7,6 +7,7 @@ const DEFAULT_TASTE_PROFILE = Object.freeze({
     average_minutes: null,
     buckets: { short: 0, medium: 0, long: 0, series: 0 },
   },
+  reason_signals: {},
   summary: [],
 });
 
@@ -36,6 +37,16 @@ function parseNameList(value) {
   return String(value).split('||').map((item) => item.trim()).filter(Boolean);
 }
 
+function safeJson(value, fallback = {}) {
+  if (value === null || value === undefined || value === '') return fallback;
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
 function parseDurationMinutes(value) {
   const text = normalizeText(value);
   if (!text) return null;
@@ -59,6 +70,7 @@ function cloneDefaultTaste() {
       average_minutes: null,
       buckets: { short: 0, medium: 0, long: 0, series: 0 },
     },
+    reason_signals: {},
     summary: [],
   };
 }
@@ -179,6 +191,8 @@ async function getAiTasteEvents(db, userId, profileId) {
     const [rows] = await db.execute(
       `SELECT
          movie_id,
+         feedback_type,
+         metadata,
          CASE feedback_type
            WHEN 'like' THEN 8
            WHEN 'watched' THEN 3
@@ -198,6 +212,8 @@ async function getAiTasteEvents(db, userId, profileId) {
       movie_id: Number(row.movie_id),
       weight: Number(row.weight) || 0,
       last_seen: row.last_seen,
+      feedback_type: row.feedback_type,
+      reason: safeJson(row.metadata, {}).reason || null,
     })).filter((row) => row.movie_id > 0 && row.weight !== 0);
   } catch (error) {
     if (isMissingFeedbackTableError(error)) return [];
@@ -235,7 +251,7 @@ async function getMovieTasteProfiles(db, movieIds) {
   }]));
 }
 
-function buildTasteSummary({ positiveGenres, positiveCountries, negativeGenres, negativeCountries, duration }) {
+function buildTasteSummary({ positiveGenres, positiveCountries, negativeGenres, negativeCountries, duration, reasonSignals = {} }) {
   const summary = [];
   positiveGenres.slice(0, 2).forEach((item) => summary.push(`thích ${friendlyGenre(item.name)}`));
   positiveCountries.slice(0, 2).forEach((item) => summary.push(`thích ${friendlyCountry(item.name)}`));
@@ -243,7 +259,18 @@ function buildTasteSummary({ positiveGenres, positiveCountries, negativeGenres, 
   negativeCountries.slice(0, 1).forEach((item) => summary.push(`ít chọn ${friendlyCountry(item.name)}`));
   const label = durationLabel(duration.preference);
   if (label) summary.push(label);
+  if (reasonSignals.too_long > 0) summary.push('ưu tiên phim gọn hơn');
+  if (reasonSignals.too_intense > 0) summary.push('tránh phim quá căng');
   return [...new Set(summary)].slice(0, 6);
+}
+
+function negativeLearningScope(reason) {
+  if (reason === 'wrong_genre' || reason === 'too_intense') return { genres: true, countries: false };
+  if (reason === 'wrong_country') return { genres: false, countries: true };
+  if (['too_long', 'seen_before', 'bad_match', 'wrong_mood', 'too_repetitive'].includes(reason)) {
+    return { genres: false, countries: false };
+  }
+  return { genres: true, countries: true };
 }
 
 async function getProfileTasteProfile(db, userId, profileId = null) {
@@ -264,6 +291,7 @@ async function getProfileTasteProfile(db, userId, profileId = null) {
   const negativeGenres = new Map();
   const negativeCountries = new Map();
   const durationBuckets = { short: 0, medium: 0, long: 0, series: 0 };
+  const reasonSignals = {};
   let durationTotal = 0;
   let durationWeight = 0;
   let signalCount = 0;
@@ -272,10 +300,13 @@ async function getProfileTasteProfile(db, userId, profileId = null) {
     const movie = movieProfiles.get(event.movie_id);
     if (!movie) continue;
     signalCount += 1;
+    const reason = String(event.reason || '').trim();
+    if (reason) reasonSignals[reason] = (reasonSignals[reason] || 0) + Math.abs(event.weight);
     const targetGenres = event.weight > 0 ? positiveGenres : negativeGenres;
     const targetCountries = event.weight > 0 ? positiveCountries : negativeCountries;
-    movie.genres.forEach((name) => addScore(targetGenres, name, event.weight));
-    movie.countries.forEach((name) => addScore(targetCountries, name, event.weight));
+    const scope = event.weight > 0 ? { genres: true, countries: true } : negativeLearningScope(reason);
+    if (scope.genres) movie.genres.forEach((name) => addScore(targetGenres, name, event.weight));
+    if (scope.countries) movie.countries.forEach((name) => addScore(targetCountries, name, event.weight));
 
     if (event.weight > 0) {
       const minutes = parseDurationMinutes(movie.duration);
@@ -285,6 +316,8 @@ async function getProfileTasteProfile(db, userId, profileId = null) {
         durationTotal += minutes * Math.abs(event.weight);
         durationWeight += Math.abs(event.weight);
       }
+    } else if (reason === 'too_long') {
+      durationBuckets.short += Math.abs(event.weight) * 2;
     }
   }
 
@@ -311,12 +344,14 @@ async function getProfileTasteProfile(db, userId, profileId = null) {
       countries: negativeCountryList,
     },
     duration,
+    reason_signals: reasonSignals,
     summary: buildTasteSummary({
       positiveGenres: positiveGenreList,
       positiveCountries: positiveCountryList,
       negativeGenres: negativeGenreList,
       negativeCountries: negativeCountryList,
       duration,
+      reasonSignals,
     }),
   };
 }
@@ -375,6 +410,20 @@ function scoreMovieWithTaste(movie, tasteProfile, signals = {}) {
     score -= 6;
   }
 
+  const reasonSignals = tasteProfile.reason_signals || {};
+  if (reasonSignals.too_long > 0 && minutes) {
+    const strength = Math.min(14, Math.max(4, Math.round(reasonSignals.too_long / 2)));
+    if (minutes > 105) score -= strength;
+    if (minutes <= 60) {
+      score += Math.min(6, strength);
+      reasons.push('Hợp phản hồi muốn phim gọn hơn');
+    }
+  }
+  if (reasonSignals.too_intense > 0) {
+    const intense = genres.some((name) => ['kinh di', 'gay can', 'hinh su', 'hanh dong'].some((term) => normalizeText(name).includes(term)));
+    if (intense) score -= Math.min(14, Math.max(5, Math.round(reasonSignals.too_intense / 2)));
+  }
+
   return { score, reasons: [...new Set(reasons)].slice(0, 3) };
 }
 
@@ -392,6 +441,7 @@ function compactTasteProfile(tasteProfile) {
       countries: (tasteProfile.negative?.countries || []).slice(0, 3),
     },
     duration: tasteProfile.duration || DEFAULT_TASTE_PROFILE.duration,
+    reason_signals: tasteProfile.reason_signals || {},
   };
 }
 

@@ -145,6 +145,7 @@ async function getLatestChatHistory(db, { userId = null, profileId = null, limit
           provider: row.provider || null,
           grounding: metadata.grounding || null,
           aiError: metadata.ai_error || null,
+          requestId: metadata.request_id || null,
           suggestedReplies: [],
           created_at: row.created_at,
         };
@@ -208,6 +209,7 @@ async function saveChatExchange(db, { sessionId, userMessage, assistantResult })
       conversation: assistantResult?.conversation || null,
       grounding: assistantResult?.grounding || null,
       ai_error: assistantResult?.ai_error || null,
+      request_id: assistantResult?.request_id || null,
     },
   });
 

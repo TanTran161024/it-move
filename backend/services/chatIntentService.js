@@ -200,16 +200,17 @@ function parseDurationMinutes(value) {
   if (value === null || value === undefined || value === '') return null;
   if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? value : null;
 
-  const normalized = normalizeText(value);
-  if (!normalized) return null;
-
-  const colonMatch = normalized.match(/\b(\d{1,2})\s*:\s*(\d{2})(?::\d{2})?\b/);
+  const rawValue = String(value).trim().toLowerCase();
+  const colonMatch = rawValue.match(/\b(\d{1,2})\s*:\s*(\d{2})(?::\d{2})?\b/);
   if (colonMatch) {
     const left = Number(colonMatch[1]);
     const right = Number(colonMatch[2]);
-    if (!Number.isFinite(left) || !Number.isFinite(right)) return null;
+    if (!Number.isFinite(left) || !Number.isFinite(right) || right >= 60) return null;
     return left <= 4 ? left * 60 + right : left + right / 60;
   }
+
+  const normalized = normalizeText(value);
+  if (!normalized) return null;
 
   const hourMatch = normalized.match(/(\d+(?:\.\d+)?)\s*(h|gio|hour|hours)/);
   const minuteMatch = normalized.match(/(\d+)\s*(m|phut|min|mins|minute|minutes)/);

@@ -48,6 +48,31 @@ const EMPTY_DASHBOARD = {
   recommendations: [],
   selected_profile_id: null,
   selected_profile: null,
+  analytics: {
+    global: {
+      available: false,
+      window_days: 30,
+      totals: {},
+      rates: {},
+      latency: {},
+      top_feedback_reasons: [],
+    },
+    profile: {
+      available: false,
+      totals: {},
+      rates: {},
+      latency: {},
+    },
+  },
+  embeddings: {
+    enabled: false,
+    configured: false,
+    model: null,
+    dimensions: 0,
+    total_movies: 0,
+    embedded_movies: 0,
+    coverage: 0,
+  },
 };
 
 function getAdminHeaders() {
@@ -105,6 +130,9 @@ export default function AITasteManager() {
   const feedbackRows = dashboard.feedbacks || [];
   const stats = dashboard.stats || EMPTY_DASHBOARD.stats;
   const topTastes = dashboard.topTastes || EMPTY_DASHBOARD.topTastes;
+  const analytics = dashboard.analytics?.global || EMPTY_DASHBOARD.analytics.global;
+  const profileAnalytics = dashboard.analytics?.profile || EMPTY_DASHBOARD.analytics.profile;
+  const embeddings = dashboard.embeddings || EMPTY_DASHBOARD.embeddings;
   const tasteSummary = selectedProfile?.taste_profile?.summary || [];
 
   const surfaceSx = {
@@ -125,6 +153,20 @@ export default function AITasteManager() {
     { label: 'Profile thiếu data', value: stats.profilesWithoutTaste, color: '#8b5cf6' },
   ]), [stats]);
 
+  const analyticsCards = useMemo(() => ([
+    { label: 'Lượt trả lời', value: statNumber(analytics.totals?.responses) },
+    { label: 'Card đã hiển thị', value: statNumber(analytics.totals?.impressions) },
+    { label: 'Mở chi tiết', value: statNumber(analytics.totals?.detail_clicks), color: '#3b82f6' },
+    { label: 'Bắt đầu xem', value: statNumber(analytics.totals?.plays), color: '#10b981' },
+    { label: 'Lưu phim', value: statNumber(analytics.totals?.saves), color: '#f59e0b' },
+    { label: 'CTR chi tiết', value: `${Number(analytics.rates?.detail_ctr) || 0}%`, color: '#3b82f6' },
+    { label: 'Tỷ lệ xem', value: `${Number(analytics.rates?.play_rate) || 0}%`, color: '#10b981' },
+    { label: 'Không có kết quả', value: `${Number(analytics.rates?.zero_result_rate) || 0}%`, color: '#ef4444' },
+    { label: 'Fallback', value: `${Number(analytics.rates?.fallback_rate) || 0}%`, color: '#f59e0b' },
+    { label: 'Độ trễ P95', value: `${statNumber(analytics.latency?.p95_ms)} ms` },
+    { label: 'Dense index', value: `${Number(embeddings.coverage) || 0}%`, color: embeddings.coverage >= 100 ? '#10b981' : '#f59e0b' },
+  ]), [analytics, embeddings]);
+
   const loadDashboard = useCallback(async (profileId = selectedProfileId, options = {}) => {
     if (!options.silent) setLoading(true);
     setError('');
@@ -134,6 +176,7 @@ export default function AITasteManager() {
         params: {
           profile_id: profileId || undefined,
           limit: 120,
+          days: 30,
         },
       });
       const nextDashboard = { ...EMPTY_DASHBOARD, ...(response.data || {}) };
@@ -209,9 +252,10 @@ export default function AITasteManager() {
     if (!selectedProfile) return;
     downloadJson(`ai-taste-profile-${selectedProfile.id}.json`, {
       exported_at: new Date().toISOString(),
-      profile: selectedProfile,
-      recommendations: currentRecs,
-      feedbacks: feedbackRows,
+          profile: selectedProfile,
+          recommendations: currentRecs,
+          feedbacks: feedbackRows,
+          analytics: dashboard.analytics,
     });
     setToastMsg('Đã xuất dữ liệu gu profile.');
   };
@@ -272,6 +316,31 @@ export default function AITasteManager() {
               </Box>
             ))}
           </Box>
+
+          <Typography variant="h6" sx={{ mb: 0.5, fontWeight: 700, color: 'var(--admin-text-strong)' }}>
+            Hiệu quả gợi ý trong {analytics.window_days || 30} ngày
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 2, color: 'var(--admin-text-muted)' }}>
+            Đo từ lúc card xuất hiện đến khi người dùng mở, xem, lưu hoặc phản hồi. Dense: {embeddings.model || 'chưa cấu hình'} · {embeddings.dimensions || 0} chiều · {statNumber(embeddings.embedded_movies)}/{statNumber(embeddings.total_movies)} phim.
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+            {analyticsCards.map((stat) => (
+              <Box key={stat.label} sx={{ ...surfaceSx, p: 2, flex: '1 1 130px', minWidth: '145px', display: 'flex', flexDirection: 'column' }}>
+                <Typography variant="caption" sx={{ color: 'var(--admin-text-muted)' }}>{stat.label}</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: stat.color || 'var(--admin-text)' }}>
+                  {stat.value}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+          {analytics.top_feedback_reasons?.length > 0 && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 4, flexWrap: 'wrap' }}>
+              <Typography variant="body2" sx={{ color: 'var(--admin-text-muted)', mr: 0.5 }}>Lý do cần cải thiện:</Typography>
+              {analytics.top_feedback_reasons.map((item) => (
+                <Chip key={item.label} label={`${item.label}: ${item.total}`} size="small" variant="outlined" sx={{ color: 'var(--admin-text)', borderColor: 'var(--admin-border)' }} />
+              ))}
+            </Box>
+          )}
 
           <Grid container spacing={3} sx={{ mb: 4 }}>
             <Grid item xs={12} md={6}>
@@ -349,6 +418,10 @@ export default function AITasteManager() {
                   <Typography variant="body2" sx={{ color: 'var(--admin-text)' }}>
                     Ưu tiên thời lượng: {selectedProfile?.type || 'Chưa rõ'}
                   </Typography>
+                  <Typography variant="body2" sx={{ color: 'var(--admin-text-muted)', mt: 0.75 }}>
+                    Hiệu quả profile: {statNumber(profileAnalytics.totals?.plays)} lượt xem / {statNumber(profileAnalytics.totals?.impressions)} lượt hiển thị
+                    {' '}({Number(profileAnalytics.rates?.play_rate) || 0}%)
+                  </Typography>
                 </Box>
 
                 <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
@@ -402,6 +475,7 @@ export default function AITasteManager() {
                   <TableCell sx={{ color: 'var(--admin-text-muted)', borderBottomColor: 'var(--admin-border)' }}>Profile</TableCell>
                   <TableCell sx={{ color: 'var(--admin-text-muted)', borderBottomColor: 'var(--admin-border)' }}>Phim</TableCell>
                   <TableCell sx={{ color: 'var(--admin-text-muted)', borderBottomColor: 'var(--admin-border)' }}>Loại</TableCell>
+                  <TableCell sx={{ color: 'var(--admin-text-muted)', borderBottomColor: 'var(--admin-border)' }}>Lý do</TableCell>
                   <TableCell sx={{ color: 'var(--admin-text-muted)', borderBottomColor: 'var(--admin-border)' }}>Nguồn</TableCell>
                   <TableCell sx={{ color: 'var(--admin-text-muted)', borderBottomColor: 'var(--admin-border)' }}>Thời gian</TableCell>
                   <TableCell sx={{ color: 'var(--admin-text-muted)', borderBottomColor: 'var(--admin-border)', textAlign: 'right' }}>Thao tác</TableCell>
@@ -414,6 +488,9 @@ export default function AITasteManager() {
                     <TableCell sx={{ color: 'var(--admin-text)', borderBottomColor: 'var(--admin-border)' }}>{row.movie}</TableCell>
                     <TableCell sx={{ borderBottomColor: 'var(--admin-border)' }}>
                       <Chip label={row.type_label || row.type} size="small" color={typeColor(row.type_label)} sx={{ fontWeight: 600, height: 24 }} />
+                    </TableCell>
+                    <TableCell sx={{ color: 'var(--admin-text-muted)', borderBottomColor: 'var(--admin-border)' }}>
+                      {row.reason_label || 'Không nêu'}
                     </TableCell>
                     <TableCell sx={{ color: 'var(--admin-text)', borderBottomColor: 'var(--admin-border)' }}>
                       <Chip label={row.source} size="small" variant="outlined" sx={{ color: 'var(--admin-text-muted)', borderColor: 'var(--admin-border)', height: 20, fontSize: '0.7rem' }} />
@@ -433,7 +510,7 @@ export default function AITasteManager() {
                   </TableRow>
                 )) : (
                   <TableRow>
-                    <TableCell colSpan={6} sx={{ color: 'var(--admin-text-muted)', borderBottomColor: 'var(--admin-border)', py: 4, textAlign: 'center' }}>
+                    <TableCell colSpan={7} sx={{ color: 'var(--admin-text-muted)', borderBottomColor: 'var(--admin-border)', py: 4, textAlign: 'center' }}>
                       Chưa có feedback AI cho profile này.
                     </TableCell>
                   </TableRow>

@@ -25,6 +25,27 @@ const feedbackMessages = {
   hide: 'Mình sẽ tránh gợi ý lại phim này.',
 };
 
+const feedbackReasonOptions = {
+  dislike: [
+    { id: 'wrong_genre', label: 'Không hợp thể loại' },
+    { id: 'too_long', label: 'Quá dài' },
+    { id: 'too_intense', label: 'Quá căng' },
+    { id: 'seen_before', label: 'Đã xem rồi' },
+    { id: 'bad_match', label: 'Gợi ý chưa đúng' },
+  ],
+  hide: [
+    { id: 'not_interested', label: 'Không quan tâm' },
+    { id: 'seen_before', label: 'Đã xem rồi' },
+    { id: 'wrong_mood', label: 'Sai mood' },
+    { id: 'wrong_country', label: 'Không thích quốc gia này' },
+    { id: 'too_repetitive', label: 'Gợi ý nhiều quá' },
+  ],
+};
+
+function needsFeedbackReason(type) {
+  return Array.isArray(feedbackReasonOptions[type]) && feedbackReasonOptions[type].length > 0;
+}
+
 function normalizeFeedbackStatus(status) {
   return {
     ...DEFAULT_FEEDBACK_STATUS,
@@ -56,6 +77,8 @@ export default function MovieTasteFeedback({
   movieId,
   initialStatus = null,
   sessionId = '',
+  requestId = '',
+  position = null,
   source = 'chatbot',
   variant = 'default',
   className = '',
@@ -66,9 +89,11 @@ export default function MovieTasteFeedback({
   const initialStatusKey = JSON.stringify(initialStatus || {});
   const [status, setStatus] = useState(() => normalizeFeedbackStatus(parseInitialStatusKey(initialStatusKey)));
   const [busyType, setBusyType] = useState('');
+  const [reasonType, setReasonType] = useState('');
 
   useEffect(() => {
     setStatus(normalizeFeedbackStatus(parseInitialStatusKey(initialStatusKey)));
+    setReasonType('');
   }, [initialStatusKey, numericMovieId]);
 
   useEffect(() => {
@@ -93,7 +118,7 @@ export default function MovieTasteFeedback({
     return () => controller.abort();
   }, [numericMovieId]);
 
-  const sendFeedback = async (type) => {
+  const sendFeedback = async (type, reason = null) => {
     if (!numericMovieId || busyType) return;
 
     const user = getStoredUser();
@@ -110,6 +135,11 @@ export default function MovieTasteFeedback({
     }
 
     const active = !status[type];
+    if (active && needsFeedbackReason(type) && !reason) {
+      setReasonType((current) => (current === type ? '' : type));
+      return;
+    }
+
     setBusyType(type);
 
     try {
@@ -124,6 +154,15 @@ export default function MovieTasteFeedback({
           active,
           session_id: sessionId || undefined,
           source,
+          metadata: {
+            reason: reason?.id || null,
+            reason_label: reason?.label || null,
+            reason_type: type,
+            ui_variant: variant,
+            request_id: requestId || null,
+            position: Number(position) || null,
+            event_key: requestId ? `feedback:${requestId}:${numericMovieId}:${type}` : null,
+          },
         }),
       });
       const body = await response.json().catch(() => ({}));
@@ -131,12 +170,16 @@ export default function MovieTasteFeedback({
 
       const nextStatus = normalizeFeedbackStatus(body.feedback || applyLocalFeedback(status, type, active));
       setStatus(nextStatus);
+      setReasonType('');
       onChanged?.({
         movieId: numericMovieId,
         type,
         active,
         feedback: nextStatus,
-        message: active ? feedbackMessages[type] : 'Đã cập nhật lại gu phim.',
+        reason,
+        message: active && reason
+          ? `${feedbackMessages[type]} Lý do: ${reason.label}.`
+          : active ? feedbackMessages[type] : 'Đã cập nhật lại gu phim.',
       });
     } catch (err) {
       onChanged?.({
@@ -176,6 +219,30 @@ export default function MovieTasteFeedback({
           </button>
         );
       })}
+      {reasonType && (
+        <div className="movie-taste-feedback__reasons" onClick={(event) => event.stopPropagation()}>
+          <span className="movie-taste-feedback__reasons-title">Vì sao?</span>
+          {feedbackReasonOptions[reasonType].map((reason) => (
+            <button
+              type="button"
+              key={reason.id}
+              className="movie-taste-feedback__reason"
+              disabled={Boolean(busyType)}
+              onClick={() => sendFeedback(reasonType, reason)}
+            >
+              {reason.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="movie-taste-feedback__reason is-muted"
+            disabled={Boolean(busyType)}
+            onClick={() => setReasonType('')}
+          >
+            Hủy
+          </button>
+        </div>
+      )}
     </div>
   );
 }

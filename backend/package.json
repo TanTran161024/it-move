@@ -23,6 +23,11 @@
     "enrich:tmdb": "node scripts/enrich-tmdb-missing.js",
     "seed:views": "node scripts/seed-random-views.js",
     "check:gemini": "node scripts/check-gemini.js",
-    "test:chatbot": "node scripts/test-chatbot.js"
+    "test:chatbot": "node scripts/test-chatbot.js",
+    "test:chatbot:quality": "node scripts/test-chatbot-quality.js",
+    "test:recommendation-loop": "node scripts/test-recommendation-learning-loop.js",
+    "test:dense-reranker": "node scripts/test-dense-reranker.js",
+    "test:dense-live": "node scripts/test-dense-search-live.js",
+    "embeddings:sync": "node scripts/sync-movie-embeddings.js"
   }
 }

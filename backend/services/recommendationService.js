@@ -4,15 +4,200 @@ const {
   getAiPositiveFeedbackSeeds,
 } = require('./aiFeedbackService');
 const { getProfileTasteProfile, scoreMovieWithTaste } = require('./profileTasteService');
+const { getDenseSearchScores } = require('./denseEmbeddingService');
+const { rerankCandidates } = require('./hybridRerankerService');
+const { getMovieEngagementScores } = require('./recommendationAnalyticsService');
 
 const DEFAULT_LIMIT = 12;
 const MAX_POOL_SIZE = 240;
+const CURRENT_YEAR = new Date().getFullYear();
+const VECTOR_MIN_SIMILARITY = 0.16;
+const VECTOR_STRONG_SIMILARITY = 0.24;
+const VECTOR_SCORE_WEIGHT = 95;
+const DENSE_MIN_SIMILARITY = Number(process.env.DENSE_SEARCH_MIN_SIMILARITY || 0.35);
+const DENSE_STRONG_SIMILARITY = Number(process.env.DENSE_SEARCH_STRONG_SIMILARITY || 0.52);
+const DENSE_SCORE_WEIGHT = Number(process.env.DENSE_SEARCH_SCORE_WEIGHT || 80);
 const COUNTRY_SIGNALS = new Set(['trung quoc', 'han quoc', 'nhat ban', 'viet nam', 'my']);
 const STOP_WORDS = new Set([
   'toi', 'minh', 'ban', 'muon', 'can', 'xem', 'phim', 'bo', 'tap', 'co',
   'khong', 'goi', 'y', 'tu', 'van', 'cho', 'hay', 'nao', 'gi', 'mot',
   'cac', 'nhung', 'the', 'loai', 'hom', 'nay', 'that', 'su',
 ]);
+const VECTOR_STOP_WORDS = new Set([
+  ...STOP_WORDS,
+  'khac', 'them', 'nua', 'doi', 'chon', 'loc', 'neu', 'duoc', 'giup', 'voi',
+  'sau', 'luc', 'dang', 'thu', 'kieu', 'hoi', 'nhieu', 'it', 'gio', 'lam',
+]);
+
+const NEGATION_PREFIXES = [
+  'khong',
+  'khong thich',
+  'khong muon',
+  'khong can',
+  'bo',
+  'tranh',
+  'it',
+  'bot',
+  'dung',
+];
+
+const SEMANTIC_CONCEPTS = [
+  {
+    id: 'light',
+    label: 'nhẹ nhàng/dễ xem',
+    query: ['nhe nhang', 'nhe nhang hon', 'chill', 'thu gian', 'de xem', 'am ap', 'doi thuong', 'khong nang dau'],
+    movie: ['hai', 'hai huoc', 'tinh cam', 'lang man', 'gia dinh', 'hoc duong', 'doi thuong', 'de thuong'],
+    wanted: ['nhe nhang', 'hai', 'tinh cam', 'hoc duong'],
+    weight: 34,
+  },
+  {
+    id: 'intense',
+    label: 'gay cấn/hồi hộp',
+    query: ['gay can', 'cang thang', 'hoi hop', 'nghet tho', 'kich tinh', 'cang hon'],
+    movie: ['gay can', 'cang thang', 'hoi hop', 'hinh su', 'hanh dong', 'chien dau', 'sat thu', 'bi an'],
+    wanted: ['gay can', 'hanh dong', 'bi an'],
+    weight: 32,
+  },
+  {
+    id: 'horror',
+    label: 'kinh dị',
+    query: ['kinh di', 'ma', 'am anh', 'horror'],
+    movie: ['kinh di', 'ma', 'am anh', 'quy', 'horror'],
+    wanted: ['kinh di'],
+    weight: 42,
+    hardExclude: true,
+  },
+  {
+    id: 'anime',
+    label: 'anime/hoạt hình',
+    query: ['anime', 'hoat hinh', 'cartoon'],
+    movie: ['anime', 'hoat hinh', 'animation', 'cartoon'],
+    wanted: ['hoat hinh'],
+    weight: 42,
+    hardExclude: true,
+  },
+  {
+    id: 'short',
+    label: 'thời lượng ngắn',
+    query: ['ngan', 'ngan thoi', 'xem nhanh', 'gon hon', 'tap ngan', 'duoi 90 phut', 'duoi mot tieng', 'duoi 1 tieng', 'khong dai'],
+    weight: 30,
+    matchProfile: (profile) => {
+      const minutes = parseMovieDurationMinutes(profile.duration);
+      return (minutes && minutes <= 60) || Boolean(profile.is_series);
+    },
+  },
+  {
+    id: 'long',
+    label: 'thời lượng dài',
+    query: ['dai', 'dai tap', 'xem lau', 'marathon', 'nhieu tap'],
+    weight: 24,
+    hardExclude: true,
+    matchProfile: (profile) => {
+      const minutes = parseMovieDurationMinutes(profile.duration);
+      return (minutes && minutes > 120) || Boolean(profile.is_series);
+    },
+  },
+  {
+    id: 'series',
+    label: 'phim bộ/series',
+    query: ['phim bo', 'series', 'nhieu tap'],
+    movie: ['phim bo', 'series'],
+    weight: 28,
+    hardExclude: true,
+    matchProfile: (profile) => Boolean(profile.is_series),
+  },
+  {
+    id: 'movie',
+    label: 'phim lẻ',
+    query: ['phim le', 'mot tap', 'khong phim bo', 'khong series'],
+    weight: 28,
+    matchProfile: (profile) => !Boolean(profile.is_series),
+  },
+  {
+    id: 'high_rating',
+    label: 'đánh giá cao',
+    query: ['imdb cao', 'diem cao', 'rating cao', 'danh gia cao', 'chat luong'],
+    weight: 24,
+    matchProfile: (profile) => Number(profile.imdb_rating) >= 7,
+  },
+  {
+    id: 'new_release',
+    label: 'phim mới',
+    query: ['phim moi', 'moi nhat', 'gan day', 'nam moi', 'moi hon'],
+    weight: 22,
+    matchProfile: (profile) => Number(profile.release_year) >= CURRENT_YEAR - 5,
+  },
+  {
+    id: 'korean',
+    label: 'Hàn Quốc',
+    query: ['han quoc', 'phim han', 'han', 'korean'],
+    movie: ['han quoc', 'korea', 'korean'],
+    wanted: ['han quoc'],
+    weight: 40,
+    hardExclude: true,
+    structuredOnly: true,
+  },
+  {
+    id: 'chinese',
+    label: 'Trung Quốc',
+    query: ['trung quoc', 'phim trung', 'trung', 'hoa ngu', 'chinese'],
+    movie: ['trung quoc', 'hoa ngu', 'china', 'chinese'],
+    wanted: ['trung quoc'],
+    weight: 40,
+    hardExclude: true,
+    structuredOnly: true,
+  },
+  {
+    id: 'japanese',
+    label: 'Nhật Bản',
+    query: ['nhat ban', 'phim nhat', 'nhat', 'japan', 'japanese'],
+    movie: ['nhat ban', 'japan', 'japanese'],
+    wanted: ['nhat ban'],
+    weight: 40,
+    hardExclude: true,
+    structuredOnly: true,
+  },
+  {
+    id: 'american',
+    label: 'Mỹ/Âu Mỹ',
+    query: ['my', 'au my', 'hollywood', 'us', 'american'],
+    movie: ['my', 'au my', 'hollywood', 'american'],
+    wanted: ['my'],
+    weight: 36,
+    hardExclude: true,
+    structuredOnly: true,
+  },
+  {
+    id: 'documentary',
+    label: 'tài liệu',
+    query: ['tai lieu', 'documentary', 'doi thuc'],
+    movie: ['tai lieu', 'documentary'],
+    wanted: ['tai lieu'],
+    weight: 38,
+  },
+  {
+    id: 'martial_arts',
+    label: 'võ thuật/kiếm hiệp',
+    query: ['vo thuat', 'kiem hiep', 'kungfu'],
+    movie: ['vo thuat', 'kiem hiep', 'kungfu', 'hanh dong', 'co trang'],
+    wanted: ['vo thuat', 'co trang'],
+    weight: 38,
+  },
+];
+
+const VECTOR_SYNONYM_GROUPS = [
+  ['chua lanh', 'healing', 'heal', 'am ap', 'doi thuong', 'nhe nhang', 'de xem', 'thu gian', 'chill', 'feel good', 'gia dinh', 'tinh cam'],
+  ['cang thang', 'gay can', 'hoi hop', 'nghet tho', 'thriller', 'bi an', 'hinh su', 'trinh tham'],
+  ['cuoi', 'vui', 'vui ve', 'hai huoc', 'hai', 'comedy', 'giai tri'],
+  ['buon', 'cam dong', 'nuoc mat', 'tam ly', 'chinh kich', 'drama'],
+  ['phep thuat', 'ma thuat', 'magic', 'magical', 'fantasy', 'vien tuong', 'than thoai', 'isekai', 'xuyen khong', 'chuyen sinh'],
+  ['bong da', 'the thao', 'sport', 'sports', 'tai lieu', 'doi thuc'],
+  ['yeu', 'love', 'romance', 'romantic', 'lang man', 'tinh cam'],
+  ['hoc sinh', 'truong hoc', 'hoc duong', 'thanh xuan', 'tuoi tre'],
+  ['anime', 'hoat hinh', 'animation', 'cartoon', 'nhat ban'],
+  ['han quoc', 'korean', 'phim han', 'lang man', 'tam ly'],
+  ['trung quoc', 'hoa ngu', 'co trang', 'kiem hiep', 'vo thuat'],
+];
 
 function clampLimit(value, fallback = DEFAULT_LIMIT) {
   const parsed = Number(value);
@@ -60,6 +245,253 @@ function escapeRegExp(value) {
 function containsPhrase(text, phrase) {
   const pattern = new RegExp(`(^|\\s)${escapeRegExp(phrase)}(\\s|$)`);
   return pattern.test(text);
+}
+
+function phraseWords(phrase) {
+  return normalizeText(phrase).split(' ').filter((word) => word.length >= 2);
+}
+
+function isNegatedPhrase(text, phrase) {
+  return NEGATION_PREFIXES.some((prefix) => {
+    const candidate = `${prefix} ${phrase}`;
+    if (!containsPhrase(text, candidate)) return false;
+
+    // "phim bo nhieu tap" means a series; "bo" is not the verb "skip" here.
+    if (prefix === 'bo' && containsPhrase(text, `phim ${candidate}`)) return false;
+    return true;
+  });
+}
+
+function addSignalWords(target, phrases) {
+  phrases.forEach((phrase) => {
+    phraseWords(phrase).forEach((word) => target.add(word));
+  });
+}
+
+function parseMovieDurationMinutes(value) {
+  const normalized = normalizeText(value);
+  if (!normalized) return null;
+  const hourMatch = normalized.match(/(\d+)\s*(gio|h)/);
+  const minuteMatch = normalized.match(/(\d+)\s*(phut|p|min)/);
+  const hours = hourMatch ? Number(hourMatch[1]) : 0;
+  const minutes = minuteMatch ? Number(minuteMatch[1]) : 0;
+  if (hours || minutes) return (hours * 60) + minutes;
+  const numberMatch = normalized.match(/\b(\d{1,3})\b/);
+  return numberMatch ? Number(numberMatch[1]) : null;
+}
+
+function profileSemanticText(profile) {
+  return normalizeText([
+    profile.title,
+    profile.original_title,
+    profile.description,
+    profile.genres.join(' '),
+    profile.countries.join(' '),
+    profile.actors.slice(0, 8).join(' '),
+    profile.directors.join(' '),
+    profile.is_series ? 'phim bo series nhieu tap' : 'phim le mot tap',
+  ].join(' '));
+}
+
+function profileStructuredText(profile) {
+  return normalizeText([
+    profile.genres.join(' '),
+    profile.countries.join(' '),
+    profile.is_series ? 'phim bo series nhieu tap' : 'phim le mot tap',
+  ].join(' '));
+}
+
+function conceptAliases(concept) {
+  return [...(concept.movie || []), ...(concept.query || [])].map(normalizeText).filter(Boolean);
+}
+
+function conceptMatchesProfile(profile, concept, haystack = profileSemanticText(profile)) {
+  if (concept.matchProfile?.(profile)) return true;
+  const targetText = concept.structuredOnly ? profileStructuredText(profile) : haystack;
+  return conceptAliases(concept).some((alias) => containsPhrase(targetText, alias));
+}
+
+function buildSemanticSignals(message, signals) {
+  const normalized = signals?.normalized || normalizeText(message);
+  const wantedSet = new Set(signals?.wanted || []);
+  const include = [];
+  const exclude = [];
+
+  SEMANTIC_CONCEPTS.forEach((concept) => {
+    const queryAliases = (concept.query || []).map(normalizeText).filter(Boolean);
+    const wantedMatch = (concept.wanted || []).some((wanted) => wantedSet.has(wanted));
+    const positiveMatch = queryAliases.some((alias) => containsPhrase(normalized, alias) && !isNegatedPhrase(normalized, alias));
+    const negativeMatch = queryAliases.some((alias) => containsPhrase(normalized, alias) && isNegatedPhrase(normalized, alias));
+
+    if (negativeMatch) {
+      exclude.push(concept);
+      return;
+    }
+    if (positiveMatch || wantedMatch) include.push(concept);
+  });
+
+  const excludedIds = new Set(exclude.map((concept) => concept.id));
+  return {
+    include: include.filter((concept, index, list) => !excludedIds.has(concept.id) && list.findIndex((item) => item.id === concept.id) === index),
+    exclude: exclude.filter((concept, index, list) => list.findIndex((item) => item.id === concept.id) === index),
+  };
+}
+
+function scoreSemanticMatch(profile, semantic) {
+  const haystack = profileSemanticText(profile);
+  let score = 0;
+  let positiveMatches = 0;
+  let blocked = false;
+  const reasons = [];
+
+  for (const concept of semantic.include || []) {
+    if (!conceptMatchesProfile(profile, concept, haystack)) continue;
+    positiveMatches += 1;
+    score += concept.weight || 24;
+    reasons.push(`Hợp ý ${concept.label}`);
+  }
+
+  for (const concept of semantic.exclude || []) {
+    if (!conceptMatchesProfile(profile, concept, haystack)) continue;
+    score -= Math.max(36, concept.weight || 24);
+    if (concept.hardExclude) blocked = true;
+  }
+
+  return {
+    score,
+    positiveMatches,
+    blocked,
+    reasons: unique(reasons).slice(0, 4),
+  };
+}
+
+function addVectorValue(vector, feature, weight = 1) {
+  if (!feature || !Number.isFinite(weight) || weight === 0) return;
+  const key = String(feature).trim();
+  if (!key) return;
+  vector.set(key, (vector.get(key) || 0) + weight);
+}
+
+function vectorTokens(value) {
+  return normalizeText(value)
+    .split(' ')
+    .filter((word) => word.length >= 2 && !VECTOR_STOP_WORDS.has(word) && !/^\d+$/.test(word));
+}
+
+function addTextToVector(vector, value, weight = 1) {
+  const tokens = vectorTokens(value);
+  tokens.forEach((token) => {
+    addVectorValue(vector, `tok:${token}`, weight);
+    if (token.length >= 5) addVectorValue(vector, `stem:${token.slice(0, 5)}`, weight * 0.35);
+  });
+
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    addVectorValue(vector, `bi:${tokens[index]} ${tokens[index + 1]}`, weight * 1.35);
+  }
+
+  for (let index = 0; index < tokens.length - 2; index += 1) {
+    addVectorValue(vector, `tri:${tokens[index]} ${tokens[index + 1]} ${tokens[index + 2]}`, weight * 0.75);
+  }
+}
+
+function normalizeVector(vector) {
+  let magnitude = 0;
+  vector.forEach((value) => {
+    magnitude += value * value;
+  });
+  magnitude = Math.sqrt(magnitude);
+  if (!magnitude) return { values: vector, magnitude: 0 };
+
+  const normalized = new Map();
+  vector.forEach((value, key) => {
+    normalized.set(key, value / magnitude);
+  });
+  return { values: normalized, magnitude: 1 };
+}
+
+function cosineSparse(left, right) {
+  if (!left?.values?.size || !right?.values?.size) return 0;
+  const smaller = left.values.size <= right.values.size ? left.values : right.values;
+  const larger = left.values.size <= right.values.size ? right.values : left.values;
+  let total = 0;
+  smaller.forEach((value, key) => {
+    if (larger.has(key)) total += value * larger.get(key);
+  });
+  return total;
+}
+
+function addSynonymExpansion(vector, sourceText, weight = 0.85) {
+  const normalized = normalizeText(sourceText);
+  VECTOR_SYNONYM_GROUPS.forEach((group) => {
+    const aliases = group.map(normalizeText).filter(Boolean);
+    if (!aliases.some((alias) => containsPhrase(normalized, alias))) return;
+    aliases.forEach((alias) => addTextToVector(vector, alias, weight));
+  });
+}
+
+function buildQueryVector(message, signals, semantic) {
+  const vector = new Map();
+  const normalized = signals?.normalized || normalizeText(message);
+  addTextToVector(vector, normalized, 1.35);
+  addSynonymExpansion(vector, normalized, 1.1);
+
+  (signals?.wanted || []).forEach((wanted) => {
+    addTextToVector(vector, wanted, 1.6);
+  });
+
+  (semantic?.include || []).forEach((concept) => {
+    addTextToVector(vector, concept.label, 1.2);
+    (concept.query || []).forEach((alias) => addTextToVector(vector, alias, 1.15));
+    (concept.movie || []).forEach((alias) => addTextToVector(vector, alias, 1.25));
+  });
+
+  const meaningfulTokens = vectorTokens(normalized);
+  return {
+    ...normalizeVector(vector),
+    active: meaningfulTokens.length > 0 || (signals?.wanted || []).length > 0 || (semantic?.include || []).length > 0,
+    terms: meaningfulTokens.slice(0, 8),
+  };
+}
+
+function buildProfileVector(profile) {
+  const vector = new Map();
+  addTextToVector(vector, profile.title, 2.4);
+  addTextToVector(vector, profile.original_title, 1.5);
+  addTextToVector(vector, profile.description, 0.85);
+  addTextToVector(vector, profile.genres.join(' '), 2.3);
+  addTextToVector(vector, profile.countries.join(' '), 1.7);
+  addTextToVector(vector, profile.actors.slice(0, 8).join(' '), 0.35);
+  addTextToVector(vector, profile.directors.join(' '), 0.45);
+  addTextToVector(vector, profile.is_series ? 'phim bo series nhieu tap' : 'phim le mot tap', 0.7);
+
+  const profileText = profileSemanticText(profile);
+  addSynonymExpansion(vector, profileText, 0.55);
+  SEMANTIC_CONCEPTS.forEach((concept) => {
+    if (!conceptMatchesProfile(profile, concept, profileText)) return;
+    addTextToVector(vector, concept.label, 0.45);
+    (concept.query || []).forEach((alias) => addTextToVector(vector, alias, 0.45));
+  });
+
+  return normalizeVector(vector);
+}
+
+function scoreVectorMatch(profile, queryVector) {
+  if (!queryVector?.active || !queryVector.values?.size) {
+    return { score: 0, similarity: 0, matched: false, strong: false, reasons: [] };
+  }
+
+  const similarity = cosineSparse(queryVector, buildProfileVector(profile));
+  const matched = similarity >= VECTOR_MIN_SIMILARITY;
+  const strong = similarity >= VECTOR_STRONG_SIMILARITY;
+  const score = matched ? Math.round(similarity * VECTOR_SCORE_WEIGHT) : 0;
+
+  return {
+    score,
+    similarity,
+    matched,
+    strong,
+    reasons: strong ? ['Gần nghĩa với yêu cầu'] : [],
+  };
 }
 
 function profileMatchesWanted(profile, wanted, haystack) {
@@ -192,6 +624,8 @@ function toMovieCard(profile, extra = {}) {
     matched: extra.matched || { genres: [], countries: [], actors: [], directors: [] },
     match_score: extra.score || 0,
     match_reasons: extra.reasons || [],
+    dense_similarity: Number.isFinite(extra.denseSimilarity) ? Number(extra.denseSimilarity.toFixed(4)) : null,
+    rerank_score: Number.isFinite(extra.rerankScore) ? extra.rerankScore : null,
   };
 }
 
@@ -644,31 +1078,50 @@ function messageSignals(message) {
     ['nhe nhang', ['nhe nhang', 'thu gian', 'chill', 'de thuong']],
     ['tai lieu', ['tai lieu', 'documentary']],
     ['hoc duong', ['hoc duong', 'truong hoc']],
-    ['trung quoc', ['trung quoc', 'hoa ngu']],
-    ['han quoc', ['han quoc', 'hanh quoc', 'korean']],
-    ['nhat ban', ['nhat ban', 'japan']],
+    ['trung quoc', ['trung quoc', 'phim trung', 'trung', 'hoa ngu']],
+    ['han quoc', ['han quoc', 'phim han', 'han', 'hanh quoc', 'korean']],
+    ['nhat ban', ['nhat ban', 'phim nhat', 'nhat', 'japan']],
     ['viet nam', ['viet nam', 'vietnam']],
     ['my', ['my', 'au my', 'hollywood']],
   ];
 
+  const ignoredSignalWords = new Set();
   for (const [label, aliases] of groups) {
-    if (aliases.some((alias) => containsPhrase(normalized, alias))) wanted.push(label);
+    const normalizedAliases = aliases.map(normalizeText);
+    const hasPositiveAlias = normalizedAliases.some((alias) => containsPhrase(normalized, alias) && !isNegatedPhrase(normalized, alias));
+    const hasNegatedAlias = normalizedAliases.some((alias) => containsPhrase(normalized, alias) && isNegatedPhrase(normalized, alias));
+    if (hasPositiveAlias) wanted.push(label);
+    if (hasNegatedAlias) addSignalWords(ignoredSignalWords, [label, ...aliases]);
   }
 
   const wantedWords = new Set();
   for (const [label, aliases] of groups) {
     if (!wanted.includes(label)) continue;
-    [label, ...aliases].forEach((phrase) => {
-      normalizeText(phrase).split(' ').forEach((word) => {
-        if (word.length >= 2) wantedWords.add(word);
-      });
-    });
+    addSignalWords(wantedWords, [label, ...aliases]);
   }
+  const semanticWords = new Set();
+  SEMANTIC_CONCEPTS.forEach((concept) => {
+    (concept.query || []).forEach((alias) => {
+      const normalizedAlias = normalizeText(alias);
+      if (containsPhrase(normalized, normalizedAlias)) addSignalWords(semanticWords, [normalizedAlias]);
+    });
+  });
+  VECTOR_SYNONYM_GROUPS.forEach((group) => {
+    const normalizedAliases = group.map(normalizeText).filter(Boolean);
+    if (normalizedAliases.some((alias) => containsPhrase(normalized, alias))) {
+      addSignalWords(semanticWords, normalizedAliases);
+    }
+  });
 
   const yearMatch = normalized.match(/\b(19\d{2}|20\d{2})\b/);
   return {
     normalized,
-    terms: rawTerms.filter((term) => !wantedWords.has(term)),
+    terms: rawTerms.filter((term) => (
+      !wantedWords.has(term)
+      && !ignoredSignalWords.has(term)
+      && !semanticWords.has(term)
+      && !VECTOR_STOP_WORDS.has(term)
+    )),
     wanted: unique(wanted),
     year: yearMatch ? Number(yearMatch[1]) : null,
   };
@@ -727,36 +1180,109 @@ function scoreMessageMatch(profile, signals) {
 
 async function searchMoviesForMessage(db, message, options = {}) {
   const signals = messageSignals(message);
-  const hasSpecificIntent = signals.wanted.length > 0 || Boolean(signals.year) || signals.terms.length > 0;
+  const semantic = buildSemanticSignals(message, signals);
+  const queryVector = buildQueryVector(message, signals, semantic);
+  const hasSemanticIntent = semantic.include.length > 0 || semantic.exclude.length > 0;
+  const hasVectorIntent = queryVector.active;
   const tasteProfile = options.tasteProfile || null;
-  const profiles = await getMovieProfiles(db, { limit: MAX_POOL_SIZE });
-  const ranked = profiles
+  const [profiles, denseResult] = await Promise.all([
+    getMovieProfiles(db, { limit: MAX_POOL_SIZE }),
+    options.denseResult
+      ? Promise.resolve(options.denseResult)
+      : getDenseSearchScores(db, message),
+  ]);
+  const hasDenseIntent = Boolean(
+    denseResult?.available
+    && denseResult.scores?.size
+    && denseResult.confident !== false
+  );
+  const denseMatchThreshold = Number(denseResult?.matchThreshold) || DENSE_MIN_SIMILARITY;
+  const denseStrongThreshold = Number(denseResult?.strongThreshold) || DENSE_STRONG_SIMILARITY;
+  const hasSpecificIntent = signals.wanted.length > 0
+    || Boolean(signals.year)
+    || signals.terms.length > 0
+    || hasSemanticIntent
+    || hasVectorIntent
+    || hasDenseIntent;
+  const requiredConcepts = semantic.include.filter((concept) => (
+    concept.structuredOnly || ['series', 'movie'].includes(concept.id)
+  ));
+  const requiredCountries = signals.wanted.filter((wanted) => COUNTRY_SIGNALS.has(wanted));
+  const candidates = profiles
     .map((profile) => {
       const result = scoreMessageMatch(profile, signals);
+      const semanticResult = scoreSemanticMatch(profile, semantic);
+      const vectorResult = scoreVectorMatch(profile, queryVector);
       const taste = scoreMovieWithTaste(profile, tasteProfile, signals);
-      const reasons = unique([...(result.reasons || []), ...(taste.reasons || [])]).slice(0, 4);
+      const denseSimilarity = hasDenseIntent ? Number(denseResult.scores.get(Number(profile.id))) || 0 : 0;
+      const denseMatched = hasDenseIntent && denseSimilarity >= denseMatchThreshold;
+      const denseStrong = hasDenseIntent && denseSimilarity >= denseStrongThreshold;
+      const denseScore = denseMatched
+        ? Math.round(Math.max(0, (denseSimilarity - denseMatchThreshold) / (1 - denseMatchThreshold)) * DENSE_SCORE_WEIGHT)
+        : 0;
+      const requiredIncludesSatisfied = requiredConcepts.every((concept) => conceptMatchesProfile(profile, concept))
+        && requiredCountries.every((country) => profileMatchesWanted(profile, country, profileSemanticText(profile)));
+      const keywordReasons = (result.reasons || []).filter((reason) => String(reason).startsWith('Có từ khóa'));
+      const structuredReasons = (result.reasons || []).filter((reason) => !String(reason).startsWith('Có từ khóa'));
+      const reasons = unique([
+        ...structuredReasons,
+        ...(semanticResult.reasons || []),
+        ...(denseStrong ? ['Khớp ngữ nghĩa sâu'] : []),
+        ...(vectorResult.reasons || []),
+        ...(taste.reasons || []),
+        ...keywordReasons,
+      ]).slice(0, 4);
       return {
         profile,
         ...result,
-        score: result.score + taste.score,
+        semanticMatches: semanticResult.positiveMatches,
+        semanticBlocked: semanticResult.blocked,
+        vectorMatches: vectorResult.matched ? 1 : 0,
+        vectorStrong: vectorResult.strong,
+        vectorSimilarity: vectorResult.similarity,
+        denseMatched,
+        denseStrong,
+        denseSimilarity,
+        requiredIncludesSatisfied,
+        tasteScore: taste.score,
+        score: result.score + semanticResult.score + vectorResult.score + denseScore + taste.score,
         reasons,
       };
     })
     .filter((item) => {
+      if (item.semanticBlocked) return false;
+      if (!item.requiredIncludesSatisfied) return false;
       if (!hasSpecificIntent) return true;
-      if (signals.wanted.length > 0 || signals.year) {
-        return item.strongMatches > 0 || item.keywordMatches >= 2;
+      if (signals.wanted.length > 0 || signals.year || semantic.include.length > 0) {
+        return item.strongMatches > 0
+          || item.semanticMatches > 0
+          || item.keywordMatches >= 2
+          || item.vectorStrong
+          || item.denseStrong;
       }
-      return item.keywordMatches > 0;
-    })
-    .sort((left, right) => right.score - left.score || (right.profile.views || 0) - (left.profile.views || 0))
-    .slice(0, clampLimit(options.limit, DEFAULT_LIMIT));
+      if (semantic.exclude.length > 0) return true;
+      return item.keywordMatches > 0 || item.vectorMatches > 0 || item.denseStrong;
+    });
 
-  if (!ranked.length) {
+  if (!candidates.length) {
     return hasSpecificIntent ? [] : getPopularMovies(db, { limit: options.limit || DEFAULT_LIMIT });
   }
 
-  return ranked.map((item) => toMovieCard(item.profile, item));
+  const engagementScores = await getMovieEngagementScores(
+    db,
+    candidates.map((item) => item.profile.id),
+    Number(process.env.HYBRID_RERANK_ENGAGEMENT_DAYS) || 90
+  ).catch(() => new Map());
+  const ranked = rerankCandidates(candidates, {
+    denseAvailable: hasDenseIntent,
+    engagementScores,
+    limit: clampLimit(options.limit, DEFAULT_LIMIT),
+  });
+
+  return ranked.map((item) => toMovieCard(item.profile, {
+    ...item,
+    score: item.score,
+  }));
 }
 
 module.exports = {

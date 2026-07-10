@@ -5,6 +5,8 @@ const {
 } = require('./aiFeedbackService');
 const { getUserRecommendations } = require('./recommendationService');
 const { compactTasteProfile, getProfileTasteProfile } = require('./profileTasteService');
+const { getRecommendationAnalytics } = require('./recommendationAnalyticsService');
+const { getMovieEmbeddingStatus } = require('./denseEmbeddingService');
 
 function toPositiveInt(value) {
   const number = Number(value);
@@ -15,6 +17,16 @@ function safeLimit(value, fallback = 80, max = 240) {
   const number = Number(value);
   if (!Number.isInteger(number) || number <= 0) return fallback;
   return Math.min(number, max);
+}
+
+function safeJson(value, fallback = {}) {
+  if (value === null || value === undefined || value === '') return fallback;
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
 }
 
 function feedbackLabel(type) {
@@ -208,6 +220,7 @@ async function getRecentFeedbackRows(db, { profileId = null, limit = 120 } = {})
          f.movie_id,
          f.feedback_type,
          f.source,
+         f.metadata,
          f.updated_at,
          u.username,
          u.email,
@@ -225,19 +238,24 @@ async function getRecentFeedbackRows(db, { profileId = null, limit = 120 } = {})
       params
     );
 
-    return rows.map((row) => ({
-      id: Number(row.id),
-      user_id: Number(row.user_id),
-      profile_id: Number(row.profile_id),
-      movie_id: Number(row.movie_id),
-      profile: `${row.username || row.email || `User #${row.user_id}`} / ${row.profile_name}`,
-      movie: row.movie_title,
-      poster_url: row.poster_url,
-      type: row.feedback_type,
-      type_label: feedbackLabel(row.feedback_type),
-      source: row.source || 'unknown',
-      time: row.updated_at,
-    }));
+    return rows.map((row) => {
+      const metadata = safeJson(row.metadata, {});
+      return {
+        id: Number(row.id),
+        user_id: Number(row.user_id),
+        profile_id: Number(row.profile_id),
+        movie_id: Number(row.movie_id),
+        profile: `${row.username || row.email || `User #${row.user_id}`} / ${row.profile_name}`,
+        movie: row.movie_title,
+        poster_url: row.poster_url,
+        type: row.feedback_type,
+        type_label: feedbackLabel(row.feedback_type),
+        reason: metadata.reason || null,
+        reason_label: metadata.reason_label || null,
+        source: row.source || 'unknown',
+        time: row.updated_at,
+      };
+    });
   } catch (error) {
     if (error?.code === 'ER_NO_SUCH_TABLE') return [];
     throw error;
@@ -276,20 +294,26 @@ async function getRecommendationPreview(db, profile) {
 
 async function getAdminAiTasteDashboard(db, options = {}) {
   const numericProfileId = toPositiveInt(options.profileId);
-  const [profileRows, feedbackStats, profileCounts, topTastes] = await Promise.all([
+  const [profileRows, feedbackStats, profileCounts, topTastes, globalAnalytics, embeddings] = await Promise.all([
     getProfileRows(db),
     getAiFeedbackStats(db),
     getTasteProfileCounts(db),
     getGlobalTopTastes(db),
+    getRecommendationAnalytics(db, { days: options.days || 30 }),
+    getMovieEmbeddingStatus(db),
   ]);
   const profiles = await hydrateAdminProfiles(db, profileRows);
   const selectedProfile = profiles.find((profile) => profile.id === numericProfileId) || profiles[0] || null;
-  const [feedbackRows, recommendations] = await Promise.all([
+  const [feedbackRows, recommendations, profileAnalytics] = await Promise.all([
     getRecentFeedbackRows(db, {
       profileId: selectedProfile?.id || numericProfileId,
       limit: options.limit,
     }),
     getRecommendationPreview(db, selectedProfile),
+    getRecommendationAnalytics(db, {
+      profileId: selectedProfile?.id || numericProfileId,
+      days: options.days || 30,
+    }),
   ]);
 
   const stats = {
@@ -310,6 +334,11 @@ async function getAdminAiTasteDashboard(db, options = {}) {
     selected_profile: selectedProfile,
     feedbacks: feedbackRows,
     recommendations,
+    analytics: {
+      global: globalAnalytics,
+      profile: profileAnalytics,
+    },
+    embeddings,
   };
 }
 
