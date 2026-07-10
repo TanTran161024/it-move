@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FaBookmark,
   FaCheck,
+  FaChevronLeft,
+  FaChevronRight,
   FaInfoCircle,
   FaPaperPlane,
   FaPlay,
@@ -219,6 +221,8 @@ function recommendationEventKey(eventType, requestId, movieId) {
 export default function MovieChatbot() {
   const navigate = useNavigate();
   const inputRef = useRef(null);
+  const launcherRef = useRef(null);
+  const suggestionsRef = useRef(null);
   const messagesEndRef = useRef(null);
   const historyLoadedRef = useRef(false);
   const streamTimerRef = useRef(null);
@@ -235,6 +239,9 @@ export default function MovieChatbot() {
   const [tasteSummary, setTasteSummary] = useState([]);
   const [expandedWhyIds, setExpandedWhyIds] = useState(() => new Set());
   const [actionMessage, setActionMessage] = useState('');
+  const [suggestionEdges, setSuggestionEdges] = useState({ canGoLeft: false, canGoRight: false });
+  const suggestions = getActiveSuggestions(messages);
+  const suggestionKey = suggestions.join('\u0001');
 
   const trackRecommendationEvents = useCallback(async (events, defaults = {}) => {
     const items = (Array.isArray(events) ? events : [events]).filter(Boolean);
@@ -263,6 +270,63 @@ export default function MovieChatbot() {
   }, []);
 
   useEffect(() => clearStreamTimer, [clearStreamTimer]);
+
+  const closeChat = useCallback(() => {
+    setOpen(false);
+    setTimeout(() => launcherRef.current?.focus(), 0);
+  }, []);
+
+  const syncSuggestionEdges = useCallback(() => {
+    const scroller = suggestionsRef.current;
+    if (!scroller) return;
+    const maxScroll = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+    setSuggestionEdges({
+      canGoLeft: scroller.scrollLeft > 2,
+      canGoRight: scroller.scrollLeft < maxScroll - 2,
+    });
+  }, []);
+
+  const scrollSuggestions = (direction) => {
+    const scroller = suggestionsRef.current;
+    if (!scroller) return;
+    scroller.scrollBy({
+      left: direction * Math.max(190, scroller.clientWidth * 0.72),
+      behavior: 'smooth',
+    });
+  };
+
+  useEffect(() => {
+    if (!open || loading) return undefined;
+    const scroller = suggestionsRef.current;
+    if (!scroller) return undefined;
+    scroller.scrollLeft = 0;
+
+    const frameId = requestAnimationFrame(syncSuggestionEdges);
+    const observer = typeof ResizeObserver === 'function'
+      ? new ResizeObserver(syncSuggestionEdges)
+      : null;
+    observer?.observe(scroller);
+    window.addEventListener('resize', syncSuggestionEdges);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      observer?.disconnect();
+      window.removeEventListener('resize', syncSuggestionEdges);
+    };
+  }, [loading, open, suggestionKey, syncSuggestionEdges]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      closeChat();
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [closeChat, open]);
 
   const loadTasteProfile = useCallback(async (signal) => {
     const user = getStoredUser();
@@ -804,120 +868,136 @@ export default function MovieChatbot() {
     const whyOpen = expandedWhyIds.has(movieId);
 
     return (
-    <article
-      className="movie-chatbot-card"
-      key={movie.id}
-    >
-      <button type="button" className="movie-chatbot-card-main" onClick={() => openMovie(movie, context)}>
-      <span className={`movie-chatbot-poster${movie.poster_url ? '' : ' is-empty'}`}>
-        {movie.poster_url && (
-          <img
-            src={movie.poster_url}
-            alt={movie.title}
-            loading="lazy"
-            onError={(event) => {
-              event.currentTarget.parentElement?.classList.add('is-empty');
-              event.currentTarget.remove();
-            }}
-          />
-        )}
-        <span className="movie-chatbot-poster-empty">Chưa có ảnh</span>
-      </span>
-      <span className="movie-chatbot-card-body">
-        <strong>{movie.title}</strong>
-        <small>{formatMovieMeta(movie)}</small>
-        {getVisibleMatchReasons(movie).length > 0 && (
-          <small className="movie-chatbot-reason">{getVisibleMatchReasons(movie).join(' · ')}</small>
-        )}
-        <span className="movie-chatbot-detail-link"><FaInfoCircle /> Chi tiết</span>
-      </span>
-      </button>
-      <span className="movie-chatbot-card-actions">
-        <button type="button" className="watch-now" onClick={() => watchMovie(movie, context)}>
-          <FaPlay /> Xem ngay
+      <article className="movie-chatbot-card" key={movie.id}>
+        <button type="button" className="movie-chatbot-card-main" onClick={() => openMovie(movie, context)}>
+          <span className={`movie-chatbot-poster${movie.poster_url ? '' : ' is-empty'}`}>
+            {movie.poster_url && (
+              <img
+                src={movie.poster_url}
+                alt=""
+                loading="lazy"
+                draggable="false"
+                onError={(event) => {
+                  event.currentTarget.parentElement?.classList.add('is-empty');
+                  event.currentTarget.remove();
+                }}
+              />
+            )}
+            <span className="movie-chatbot-poster-empty">Chưa có ảnh</span>
+            <span className="movie-chatbot-poster-play" aria-hidden="true"><FaPlay /></span>
+          </span>
+          <span className="movie-chatbot-card-body">
+            <span className="movie-chatbot-card-kicker">Gợi ý {context.position || 1}</span>
+            <strong>{movie.title}</strong>
+            <small>{formatMovieMeta(movie)}</small>
+            {getVisibleMatchReasons(movie).length > 0 && (
+              <small className="movie-chatbot-reason">{getVisibleMatchReasons(movie).join(' · ')}</small>
+            )}
+            <span className="movie-chatbot-detail-link"><FaInfoCircle /> Xem thông tin</span>
+          </span>
         </button>
-        <button
-          type="button"
-          className="save"
-          disabled={busy || saved}
-          onClick={(event) => addToWatchlist(movie, event, context)}
-        >
-          {saved ? <FaCheck /> : <FaBookmark />}
-          {saved ? 'Đã lưu' : busy ? 'Đang lưu' : 'Thêm'}
-        </button>
-      </span>
-      {explanation && (
-        <div className={`movie-chatbot-why${whyOpen ? ' is-open' : ''}`}>
+        <span className="movie-chatbot-card-actions">
+          <button type="button" className="watch-now" onClick={() => watchMovie(movie, context)}>
+            <FaPlay /> Xem ngay
+          </button>
           <button
             type="button"
-            className="movie-chatbot-why-toggle"
-            aria-expanded={whyOpen}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (!whyOpen) trackMovieEvent('why_open', movie, context);
-              toggleWhy(movieId);
-            }}
+            className="save"
+            disabled={busy || saved}
+            onClick={(event) => addToWatchlist(movie, event, context)}
           >
-            <FaQuestionCircle /> Vì sao gợi ý?
+            {saved ? <FaCheck /> : <FaBookmark />}
+            {saved ? 'Đã lưu' : busy ? 'Đang lưu' : 'Thêm'}
           </button>
-          {whyOpen && (
-            <div className="movie-chatbot-why-panel">
-              <p>{explanation.summary}</p>
-              {explanation.details.length > 0 && (
-                <ul>
-                  {explanation.details.map((detail) => (
-                    <li key={detail}>{detail}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-      <MovieTasteFeedback
-        movieId={movieId}
-        sessionId={chatSessionId}
-        requestId={context.requestId}
-        position={context.position}
-        source="chatbot"
-        variant="chatbot"
-        onChanged={({ message }) => {
-          setActionMessage(message || 'Đã cập nhật gu phim.');
-          loadTasteProfile().catch((err) => console.warn('[Chat taste]', err.message));
-        }}
-      />
-    </article>
+        </span>
+        {explanation && (
+          <div className={`movie-chatbot-why${whyOpen ? ' is-open' : ''}`}>
+            <button
+              type="button"
+              className="movie-chatbot-why-toggle"
+              aria-expanded={whyOpen}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (!whyOpen) trackMovieEvent('why_open', movie, context);
+                toggleWhy(movieId);
+              }}
+            >
+              <FaQuestionCircle /> Vì sao gợi ý?
+            </button>
+            {whyOpen && (
+              <div className="movie-chatbot-why-panel">
+                <p>{explanation.summary}</p>
+                {explanation.details.length > 0 && (
+                  <ul>
+                    {explanation.details.map((detail) => (
+                      <li key={detail}>{detail}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        <MovieTasteFeedback
+          movieId={movieId}
+          sessionId={chatSessionId}
+          requestId={context.requestId}
+          position={context.position}
+          source="chatbot"
+          variant="chatbot"
+          onChanged={({ message }) => {
+            setActionMessage(message || 'Đã cập nhật gu phim.');
+            loadTasteProfile().catch((err) => console.warn('[Chat taste]', err.message));
+          }}
+        />
+      </article>
     );
   };
 
   const hasStreamingMessage = messages.some((item) => item.isStreaming);
-  const suggestions = getActiveSuggestions(messages);
 
   return (
     <div className={`movie-chatbot${open ? ' open' : ''}`}>
       {open && (
-        <section className="movie-chatbot-panel" aria-label="Tư vấn phim">
+        <>
+        <button
+          type="button"
+          className="movie-chatbot-backdrop"
+          aria-label="Đóng tư vấn phim"
+          onClick={closeChat}
+        />
+        <section
+          id="movie-chatbot-panel"
+          className="movie-chatbot-panel"
+          role="dialog"
+          aria-labelledby="movie-chatbot-title"
+          aria-busy={loading || hasStreamingMessage}
+        >
           <header className="movie-chatbot-header">
             <div className="movie-chatbot-title">
               <span className="movie-chatbot-avatar">
-                <img src="/chatbot-logo.svg" alt="IT Move AI" />
+                <img src="/chatbot-logo.svg" alt="IT Move AI" draggable="false" />
               </span>
               <div>
-                <strong>IT Move AI</strong>
-                <small>{tasteSummary.length ? `Nhớ gu: ${tasteSummary.join(', ')}` : 'Sẵn sàng tư vấn phim'}</small>
+                <span className="movie-chatbot-eyebrow"><i /> Trợ lý điện ảnh</span>
+                <strong id="movie-chatbot-title">IT Move AI</strong>
+                <small>{tasteSummary.length ? `Đang nhớ gu: ${tasteSummary.join(', ')}` : 'Tìm đúng phim cho tối nay'}</small>
               </div>
             </div>
             <div className="movie-chatbot-header-actions">
               <button type="button" className="movie-chatbot-close" onClick={resetChat} aria-label="Bắt đầu lại" title="Khởi động lại">
                 <FaRedo />
               </button>
-              <button type="button" className="movie-chatbot-close" onClick={() => setOpen(false)} aria-label="Đóng chatbot" title="Đóng">
+              <button type="button" className="movie-chatbot-close" onClick={closeChat} aria-label="Đóng chatbot" title="Đóng">
                 <FaTimes />
               </button>
             </div>
           </header>
 
-          <div className="movie-chatbot-messages" aria-live="polite">
+          <div
+            className={`movie-chatbot-messages${messages.length === 1 ? ' is-welcome' : ''}`}
+            aria-live="polite"
+          >
             {messages.map((chatMessage, index) => (
               <article
                 className={`movie-chatbot-message ${chatMessage.role}${chatMessage.isStreaming ? ' streaming' : ''}`}
@@ -933,6 +1013,7 @@ export default function MovieChatbot() {
                 {chatMessage.role === 'assistant' && !chatMessage.isStreaming && chatMessage.recommendations?.length > 0 && (
                   <div className="movie-chatbot-message-meta">
                     <span>Chọn riêng cho bạn</span>
+                    <small>{chatMessage.recommendations.length} lựa chọn</small>
                   </div>
                 )}
                 {!chatMessage.isStreaming && chatMessage.recommendations?.length > 0 && (
@@ -962,20 +1043,44 @@ export default function MovieChatbot() {
           </div>
 
           {!loading && !hasStreamingMessage && suggestions.length > 0 && (
-            <div className="movie-chatbot-starters">
-              {suggestions.map((item) => (
-                <button type="button" key={item} onClick={() => sendMessage(item)}>
-                  {item}
-                </button>
-              ))}
+            <div className="movie-chatbot-starter-shell">
+              <button
+                type="button"
+                className="movie-chatbot-starter-nav"
+                onClick={() => scrollSuggestions(-1)}
+                disabled={!suggestionEdges.canGoLeft}
+                aria-label="Xem gợi ý trước"
+                title="Gợi ý trước"
+              >
+                <FaChevronLeft />
+              </button>
+              <div ref={suggestionsRef} className="movie-chatbot-starters" onScroll={syncSuggestionEdges}>
+                {suggestions.map((item) => (
+                  <button type="button" key={item} onClick={() => sendMessage(item)}>
+                    {item}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="movie-chatbot-starter-nav"
+                onClick={() => scrollSuggestions(1)}
+                disabled={!suggestionEdges.canGoRight}
+                aria-label="Xem gợi ý tiếp theo"
+                title="Gợi ý tiếp theo"
+              >
+                <FaChevronRight />
+              </button>
             </div>
           )}
 
-          {error && <div className="movie-chatbot-error">{error}</div>}
-          {actionMessage && <div className="movie-chatbot-action-message">{actionMessage}</div>}
+          {error && <div className="movie-chatbot-error" role="alert">{error}</div>}
+          {actionMessage && <div className="movie-chatbot-action-message" role="status">{actionMessage}</div>}
 
           <form className="movie-chatbot-input" onSubmit={handleSubmit}>
+            <label htmlFor="movie-chatbot-query">Nhập yêu cầu tìm phim</label>
             <input
+              id="movie-chatbot-query"
               ref={inputRef}
               value={input}
               onChange={(event) => setInput(event.target.value)}
@@ -987,21 +1092,25 @@ export default function MovieChatbot() {
             </button>
           </form>
         </section>
+        </>
       )}
 
       <button
+        ref={launcherRef}
         type="button"
         className={`movie-chatbot-fab ${open ? 'is-open' : ''}`}
         onClick={() => {
           setOpen((value) => !value);
           setTimeout(() => inputRef.current?.focus(), 0);
         }}
-        aria-label="Mở tư vấn phim"
+        aria-label={open ? 'Đóng tư vấn phim' : 'Mở tư vấn phim'}
+        aria-expanded={open}
+        aria-controls="movie-chatbot-panel"
       >
-        <div className="movie-chatbot-fab-icon">
-          {open ? <FaTimes /> : <img src="/chatbot-logo.svg" alt="IT Move AI" />}
-        </div>
-        {!open && <span className="movie-chatbot-fab-text">Chatbot gợi ý phim</span>}
+        <span className="movie-chatbot-fab-icon">
+          {open ? <FaTimes /> : <img src="/chatbot-logo.svg" alt="IT Move AI" draggable="false" />}
+        </span>
+        {!open && <span className="movie-chatbot-fab-status" aria-hidden="true" />}
       </button>
     </div>
   );

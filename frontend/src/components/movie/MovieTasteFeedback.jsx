@@ -197,6 +197,7 @@ export default function MovieTasteFeedback({
 
   return (
     <div className={`movie-taste-feedback movie-taste-feedback--${variant} ${className}`.trim()} aria-label="Dạy gu phim">
+      {variant === 'chatbot' && <span className="movie-taste-feedback__label">Phản hồi gợi ý</span>}
       {feedbackOptions.map((option) => {
         const Icon = option.icon;
         const active = Boolean(status[option.type]);
@@ -207,6 +208,7 @@ export default function MovieTasteFeedback({
             key={option.type}
             className={`movie-taste-feedback__button ${option.type}${active ? ' is-active' : ''}`}
             aria-pressed={active}
+            aria-label={active ? option.activeLabel : option.label}
             disabled={Boolean(busyType)}
             title={active ? option.activeLabel : option.label}
             onClick={(event) => {
