@@ -28,6 +28,16 @@ function hasImage(actor) {
   return Boolean(String(actor?.profile_pic_url || '').trim());
 }
 
+function normalizeSearchText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .trim();
+}
+
 function ActorCard({ actor, onClick }) {
   const [imageFailed, setImageFailed] = useState(false);
   const image = hasImage(actor) && !imageFailed ? actor.profile_pic_url : '';
@@ -137,6 +147,7 @@ export default function ActorList() {
   const navigate = useNavigate();
 
   const page = Math.max(1, Number.parseInt(searchParams.get('page') || '1', 10) || 1);
+  const searchTerm = searchParams.get('q') || '';
 
   useEffect(() => {
     const controller = new AbortController();
@@ -167,29 +178,82 @@ export default function ActorList() {
     return () => controller.abort();
   }, []);
 
-  const totalPages = Math.max(1, Math.ceil(actors.length / PAGE_SIZE));
+  const filteredActors = useMemo(() => {
+    const normalizedTerm = normalizeSearchText(searchTerm);
+    if (!normalizedTerm) return actors;
+
+    return actors.filter((actor) => normalizeSearchText(actor.name).includes(normalizedTerm));
+  }, [actors, searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredActors.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const pageActors = useMemo(
-    () => actors.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [actors, safePage]
+    () => filteredActors.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filteredActors, safePage]
   );
 
   useEffect(() => {
     if (!loading && page !== safePage) {
-      setSearchParams(safePage > 1 ? { page: String(safePage) } : {});
+      setSearchParams((currentParams) => {
+        const nextParams = new URLSearchParams(currentParams);
+        if (safePage > 1) nextParams.set('page', String(safePage));
+        else nextParams.delete('page');
+        return nextParams;
+      });
     }
   }, [loading, page, safePage, setSearchParams]);
 
   const handlePageChange = (nextPage) => {
-    setSearchParams(nextPage > 1 ? { page: String(nextPage) } : {});
+    setSearchParams((currentParams) => {
+      const nextParams = new URLSearchParams(currentParams);
+      if (nextPage > 1) nextParams.set('page', String(nextPage));
+      else nextParams.delete('page');
+      return nextParams;
+    });
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSearchChange = (event) => {
+    const nextTerm = event.target.value;
+    setSearchParams((currentParams) => {
+      const nextParams = new URLSearchParams(currentParams);
+      if (nextTerm) nextParams.set('q', nextTerm);
+      else nextParams.delete('q');
+      nextParams.delete('page');
+      return nextParams;
+    }, { replace: true });
   };
 
   return (
     <div className="min-h-screen bg-background px-4 pb-16 pt-24 text-white md:px-8">
       <div className="mx-auto max-w-[1500px]">
-        <div className="mb-8">
+        <div className="mb-8 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <h1 className="text-2xl font-black text-white md:text-3xl">Diễn viên</h1>
+          <div className="w-full md:max-w-md">
+            <label htmlFor="actor-search" className="sr-only">Tìm kiếm diễn viên</label>
+            <div className="relative">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/45"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+              <input
+                id="actor-search"
+                type="search"
+                value={searchTerm}
+                onChange={handleSearchChange}
+                placeholder="Nhập tên diễn viên..."
+                autoComplete="off"
+                className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.06] pl-12 pr-4 text-sm font-semibold text-white outline-none transition placeholder:text-white/35 hover:border-white/20 focus:border-primary/70 focus:bg-white/[0.08] focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+          </div>
         </div>
 
         {error ? (
@@ -205,17 +269,28 @@ export default function ActorList() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-x-5 gap-y-12 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-              {pageActors.map((actor) => (
-                <ActorCard
-                  key={actor.id}
-                  actor={actor}
-                  onClick={() => navigate(actorPath(actor))}
-                />
-              ))}
-            </div>
+            {pageActors.length ? (
+              <>
+                <div className="grid grid-cols-2 gap-x-5 gap-y-12 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+                  {pageActors.map((actor) => (
+                    <ActorCard
+                      key={actor.id}
+                      actor={actor}
+                      onClick={() => navigate(actorPath(actor))}
+                    />
+                  ))}
+                </div>
 
-            <Pagination page={safePage} totalPages={totalPages} onPageChange={handlePageChange} />
+                <Pagination page={safePage} totalPages={totalPages} onPageChange={handlePageChange} />
+              </>
+            ) : (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-16 text-center">
+                <h2 className="text-xl font-black text-white">Không tìm thấy diễn viên</h2>
+                <p className="mt-2 text-sm text-white/55">
+                  Không có kết quả phù hợp với “{searchTerm.trim()}”.
+                </p>
+              </div>
+            )}
           </>
         )}
       </div>
