@@ -168,6 +168,8 @@ function formatUser(user) {
     is_admin: user.is_admin,
     email_verified: user.email_verified,
     is_active: user.is_active,
+    vip_until: user.vip_until || null,
+    is_vip: Boolean(user.vip_until && new Date(user.vip_until) > new Date()),
     gender: user.gender,
     avatar: user.avatar_url,
     avatar_url: user.avatar_url,
@@ -3948,7 +3950,7 @@ router.delete('/producers/:id', requireAdminMiddleware, async (req, res) => {
 router.get('/users', requireAdminMiddleware, async (req, res) => {
   try {
     const db = getDb(req);
-    const [rows] = await db.execute('SELECT id, username, email, is_admin, email_verified, is_active, gender, created_at FROM users ORDER BY created_at DESC');
+    const [rows] = await db.execute('SELECT id, username, email, is_admin, email_verified, is_active, gender, vip_until, (vip_until IS NOT NULL AND vip_until > NOW()) AS is_vip, created_at FROM users ORDER BY created_at DESC');
     res.json(rows);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -4769,6 +4771,149 @@ router.post('/setup/category-countries', requireAdminMiddleware, async (req, res
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
+});
+
+
+// ===== VIP & ADVERTISEMENTS =====
+function isVipUntil(value) {
+  return Boolean(value && new Date(value).getTime() > Date.now());
+}
+
+router.get('/vip/status', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.json({ is_vip: false, vip_until: null });
+    const db = getDb(req);
+    const [rows] = await db.execute('SELECT vip_until FROM users WHERE id = ?', [userId]);
+    const vipUntil = rows[0]?.vip_until || null;
+    res.json({ is_vip: isVipUntil(vipUntil), vip_until: vipUntil });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+router.get('/vip/plans', async (req, res) => {
+  try {
+    const [rows] = await getDb(req).execute('SELECT * FROM vip_plans WHERE is_active = 1 ORDER BY duration_days');
+    res.json(rows);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+router.post('/vip/orders', async (req, res) => {
+  try {
+    const userId = toPositiveInt(getUserId(req));
+    const planId = toPositiveInt(req.body?.plan_id);
+    if (!userId) return res.status(401).json({ message: 'Vui lòng đăng nhập' });
+    if (!planId) return res.status(400).json({ message: 'Gói VIP không hợp lệ' });
+    const db = getDb(req);
+    const [plans] = await db.execute('SELECT * FROM vip_plans WHERE id=? AND is_active=1', [planId]);
+    if (!plans.length) return res.status(404).json({ message: 'Không tìm thấy gói VIP' });
+    const [pending] = await db.execute("SELECT id FROM vip_orders WHERE user_id=? AND status='pending' LIMIT 1", [userId]);
+    if (pending.length) return res.status(409).json({ message: 'Bạn đang có một đơn VIP chờ duyệt' });
+    const [result] = await db.execute(
+      'INSERT INTO vip_orders (user_id, plan_id, amount, payment_note) VALUES (?, ?, ?, ?)',
+      [userId, planId, plans[0].price, String(req.body?.payment_note || '').trim() || null]
+    );
+    res.status(201).json({ id: result.insertId, message: 'Đã gửi yêu cầu mua VIP. Vui lòng chờ admin xác nhận.' });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+router.get('/vip/orders/my', async (req, res) => {
+  try {
+    const userId = toPositiveInt(getUserId(req));
+    if (!userId) return res.status(401).json({ message: 'Vui lòng đăng nhập' });
+    const [rows] = await getDb(req).execute(
+      `SELECT o.*, p.name AS plan_name, p.duration_days FROM vip_orders o JOIN vip_plans p ON p.id=o.plan_id
+       WHERE o.user_id=? ORDER BY o.created_at DESC`, [userId]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+router.get('/admin/vip/plans', requireAdminMiddleware, async (req, res) => {
+  try { const [rows] = await getDb(req).execute('SELECT * FROM vip_plans ORDER BY duration_days'); res.json(rows); }
+  catch (err) { res.status(500).json({ message: err.message }); }
+});
+router.post('/admin/vip/plans', requireAdminMiddleware, async (req, res) => {
+  try {
+    const { name, duration_days, price, description, is_active=true } = req.body;
+    if (!name || !toPositiveInt(duration_days)) return res.status(400).json({ message: 'Thiếu tên hoặc số ngày' });
+    const [result] = await getDb(req).execute('INSERT INTO vip_plans (name,duration_days,price,description,is_active) VALUES (?,?,?,?,?)', [name, duration_days, Number(price)||0, description||null, is_active?1:0]);
+    res.status(201).json({ id: result.insertId });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+router.put('/admin/vip/plans/:id', requireAdminMiddleware, async (req, res) => {
+  try {
+    const { name, duration_days, price, description, is_active } = req.body;
+    await getDb(req).execute('UPDATE vip_plans SET name=?,duration_days=?,price=?,description=?,is_active=? WHERE id=?', [name,duration_days,Number(price)||0,description||null,is_active?1:0,req.params.id]);
+    res.json({ message: 'Đã cập nhật gói VIP' });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+router.get('/admin/vip/orders', requireAdminMiddleware, async (req, res) => {
+  try {
+    const [rows] = await getDb(req).execute(`SELECT o.*,u.username,u.email,p.name AS plan_name,p.duration_days
+      FROM vip_orders o JOIN users u ON u.id=o.user_id JOIN vip_plans p ON p.id=o.plan_id ORDER BY o.created_at DESC`);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+router.patch('/admin/vip/orders/:id', requireAdminMiddleware, async (req, res) => {
+  const status = req.body?.status;
+  if (!['approved','rejected'].includes(status)) return res.status(400).json({ message: 'Trạng thái không hợp lệ' });
+  const db = getDb(req);
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [rows] = await conn.execute(`SELECT o.*,p.duration_days FROM vip_orders o JOIN vip_plans p ON p.id=o.plan_id WHERE o.id=? FOR UPDATE`, [req.params.id]);
+    if (!rows.length) { await conn.rollback(); return res.status(404).json({ message: 'Không tìm thấy đơn' }); }
+    if (rows[0].status !== 'pending') { await conn.rollback(); return res.status(409).json({ message: 'Đơn đã được xử lý' }); }
+    await conn.execute('UPDATE vip_orders SET status=?,approved_by=?,approved_at=NOW() WHERE id=?', [status,getUserId(req),req.params.id]);
+    if (status === 'approved') {
+      await conn.execute(`UPDATE users SET vip_until=DATE_ADD(IF(vip_until IS NOT NULL AND vip_until>NOW(),vip_until,NOW()), INTERVAL ? DAY) WHERE id=?`, [rows[0].duration_days,rows[0].user_id]);
+    }
+    await conn.commit();
+    res.json({ message: status === 'approved' ? 'Đã kích hoạt VIP' : 'Đã từ chối đơn' });
+  } catch (err) { await conn.rollback(); res.status(500).json({ message: err.message }); }
+  finally { conn.release(); }
+});
+
+router.get('/ads', async (req, res) => {
+  try {
+    const db = getDb(req);
+    const userId = toPositiveInt(getUserId(req));
+    if (userId) {
+      const [users] = await db.execute('SELECT vip_until FROM users WHERE id=?', [userId]);
+      if (isVipUntil(users[0]?.vip_until)) return res.json([]);
+    }
+    const placement = String(req.query.placement || '').trim();
+    const params = [];
+    let sql = `SELECT * FROM advertisements WHERE is_active=1 AND (start_at IS NULL OR start_at<=NOW()) AND (end_at IS NULL OR end_at>=NOW())`;
+    if (placement) { sql += ' AND placement=?'; params.push(placement); }
+    sql += ' ORDER BY id DESC';
+    const [rows] = await db.execute(sql, params);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+router.get('/admin/ads', requireAdminMiddleware, async (req, res) => {
+  try { const [rows] = await getDb(req).execute('SELECT * FROM advertisements ORDER BY id DESC'); res.json(rows); }
+  catch (err) { res.status(500).json({ message: err.message }); }
+});
+router.post('/admin/ads', requireAdminMiddleware, async (req, res) => {
+  try {
+    const { name,image_url,target_url,placement,is_active=true,start_at,end_at } = req.body;
+    if (!name || !image_url || !placement) return res.status(400).json({ message: 'Thiếu tên, ảnh hoặc vị trí' });
+    const [result] = await getDb(req).execute('INSERT INTO advertisements (name,image_url,target_url,placement,is_active,start_at,end_at) VALUES (?,?,?,?,?,?,?)', [name,image_url,target_url||null,placement,is_active?1:0,start_at||null,end_at||null]);
+    res.status(201).json({ id: result.insertId });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+router.put('/admin/ads/:id', requireAdminMiddleware, async (req, res) => {
+  try {
+    const { name,image_url,target_url,placement,is_active,start_at,end_at } = req.body;
+    await getDb(req).execute('UPDATE advertisements SET name=?,image_url=?,target_url=?,placement=?,is_active=?,start_at=?,end_at=? WHERE id=?', [name,image_url,target_url||null,placement,is_active?1:0,start_at||null,end_at||null,req.params.id]);
+    res.json({ message: 'Đã cập nhật quảng cáo' });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+router.delete('/admin/ads/:id', requireAdminMiddleware, async (req, res) => {
+  try { await getDb(req).execute('DELETE FROM advertisements WHERE id=?', [req.params.id]); res.json({ message: 'Đã xóa quảng cáo' }); }
+  catch (err) { res.status(500).json({ message: err.message }); }
 });
 
 module.exports = router; 

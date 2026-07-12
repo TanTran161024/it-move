@@ -23,6 +23,7 @@ const ForYou = lazy(() => import('./pages/movie/ForYou'));
 const Profile = lazy(() => import('./pages/user/Profile'));
 const UserSettings = lazy(() => import('./pages/user/UserSettings'));
 const UserLibrary = lazy(() => import('./pages/user/UserLibrary'));
+const Vip = lazy(() => import('./pages/user/Vip'));
 const MovieChatbot = lazy(() => import('./components/ai/MovieChatbot'));
 
 function RouteLoader() {
@@ -107,6 +108,7 @@ function App() {
                     <Route path="/user/history" element={<UserLibrary />} />
                     <Route path="/user/continue" element={<UserLibrary />} />
                     <Route path="/user/notifications" element={<UserLibrary />} />
+                    <Route path="/vip" element={<Vip />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </Suspense>

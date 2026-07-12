@@ -3,6 +3,7 @@ import { FaArrowLeft, FaChevronLeft, FaChevronRight, FaRegCommentDots, FaRegHear
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import VideoPlayer from "../../components/player/VideoPlayer";
+import Advertisement from "../../components/common/Advertisement";
 import { API_BASE_URL, API_URL as API } from "../../config/api";
 import {
   getActiveProfile,
@@ -940,6 +941,7 @@ const WatchMovie = () => {
   return (
     <div className="min-h-screen overflow-x-hidden bg-black text-white">
       <section className="relative h-[100dvh] min-h-[520px] overflow-hidden bg-black">
+        <Advertisement placement="watch_top" className="absolute inset-x-0 top-20 z-[80] mx-auto max-w-4xl px-4" />
         <div className="absolute inset-0 z-0">
         {currentEpisode ? (
           <VideoPlayer

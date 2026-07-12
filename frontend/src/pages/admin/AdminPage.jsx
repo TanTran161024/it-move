@@ -13,6 +13,7 @@ import DubbingStudio from '../../components/admin/DubbingStudio';
 import AdminDashboardStats from '../../components/admin/AdminDashboardStats';
 import AdminAutomationHub from '../../components/admin/AdminAutomationHub';
 import AITasteManager from '../../components/admin/AITasteManager';
+import VipAdsManager from '../../components/admin/VipAdsManager';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
@@ -943,6 +944,7 @@ export default function Admin() {
         {selectedMenu === 'dubbing' && (
           <DubbingStudio />
         )}
+        {selectedMenu === 'vip_ads' && <VipAdsManager />}
         {selectedMenu === 'users' && (
           <Box sx={{ color: 'var(--admin-text)', mt: 4, width: '100%' }}>
             <div className="admin-section-header">

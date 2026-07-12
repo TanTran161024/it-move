@@ -9,6 +9,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import SubtitlesIcon from '@mui/icons-material/Subtitles';
 import PsychologyIcon from '@mui/icons-material/Psychology';
+import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
 
 export const adminMenuGroups = [
   {
@@ -54,6 +55,7 @@ export const adminMenuGroups = [
   {
     title: 'Người dùng',
     items: [
+      { key: 'vip_ads', label: 'VIP & quảng cáo', description: 'Duyệt đơn VIP và quản lý quảng cáo.', Icon: WorkspacePremiumIcon },
       {
         key: 'users',
         label: 'Quản lý người dùng',
