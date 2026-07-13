@@ -9,7 +9,6 @@
     "dotenv": "^17.0.0",
     "express": "^5.1.0",
     "ffmpeg-static": "^5.2.0",
-    "it-move": "file:..",
     "mysql2": "^3.14.1",
     "nodemailer": "^8.0.11"
   },
