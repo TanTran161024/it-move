@@ -874,7 +874,7 @@ export default function Header() {
           <UserAvatar user={user} activeProfile={activeProfile} size={46} />
           <div className="min-w-0 flex-1">
             <div className="text-xs font-medium text-text-secondary">Xin chào,</div>
-            <div className="truncate text-lg font-bold leading-tight text-white mt-0.5">{activeProfile?.name || user.username}</div>
+            <div className="flex items-center gap-2 truncate text-lg font-bold leading-tight text-white mt-0.5"><span className="truncate">{activeProfile?.name || user.username}</span>{user.is_vip && <span className="rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-black text-black">VIP</span>}</div>
             {activeProfile?.name && <div className="truncate text-xs font-medium text-text-secondary mt-1">{user.username}</div>}
           </div>
         </div>
@@ -886,6 +886,7 @@ export default function Header() {
           <MenuAction icon="plus" onClick={() => { setUserAnchor(null); navigate('/user/list'); }}>Danh sách</MenuAction>
           <MenuAction icon="history" onClick={() => { setUserAnchor(null); navigate('/user/history'); }}>Lịch sử xem</MenuAction>
           <MenuAction icon="playCircle" onClick={() => { setUserAnchor(null); navigate('/user/continue'); }}>Xem tiếp</MenuAction>
+          <MenuAction icon="sparkles" accent onClick={() => { setUserAnchor(null); navigate('/vip'); }}>{user.is_vip ? 'Quản lý VIP' : 'Nâng cấp VIP'}</MenuAction>
           <MenuAction icon="account" onClick={() => { setUserAnchor(null); navigate('/user/profile'); }}>Tài khoản</MenuAction>
           {Boolean(user.is_admin) && (
             <MenuAction icon="chart" accent onClick={() => { setUserAnchor(null); navigate('/admin'); }}>Admin Dashboard</MenuAction>
