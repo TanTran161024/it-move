@@ -4779,6 +4779,69 @@ function isVipUntil(value) {
   return Boolean(value && new Date(value).getTime() > Date.now());
 }
 
+function makeMockMomoToken() {
+  return crypto.randomBytes(24).toString('hex');
+}
+
+function makeMockMomoTransactionRef(orderId) {
+  return `MOMO-DEMO-${Date.now()}-${orderId}`;
+}
+
+async function activatePaidVipOrder(db, orderId) {
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [rows] = await conn.execute(
+      `SELECT o.*, p.duration_days
+       FROM vip_orders o
+       JOIN vip_plans p ON p.id = o.plan_id
+       WHERE o.id = ?
+       FOR UPDATE`,
+      [orderId]
+    );
+
+    if (!rows.length) {
+      await conn.rollback();
+      return { ok: false, status: 404, message: 'Không tìm thấy đơn VIP' };
+    }
+
+    const order = rows[0];
+    if (order.payment_status === 'paid' && order.status === 'approved') {
+      await conn.commit();
+      return { ok: true, duplicate: true, order };
+    }
+
+    await conn.execute(
+      `UPDATE vip_orders
+       SET payment_status = 'paid',
+           status = 'approved',
+           paid_at = NOW(),
+           approved_at = NOW(),
+           transaction_ref = COALESCE(transaction_ref, ?)
+       WHERE id = ?`,
+      [makeMockMomoTransactionRef(order.id), order.id]
+    );
+
+    await conn.execute(
+      `UPDATE users
+       SET vip_until = DATE_ADD(
+         IF(vip_until IS NOT NULL AND vip_until > NOW(), vip_until, NOW()),
+         INTERVAL ? DAY
+       )
+       WHERE id = ?`,
+      [order.duration_days, order.user_id]
+    );
+
+    await conn.commit();
+    return { ok: true, duplicate: false, order };
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+}
+
 router.get('/vip/status', async (req, res) => {
   try {
     const userId = getUserId(req);
@@ -4797,22 +4860,113 @@ router.get('/vip/plans', async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-router.post('/vip/orders', async (req, res) => {
+// Tạo một giao dịch MoMo mô phỏng và trả URL thanh toán nội bộ.
+router.post('/vip/mock-momo/create', async (req, res) => {
   try {
     const userId = toPositiveInt(getUserId(req));
     const planId = toPositiveInt(req.body?.plan_id);
     if (!userId) return res.status(401).json({ message: 'Vui lòng đăng nhập' });
     if (!planId) return res.status(400).json({ message: 'Gói VIP không hợp lệ' });
+
     const db = getDb(req);
     const [plans] = await db.execute('SELECT * FROM vip_plans WHERE id=? AND is_active=1', [planId]);
     if (!plans.length) return res.status(404).json({ message: 'Không tìm thấy gói VIP' });
-    const [pending] = await db.execute("SELECT id FROM vip_orders WHERE user_id=? AND status='pending' LIMIT 1", [userId]);
-    if (pending.length) return res.status(409).json({ message: 'Bạn đang có một đơn VIP chờ duyệt' });
-    const [result] = await db.execute(
-      'INSERT INTO vip_orders (user_id, plan_id, amount, payment_note) VALUES (?, ?, ?, ?)',
-      [userId, planId, plans[0].price, String(req.body?.payment_note || '').trim() || null]
+
+    const [pending] = await db.execute(
+      `SELECT id, payment_token
+       FROM vip_orders
+       WHERE user_id = ?
+         AND payment_method = 'mock_momo'
+         AND payment_status = 'pending'
+         AND payment_token IS NOT NULL
+       ORDER BY id DESC LIMIT 1`,
+      [userId]
     );
-    res.status(201).json({ id: result.insertId, message: 'Đã gửi yêu cầu mua VIP. Vui lòng chờ admin xác nhận.' });
+    if (pending.length) {
+      return res.status(409).json({
+        message: 'Bạn đang có một giao dịch MoMo chờ xử lý.',
+        payment_url: `/vip/mock-momo/${pending[0].payment_token}`,
+      });
+    }
+
+    const paymentToken = makeMockMomoToken();
+    const [result] = await db.execute(
+      `INSERT INTO vip_orders
+       (user_id, plan_id, amount, payment_note, payment_method, payment_status, payment_token, status)
+       VALUES (?, ?, ?, ?, 'mock_momo', 'pending', ?, 'pending')`,
+      [userId, planId, plans[0].price, `Thanh toán MoMo Sandbox Demo cho ${plans[0].name}`, paymentToken]
+    );
+
+    res.status(201).json({
+      id: result.insertId,
+      payment_url: `/vip/mock-momo/${paymentToken}`,
+      message: 'Đã tạo giao dịch MoMo Sandbox Demo',
+    });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+router.get('/vip/mock-momo/:token', async (req, res) => {
+  try {
+    const userId = toPositiveInt(getUserId(req));
+    if (!userId) return res.status(401).json({ message: 'Vui lòng đăng nhập' });
+    const [rows] = await getDb(req).execute(
+      `SELECT o.id, o.amount, o.payment_status, o.status, o.created_at,
+              p.name AS plan_name, p.duration_days
+       FROM vip_orders o
+       JOIN vip_plans p ON p.id = o.plan_id
+       WHERE o.payment_token = ? AND o.user_id = ?
+       LIMIT 1`,
+      [String(req.params.token || ''), userId]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Không tìm thấy giao dịch' });
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// Endpoint mô phỏng callback của MoMo. Chỉ dùng trong môi trường demo/đồ án.
+router.post('/vip/mock-momo/:token/complete', async (req, res) => {
+  try {
+    const userId = toPositiveInt(getUserId(req));
+    const result = String(req.body?.result || '').toLowerCase();
+    if (!userId) return res.status(401).json({ message: 'Vui lòng đăng nhập' });
+    if (!['success', 'failed', 'cancelled'].includes(result)) {
+      return res.status(400).json({ message: 'Kết quả mô phỏng không hợp lệ' });
+    }
+
+    const db = getDb(req);
+    const [rows] = await db.execute(
+      `SELECT id, payment_status
+       FROM vip_orders
+       WHERE payment_token = ? AND user_id = ?
+       LIMIT 1`,
+      [String(req.params.token || ''), userId]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Không tìm thấy giao dịch' });
+
+    const order = rows[0];
+    if (order.payment_status !== 'pending') {
+      return res.status(409).json({ message: 'Giao dịch này đã được xử lý', payment_status: order.payment_status });
+    }
+
+    if (result === 'success') {
+      const activated = await activatePaidVipOrder(db, order.id);
+      return res.json({
+        message: activated.duplicate ? 'Giao dịch đã được xác nhận trước đó' : 'Thanh toán thành công. VIP đã được kích hoạt.',
+        payment_status: 'paid',
+      });
+    }
+
+    const paymentStatus = result === 'cancelled' ? 'cancelled' : 'failed';
+    await db.execute(
+      `UPDATE vip_orders
+       SET payment_status = ?, status = 'rejected'
+       WHERE id = ? AND payment_status = 'pending'`,
+      [paymentStatus, order.id]
+    );
+    return res.json({
+      message: result === 'cancelled' ? 'Bạn đã hủy giao dịch.' : 'Thanh toán mô phỏng thất bại.',
+      payment_status: paymentStatus,
+    });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
@@ -4868,6 +5022,7 @@ router.patch('/admin/vip/orders/:id', requireAdminMiddleware, async (req, res) =
     await conn.execute('UPDATE vip_orders SET status=?,approved_by=?,approved_at=NOW() WHERE id=?', [status,getUserId(req),req.params.id]);
     if (status === 'approved') {
       await conn.execute(`UPDATE users SET vip_until=DATE_ADD(IF(vip_until IS NOT NULL AND vip_until>NOW(),vip_until,NOW()), INTERVAL ? DAY) WHERE id=?`, [rows[0].duration_days,rows[0].user_id]);
+      await conn.execute(`UPDATE vip_orders SET payment_status='paid', paid_at=COALESCE(paid_at,NOW()) WHERE id=?`, [req.params.id]);
     }
     await conn.commit();
     res.json({ message: status === 'approved' ? 'Đã kích hoạt VIP' : 'Đã từ chối đơn' });

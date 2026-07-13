@@ -24,6 +24,7 @@ const Profile = lazy(() => import('./pages/user/Profile'));
 const UserSettings = lazy(() => import('./pages/user/UserSettings'));
 const UserLibrary = lazy(() => import('./pages/user/UserLibrary'));
 const Vip = lazy(() => import('./pages/user/Vip'));
+const MockMomoPayment = lazy(() => import('./pages/user/MockMomoPayment'));
 const MovieChatbot = lazy(() => import('./components/ai/MovieChatbot'));
 
 function RouteLoader() {
@@ -66,7 +67,8 @@ function App() {
   const location = useLocation();
   const isAdminPage = location.pathname.startsWith('/admin');
   const isWatchPage = location.pathname.startsWith('/watch/');
-  const showAmbientTools = !isAdminPage && !isWatchPage;
+  const isMockPaymentPage = location.pathname.startsWith('/vip/mock-momo/');
+  const showAmbientTools = !isAdminPage && !isWatchPage && !isMockPaymentPage;
   const ambientToolsReady = useAmbientMount(showAmbientTools);
 
   useEffect(() => {
@@ -109,6 +111,7 @@ function App() {
                     <Route path="/user/continue" element={<UserLibrary />} />
                     <Route path="/user/notifications" element={<UserLibrary />} />
                     <Route path="/vip" element={<Vip />} />
+                    <Route path="/vip/mock-momo/:token" element={<MockMomoPayment />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </Suspense>
