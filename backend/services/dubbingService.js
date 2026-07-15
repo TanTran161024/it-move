@@ -28,6 +28,15 @@ const ffsubsyncPath = process.env.FFSUBSYNC_PATH || path.join(
 );
 let jobQueue = Promise.resolve();
 
+function positiveIntegerEnv(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+}
+
+const FFMPEG_TIMEOUT_MS = positiveIntegerEnv('DUBBING_FFMPEG_TIMEOUT_MS', 60 * 60 * 1000);
+const FFMPEG_IDLE_TIMEOUT_MS = positiveIntegerEnv('DUBBING_FFMPEG_IDLE_TIMEOUT_MS', 90 * 1000);
+const FFSUBSYNC_TIMEOUT_MS = positiveIntegerEnv('DUBBING_FFSUBSYNC_TIMEOUT_MS', 30 * 60 * 1000);
+
 function enqueueJob(db, jobId) {
   jobQueue = jobQueue
     .then(() => processJob(db, jobId))
@@ -146,8 +155,66 @@ function runCommand(command, args, options = {}) {
   });
 }
 
+function runCommandWithTimeout(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    const { timeoutMs = 0, idleTimeoutMs = 0, ...spawnOptions } = options;
+    const child = spawn(command, args, { windowsHide: true, ...spawnOptions });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    let timeout = null;
+    let idleTimeout = null;
+
+    const cleanup = () => {
+      if (timeout) clearTimeout(timeout);
+      if (idleTimeout) clearTimeout(idleTimeout);
+    };
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      child.kill('SIGKILL');
+      reject(Object.assign(error, { stdout, stderr }));
+    };
+    const resetIdleTimeout = () => {
+      if (!idleTimeoutMs) return;
+      if (idleTimeout) clearTimeout(idleTimeout);
+      idleTimeout = setTimeout(() => {
+        fail(new Error(`${path.basename(command)} had no output for ${Math.round(idleTimeoutMs / 1000)} seconds`));
+      }, idleTimeoutMs);
+    };
+
+    if (timeoutMs) {
+      timeout = setTimeout(() => {
+        fail(new Error(`${path.basename(command)} exceeded ${Math.round(timeoutMs / 60000)} minutes`));
+      }, timeoutMs);
+    }
+    resetIdleTimeout();
+
+    child.stdout?.on('data', (chunk) => {
+      stdout = `${stdout}${chunk}`.slice(-20000);
+      resetIdleTimeout();
+    });
+    child.stderr?.on('data', (chunk) => {
+      stderr = `${stderr}${chunk}`.slice(-20000);
+      resetIdleTimeout();
+    });
+    child.on('error', fail);
+    child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (code === 0) resolve({ stdout, stderr });
+      else reject(Object.assign(new Error(`${path.basename(command)} failed (${code}): ${(stderr || stdout).trim().slice(-3000)}`), { stdout, stderr }));
+    });
+  });
+}
+
 function runFfmpeg(args) {
-  return runCommand(ffmpegPath, args).then(() => undefined).catch((error) => {
+  return runCommandWithTimeout(ffmpegPath, args, {
+    timeoutMs: FFMPEG_TIMEOUT_MS,
+    idleTimeoutMs: FFMPEG_IDLE_TIMEOUT_MS,
+  }).then(() => undefined).catch((error) => {
     throw new Error(`FFmpeg thất bại: ${error.message}`);
   });
 }
@@ -172,6 +239,12 @@ function mediaInputArgs(source) {
   const resolved = resolveMediaSource(source);
   if (!/^https?:\/\//i.test(resolved)) return ['-i', resolved];
   return [
+    '-fflags', '+discardcorrupt+genpts',
+    '-err_detect', 'ignore_err',
+    '-reconnect', '1',
+    '-reconnect_streamed', '1',
+    '-reconnect_delay_max', '5',
+    '-rw_timeout', '15000000',
     '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ITMove/1.0',
     '-referer', 'https://player.phimapi.com/',
     '-i', resolved,
@@ -197,16 +270,18 @@ async function synchronizeCues(source, cues, workDir) {
 
   let commandOutput = '';
   try {
-    const result = await runCommand(ffsubsyncPath, [
+    const result = await runCommandWithTimeout(ffsubsyncPath, [
       ...baseArgs,
       '--multi-segment-sync',
       '--segment-count', '8',
       '--skip-intro-outro',
       '--parallel-workers', '2',
-    ]);
+    ], { timeoutMs: FFSUBSYNC_TIMEOUT_MS });
     commandOutput = `${result.stdout}\n${result.stderr}`;
   } catch (multiSegmentError) {
-    const result = await runCommand(ffsubsyncPath, [...baseArgs, '--extract-audio-first']);
+    const result = await runCommandWithTimeout(ffsubsyncPath, [...baseArgs, '--extract-audio-first'], {
+      timeoutMs: FFSUBSYNC_TIMEOUT_MS,
+    });
     commandOutput = `${result.stdout}\n${result.stderr}\nFallback: ${multiSegmentError.message}`;
   }
 
@@ -297,6 +372,8 @@ async function buildCuesFromVideoAudio(db, job, source, workDir) {
         bilingual: false,
       });
       if (translation.fallback) {
+        const statusText = translation.ai_error?.http_status ? ` Gemini HTTP ${translation.ai_error.http_status}.` : '';
+        translation.message = `Khong the dich hoi thoai video sang tieng Viet.${statusText} Hay dung phu de Viet co san hoac thu lai sau.`;
         const error = new Error(translation.message || 'Không thể dịch hội thoại video sang tiếng Việt.');
         error.statusCode = 502;
         throw error;
@@ -518,14 +595,14 @@ async function renderDubbedVideo(source, dubbingWav, outputPath, originalVolume)
     '[1:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=mono,asplit=2[dub_sc][dub_mix]',
     '[0:a:0]aresample=48000,aformat=sample_fmts=fltp[original]',
     `[original][dub_sc]sidechaincompress=threshold=0.030:ratio=${ratio.toFixed(2)}:attack=20:release=450[ducked]`,
-    '[ducked][dub_mix]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[mixed]',
+    '[ducked][dub_mix]amix=inputs=2:duration=shortest:dropout_transition=0:normalize=0[mixed]',
     '[mixed]loudnorm=I=-16:LRA=11:TP=-1.5,alimiter=limit=0.95[audio]',
   ].join(';');
   try {
     await runFfmpeg([
       ...common,
       '-filter_complex', audioFilter,
-      '-map', '0:v:0', '-map', '[audio]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', outputPath,
+      '-map', '0:v:0', '-map', '[audio]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', '-movflags', '+faststart', outputPath,
     ]);
   } catch (error) {
     const sourceHasNoAudio = /matches no streams|stream specifier[^\n]*a:0|does not contain any audio stream/i.test(error.message);
