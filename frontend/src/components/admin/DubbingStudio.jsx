@@ -30,6 +30,10 @@ import '../../pages/admin/AdminStyles.css';
 const fieldSx = {
   '& .MuiInputBase-input': { color: 'var(--admin-text)' },
   '& .MuiInputLabel-root': { color: 'var(--admin-text-muted)' },
+  '& .MuiInputBase-input.Mui-disabled': {
+    color: 'var(--admin-text-muted)',
+    WebkitTextFillColor: 'var(--admin-text-muted)',
+  },
   '& .MuiOutlinedInput-root': {
     background: 'var(--admin-input-bg)',
     '& fieldset': { borderColor: 'var(--admin-border)' },
@@ -41,9 +45,11 @@ const fieldSx = {
 const menuProps = {
   PaperProps: {
     sx: {
-      bgcolor: 'var(--admin-surface)',
+      bgcolor: 'var(--admin-popover-bg)',
       color: 'var(--admin-text)',
       border: '1px solid var(--admin-border)',
+      boxShadow: 'var(--admin-shadow)',
+      backdropFilter: 'none',
       '& .MuiMenuItem-root': {
         fontWeight: 700,
         color: 'var(--admin-text)',
@@ -108,13 +114,50 @@ function sourceModeLabel(value) {
 }
 
 function StatusChip({ label, tone = 'default' }) {
+  const toneStyles = {
+    success: {
+      color: 'var(--admin-success)',
+      background: 'var(--admin-success-soft)',
+      borderColor: 'color-mix(in srgb, var(--admin-success) 32%, transparent)',
+    },
+    error: {
+      color: 'var(--admin-danger)',
+      background: 'var(--admin-danger-soft)',
+      borderColor: 'color-mix(in srgb, var(--admin-danger) 32%, transparent)',
+    },
+    warning: {
+      color: 'var(--admin-warning)',
+      background: 'var(--admin-warning-soft)',
+      borderColor: 'color-mix(in srgb, var(--admin-warning) 32%, transparent)',
+    },
+    info: {
+      color: 'var(--admin-info)',
+      background: 'var(--admin-info-soft)',
+      borderColor: 'color-mix(in srgb, var(--admin-info) 32%, transparent)',
+    },
+    default: {
+      color: 'var(--admin-text-muted)',
+      background: 'var(--admin-bg-soft)',
+      borderColor: 'var(--admin-border)',
+    },
+  };
+
   return (
     <Chip
       size="small"
       label={label}
-      color={tone}
-      variant={tone === 'default' ? 'outlined' : 'filled'}
-      sx={{ fontWeight: 800 }}
+      variant="outlined"
+      sx={{
+        ...(toneStyles[tone] || toneStyles.default),
+        maxWidth: '100%',
+        height: 28,
+        fontWeight: 800,
+        '& .MuiChip-label': {
+          minWidth: 0,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        },
+      }}
     />
   );
 }
@@ -236,6 +279,15 @@ export default function DubbingStudio() {
     }
   }, []);
 
+  const loadDubbingJobs = useCallback(async (episodeId) => {
+    if (!episodeId) {
+      setJobs([]);
+      return;
+    }
+    const jobRes = await axios.get(`${API}/api/admin/dubbing/jobs`, { params: { episode_id: episodeId } });
+    setJobs((jobRes.data || []).map(normalizeDubbingJob));
+  }, []);
+
   const loadEpisodeDubbingData = useCallback(async (episodeId) => {
     if (!episodeId) {
       setSubtitles([]);
@@ -285,14 +337,13 @@ export default function DubbingStudio() {
     if (!latestJob || !['queued', 'running'].includes(latestJob.status)) return undefined;
     const timer = setInterval(async () => {
       try {
-        await loadEpisodeDubbingData(selectedEpisodeId);
-        if (selectedMovieId) await loadEpisodes(selectedMovieId);
+        await loadDubbingJobs(selectedEpisodeId);
       } catch {
         // Keep polling on transient failures; the next tick can recover.
       }
     }, 2500);
     return () => clearInterval(timer);
-  }, [latestJob, loadEpisodeDubbingData, loadEpisodes, selectedEpisodeId, selectedMovieId]);
+  }, [latestJob?.id, latestJob?.status, loadDubbingJobs, selectedEpisodeId]);
 
   useEffect(() => {
     if (sourceMode !== 'auto') return;
@@ -425,7 +476,7 @@ export default function DubbingStudio() {
 
   return (
     <Box className="admin-content-section" sx={{ display: 'grid', gap: 2.5 }}>
-      <div className="admin-section-header">
+      <div className="admin-section-header dubbing-studio-toolbar">
         <div>
           <h2 className="admin-section-title">Xưởng lồng tiếng</h2>
           <p className="admin-section-subtitle">Điều phối nguồn video, phụ đề, Whisper và Kokoro theo từng tập phim.</p>
@@ -522,7 +573,7 @@ export default function DubbingStudio() {
           </FormControl>
 
           <FormControl size="small" sx={fieldSx} disabled={effectiveSourceMode !== 'subtitle' || !subtitles.length}>
-            <InputLabel id="dubbing-studio-subtitle-label">Phụ đề nguồn</InputLabel>
+            <InputLabel id="dubbing-studio-subtitle-label" shrink>Phụ đề nguồn</InputLabel>
             <Select
               labelId="dubbing-studio-subtitle-label"
               value={subtitleId}

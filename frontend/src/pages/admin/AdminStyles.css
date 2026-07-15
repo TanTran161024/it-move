@@ -11,6 +11,7 @@ html[data-admin-theme='dark'] {
   --admin-surface: rgba(255, 255, 255, 0.03);
   --admin-card: rgba(255, 255, 255, 0.04);
   --admin-card-hover: rgba(255, 255, 255, 0.08);
+  --admin-popover-bg: #111111;
   --admin-input-bg: rgba(255, 255, 255, 0.05);
   --admin-border: rgba(255, 255, 255, 0.1);
   --admin-border-strong: rgba(255, 255, 255, 0.2);
@@ -44,6 +45,7 @@ html[data-admin-theme='light'] {
   --admin-surface: #ffffff;
   --admin-card: #ffffff;
   --admin-card-hover: #f7f9fc;
+  --admin-popover-bg: #ffffff;
   --admin-input-bg: #ffffff;
   --admin-border: rgba(15, 23, 42, 0.12);
   --admin-border-strong: rgba(15, 23, 42, 0.22);
@@ -668,6 +670,57 @@ html[data-admin-theme='light'] {
 }
 
 /* ------------------------------------------------------------
+   Dubbing studio
+   ------------------------------------------------------------ */
+
+.dubbing-studio-toolbar {
+  justify-content: flex-end;
+  margin-bottom: 0;
+}
+
+.dubbing-studio-toolbar > div:first-child {
+  display: none;
+}
+
+.admin-shell .MuiChip-root {
+  border-color: var(--admin-border);
+}
+
+.admin-shell .MuiChip-label {
+  color: inherit;
+}
+
+.admin-shell .MuiLinearProgress-root {
+  background-color: var(--admin-bg-soft) !important;
+}
+
+.admin-shell .MuiLinearProgress-bar {
+  background-color: var(--admin-accent) !important;
+}
+
+.admin-shell .MuiSwitch-track {
+  background-color: var(--admin-text-muted) !important;
+}
+
+.admin-shell .MuiSwitch-thumb {
+  color: var(--admin-surface) !important;
+}
+
+.admin-shell .MuiSwitch-switchBase.Mui-checked {
+  color: var(--admin-accent) !important;
+}
+
+.admin-shell .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track {
+  background-color: var(--admin-accent) !important;
+  opacity: 0.35 !important;
+}
+
+.admin-shell .Mui-disabled {
+  color: var(--admin-text-muted) !important;
+  -webkit-text-fill-color: var(--admin-text-muted) !important;
+}
+
+/* ------------------------------------------------------------
    MUI theme alignment inside admin
    ------------------------------------------------------------ */
 
@@ -772,9 +825,12 @@ html[data-admin-theme='light'] {
 
 .MuiMenu-paper,
 .MuiAutocomplete-popper .MuiPaper-root {
-  background: var(--admin-surface) !important;
+  background: var(--admin-popover-bg) !important;
   color: var(--admin-text) !important;
   border: 1px solid var(--admin-border);
+  box-shadow: var(--admin-shadow) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 .MuiMenuItem-root,
